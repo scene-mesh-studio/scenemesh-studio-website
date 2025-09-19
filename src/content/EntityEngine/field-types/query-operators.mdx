@@ -1,0 +1,560 @@
+# 查询操作符
+
+Entity Engine 为不同的字段类型提供了丰富的查询操作符，让您可以构建复杂的数据查询条件。每种字段类型都有适合的操作符，比如文本字段支持模糊搜索，数字字段支持范围查询，日期字段支持时间区间查询。
+
+查询操作符让用户可以在界面中轻松构建查询条件，无需编写复杂的查询语句。系统会根据字段类型自动提供合适的操作符选项。
+
+## 文本字段查询操作符
+
+文本字段提供了多种文本匹配方式，适用于名称搜索、内容检索等场景。
+
+### 精确匹配
+
+查找完全匹配的文本内容：
+
+```typescript
+// 查找名称为 "张三" 的用户
+{
+  field: 'name',
+  operator: 'equals',
+  value: '张三'
+}
+
+// 查找状态不是 "已删除" 的记录
+{
+  field: 'status', 
+  operator: 'not_equals',
+  value: '已删除'
+}
+```
+
+### 模糊匹配
+
+用于部分文本匹配和关键词搜索：
+
+```typescript
+// 查找包含 "产品" 关键词的标题
+{
+  field: 'title',
+  operator: 'contains',
+  value: '产品'
+}
+
+// 查找以 "订单" 开头的编号
+{
+  field: 'orderNumber',
+  operator: 'starts_with', 
+  value: '订单'
+}
+
+// 查找以 "@gmail.com" 结尾的邮箱
+{
+  field: 'email',
+  operator: 'ends_with',
+  value: '@gmail.com'
+}
+```
+
+### 空值检查
+
+检查字段是否有值：
+
+```typescript
+// 查找已填写备注的记录
+{
+  field: 'remark',
+  operator: 'is_not_null'
+}
+
+// 查找未填写描述的产品
+{
+  field: 'description',
+  operator: 'is_null'
+}
+```
+
+## 数字字段查询操作符
+
+数字字段支持精确匹配和范围查询，适用于价格筛选、数量统计等场景。
+
+### 数值比较
+
+```typescript
+// 查找价格为 100 的商品
+{
+  field: 'price',
+  operator: 'equals',
+  value: 100
+}
+
+// 查找价格大于 500 的商品
+{
+  field: 'price',
+  operator: 'greater_than',
+  value: 500
+}
+
+// 查找价格小于等于 200 的商品
+{
+  field: 'price',
+  operator: 'less_than_or_equal',
+  value: 200
+}
+```
+
+### 范围查询
+
+查找数值在指定区间内的记录：
+
+```typescript
+// 查找价格在 100-500 之间的商品
+{
+  field: 'price',
+  operator: 'between',
+  value: [100, 500]
+}
+
+// 查找年龄在 18-65 之间的用户
+{
+  field: 'age',
+  operator: 'between', 
+  value: [18, 65]
+}
+```
+
+### 集合查询
+
+查找数值在指定集合中的记录：
+
+```typescript
+// 查找价格为 99, 199, 299 的商品
+{
+  field: 'price',
+  operator: 'in',
+  value: [99, 199, 299]
+}
+
+// 查找不是这些价格的商品
+{
+  field: 'price',
+  operator: 'not_in',
+  value: [0, 1, 2]
+}
+```
+
+## 日期字段查询操作符
+
+日期字段提供了灵活的时间查询方式，支持精确日期和时间范围查询。
+
+### 日期比较
+
+```typescript
+// 查找今天创建的记录
+{
+  field: 'createdAt',
+  operator: 'equals',
+  value: '2025-01-15'
+}
+
+// 查找一周内创建的记录
+{
+  field: 'createdAt',
+  operator: 'greater_than',
+  value: '2025-01-08'
+}
+
+// 查找本月之前的记录
+{
+  field: 'createdAt',
+  operator: 'less_than',
+  value: '2025-01-01'
+}
+```
+
+### 时间范围查询
+
+```typescript
+// 查找本月创建的记录
+{
+  field: 'createdAt',
+  operator: 'between',
+  value: ['2025-01-01', '2025-01-31']
+}
+
+// 查找最近 7 天的记录
+{
+  field: 'createdAt',
+  operator: 'in_last_days',
+  value: 7
+}
+```
+
+### 相对时间查询
+
+使用相对时间概念进行查询：
+
+```typescript
+// 查找今天的记录
+{
+  field: 'createdAt',
+  operator: 'today'
+}
+
+// 查找本周的记录
+{
+  field: 'createdAt',
+  operator: 'this_week'
+}
+
+// 查找本月的记录
+{
+  field: 'createdAt',
+  operator: 'this_month'
+}
+
+// 查找今年的记录
+{
+  field: 'createdAt',
+  operator: 'this_year'
+}
+```
+
+## 布尔字段查询操作符
+
+布尔字段的查询比较简单，主要是真假值判断：
+
+```typescript
+// 查找已激活的用户
+{
+  field: 'isActive',
+  operator: 'equals',
+  value: true
+}
+
+// 查找未删除的记录
+{
+  field: 'isDeleted',
+  operator: 'equals',
+  value: false
+}
+
+// 查找已设置VIP状态的用户（不论真假）
+{
+  field: 'isVip',
+  operator: 'is_not_null'
+}
+```
+
+## 枚举字段查询操作符
+
+枚举字段支持单选和多选查询：
+
+```typescript
+// 查找状态为 "已发布" 的文章
+{
+  field: 'status',
+  operator: 'equals',
+  value: 'published'
+}
+
+// 查找状态为 "草稿" 或 "审核中" 的文章
+{
+  field: 'status',
+  operator: 'in',
+  value: ['draft', 'reviewing']
+}
+
+// 查找状态不是 "已删除" 的文章
+{
+  field: 'status',
+  operator: 'not_equals',
+  value: 'deleted'
+}
+```
+
+## 数组字段查询操作符
+
+数组字段可以查询包含特定元素或满足条件的数组：
+
+```typescript
+// 查找包含 "JavaScript" 标签的文章
+{
+  field: 'tags',
+  operator: 'contains',
+  value: 'JavaScript'
+}
+
+// 查找包含多个指定标签的文章
+{
+  field: 'tags',
+  operator: 'contains_all',
+  value: ['React', 'TypeScript']
+}
+
+// 查找包含任一指定标签的文章
+{
+  field: 'tags',
+  operator: 'contains_any',
+  value: ['Vue', 'Angular', 'React']
+}
+
+// 查找数组长度为 3 的记录
+{
+  field: 'tags',
+  operator: 'array_length',
+  value: 3
+}
+```
+
+## 关系字段查询操作符
+
+关系字段可以根据关联记录进行查询：
+
+### 直接关系查询
+
+```typescript
+// 查找作者 ID 为 "user-123" 的文章
+{
+  field: 'author',
+  operator: 'equals',
+  value: 'user-123'
+}
+
+// 查找属于指定分类的文章
+{
+  field: 'category',
+  operator: 'in',
+  value: ['tech', 'business']
+}
+```
+
+### 关联字段查询
+
+通过关联记录的字段进行查询：
+
+```typescript
+// 查找作者名称包含 "张" 的文章
+{
+  field: 'author.name',
+  operator: 'contains',
+  value: '张'
+}
+
+// 查找分类名称为 "技术" 的文章
+{
+  field: 'category.name',
+  operator: 'equals',
+  value: '技术'
+}
+```
+
+### 关系存在性查询
+
+```typescript
+// 查找有作者的文章
+{
+  field: 'author',
+  operator: 'is_not_null'
+}
+
+// 查找没有分类的文章
+{
+  field: 'category',
+  operator: 'is_null'
+}
+```
+
+## 构建复合查询条件
+
+您可以组合多个查询条件来构建复杂的查询：
+
+### AND 条件
+
+所有条件都必须满足：
+
+```typescript
+{
+  operator: 'and',
+  conditions: [
+    {
+      field: 'status',
+      operator: 'equals',
+      value: 'published'
+    },
+    {
+      field: 'createdAt',
+      operator: 'greater_than',
+      value: '2025-01-01'
+    },
+    {
+      field: 'author.name',
+      operator: 'contains',
+      value: '张'
+    }
+  ]
+}
+```
+
+### OR 条件
+
+满足任一条件即可：
+
+```typescript
+{
+  operator: 'or',
+  conditions: [
+    {
+      field: 'status',
+      operator: 'equals',
+      value: 'published'
+    },
+    {
+      field: 'status',
+      operator: 'equals',
+      value: 'featured'
+    }
+  ]
+}
+```
+
+### 嵌套条件
+
+组合 AND 和 OR 条件：
+
+```typescript
+{
+  operator: 'and',
+  conditions: [
+    {
+      field: 'isActive',
+      operator: 'equals',
+      value: true
+    },
+    {
+      operator: 'or',
+      conditions: [
+        {
+          field: 'type',
+          operator: 'equals',
+          value: 'premium'
+        },
+        {
+          field: 'score',
+          operator: 'greater_than',
+          value: 80
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 在代码中使用查询操作符
+
+### 基础查询
+
+```typescript
+const engine = await getEntityEngine();
+
+// 查找特定状态的用户
+const users = await engine.datasourceFactory
+  .create('User')
+  .listObjects({
+    modelName: 'User',
+    filter: {
+      status: { equals: 'active' }
+    }
+  });
+```
+
+### 复合查询
+
+```typescript
+// 查找活跃且高分的用户
+const users = await engine.datasourceFactory
+  .create('User')
+  .listObjects({
+    modelName: 'User',
+    filter: {
+      and: [
+        { status: { equals: 'active' } },
+        { score: { greater_than: 80 } }
+      ]
+    }
+  });
+```
+
+### 关系查询
+
+```typescript
+// 查找作者名称包含特定关键词的文章
+const articles = await engine.datasourceFactory
+  .create('Article')
+  .listObjects({
+    modelName: 'Article',
+    filter: {
+      'author.name': { contains: '张' }
+    }
+  });
+```
+
+## 查询性能优化建议
+
+### 使用索引友好的查询
+
+优先使用精确匹配和范围查询，它们通常有更好的性能：
+
+```typescript
+// 推荐：使用精确匹配
+{ field: 'status', operator: 'equals', value: 'active' }
+
+// 推荐：使用范围查询
+{ field: 'price', operator: 'between', value: [100, 500] }
+
+// 慎用：模糊查询可能较慢
+{ field: 'content', operator: 'contains', value: 'keyword' }
+```
+
+### 合理使用复合条件
+
+将选择性高的条件放在前面：
+
+```typescript
+{
+  operator: 'and',
+  conditions: [
+    // 选择性高的条件放在前面
+    { field: 'userId', operator: 'equals', value: 'user-123' },
+    { field: 'status', operator: 'equals', value: 'active' },
+    // 选择性低的条件放在后面
+    { field: 'content', operator: 'contains', value: 'keyword' }
+  ]
+}
+```
+
+### 限制结果数量
+
+对于可能返回大量结果的查询，设置合理的分页：
+
+```typescript
+const results = await engine.datasourceFactory
+  .create('Article')
+  .listObjects({
+    modelName: 'Article',
+    filter: queryConditions,
+    pagination: {
+      page: 1,
+      pageSize: 20
+    }
+  });
+```
+
+通过灵活使用这些查询操作符，您可以构建出强大而高效的数据查询功能，满足各种业务场景的需求。
+
+## 下一步
+
+了解查询操作符后，您可能想要：
+
+- 学习[组件映射](/field-types/widget-mapping)来自定义字段的显示和输入组件
+- 查看[内置字段类型](/field-types/builtin-types)了解每种字段类型支持的操作符
+- 探索[自定义字段类型](/field-types/custom-typer)来创建特殊的查询逻辑

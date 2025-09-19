@@ -1,0 +1,640 @@
+# 常见问题
+
+这里收集了 Entity Engine 使用过程中最常遇到的问题和解决方案。如果您的问题没有在这里找到答案，请访问我们的 [GitHub Issues](https://github.com/scenemesh/entity-engine/issues) 或加入社区讨论。
+
+## 🚀 快速解答
+
+### Q: Entity Engine 适合什么类型的项目？
+
+**A:** Entity Engine 特别适合以下类型的项目：
+- 中大型企业应用
+- 内容管理系统 (CMS)
+- 电商平台
+- 客户关系管理系统 (CRM)
+- 需要复杂数据关系的应用
+- 实时协作应用
+
+### Q: Entity Engine 与其他 ORM 框架有什么区别？
+
+**A:** Entity Engine 的主要优势：
+- **类型安全**: 完整的 TypeScript 支持
+- **灵活的视图系统**: 支持多种输出格式
+- **实时数据同步**: 内置 WebSocket 支持
+- **智能查询优化**: 自动查询性能优化
+- **企业级功能**: 权限管理、审计日志、性能监控
+
+### Q: 支持哪些数据库？
+
+**A:** 目前支持的数据库：
+- PostgreSQL ✅
+- MySQL ✅  
+- MongoDB ✅
+- Redis ✅
+- SQLite ✅
+- Elasticsearch (开发中) 🔄
+- Oracle (计划中) 📋
+
+## 📚 新手入门
+
+### Q: 如何快速开始使用 Entity Engine？
+
+**A:** 三步快速开始：
+
+```bash
+# 1. 安装
+npm install @scenemesh/entity-engine
+
+# 2. 初始化项目
+npx entity-engine init my-project
+
+# 3. 运行开发服务器
+cd my-project && npm run dev
+```
+
+### Q: 需要什么技术基础？
+
+**A:** 推荐的技术背景：
+- **必须**: JavaScript/TypeScript 基础
+- **推荐**: Node.js 开发经验
+- **有帮助**: 数据库基础知识
+- **加分**: 现代 Web 框架经验 (React/Vue/Angular)
+
+### Q: 有哪些学习资源？
+
+**A:** 学习资源：
+- [官方文档](/) - 完整的使用指南
+- [实战示例](/recipes) - 真实项目案例
+- [视频教程](https://youtube.com/@scenemesh) - 入门到进阶
+- [社区论坛](https://forum.scenemesh.io) - 问答和讨论
+- [GitHub 仓库](https://github.com/scenemesh/entity-engine) - 源码和示例
+
+## 💻 开发问题
+
+### Q: 如何定义实体关系？
+
+**A:** 使用装饰器定义关系：
+
+```typescript
+@Entity()
+class User {
+  @OneToMany(() => Post, post => post.author)
+  posts: Post[];
+}
+
+@Entity()
+class Post {
+  @ManyToOne(() => User, user => user.posts)
+  author: User;
+  
+  @ManyToMany(() => Tag)
+  tags: Tag[];
+}
+```
+
+### Q: 如何实现数据验证？
+
+**A:** 使用内置验证器：
+
+```typescript
+@Entity()
+class User {
+  @Field({
+    type: 'string',
+    validators: [
+      { type: 'required' },
+      { type: 'email' },
+      { type: 'minLength', value: 5 }
+    ]
+  })
+  email: string;
+  
+  @Field({
+    type: 'number',
+    validators: [
+      { type: 'min', value: 18 },
+      { type: 'max', value: 120 }
+    ]
+  })
+  age: number;
+}
+```
+
+### Q: 如何处理异步操作？
+
+**A:** Entity Engine 全面支持 async/await：
+
+```typescript
+async function createUser(data: CreateUserData) {
+  const entityManager = getEntityManager();
+  
+  // 开启事务
+  return await entityManager.transaction(async (em) => {
+    // 创建用户
+    const user = await em.create('User', data);
+    
+    // 发送欢迎邮件
+    await sendWelcomeEmail(user.email);
+    
+    return user;
+  });
+}
+```
+
+### Q: 如何优化查询性能？
+
+**A:** 几种优化方式：
+
+```typescript
+// 1. 使用预加载避免 N+1 问题
+const users = await entityManager.find('User', {
+  include: ['posts', 'profile']
+});
+
+// 2. 使用查询缓存
+const users = await entityManager.find('User', {
+  cache: { ttl: 300 } // 缓存5分钟
+});
+
+// 3. 使用索引
+@Entity()
+class User {
+  @Field({ index: true })
+  email: string;
+  
+  @Field({ index: 'compound', with: ['status'] })
+  createdAt: Date;
+}
+```
+
+### Q: 如何实现实时数据同步？
+
+**A:** 使用内置的实时系统：
+
+```typescript
+// 服务端
+const realTimeManager = getRealTimeManager();
+
+// 订阅实体变更
+realTimeManager.subscribe('User', {
+  events: ['created', 'updated', 'deleted'],
+  filter: (event) => event.entity.isPublic
+});
+
+// 客户端
+const client = new EntityEngineClient();
+client.subscribe('User', {
+  onUpdate: (user) => updateUI(user),
+  onDelete: (userId) => removeFromUI(userId)
+});
+```
+
+## 🚀 部署问题
+
+### Q: 推荐的生产环境部署方式？
+
+**A:** 推荐的部署架构：
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    image: my-entity-engine-app
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://...
+      - REDIS_URL=redis://...
+    depends_on:
+      - postgres
+      - redis
+  
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+  
+  redis:
+    image: redis:7-alpine
+```
+
+### Q: 如何配置环境变量？
+
+**A:** 在 `.env` 文件中配置：
+
+```bash
+# 数据库配置
+DATABASE_URL=postgresql://user:pass@localhost:5432/dbname
+
+# Redis 配置
+REDIS_URL=redis://localhost:6379
+
+# 应用配置
+PORT=3000
+NODE_ENV=production
+JWT_SECRET=your-secret-key
+
+# 日志级别
+LOG_LEVEL=info
+
+# 性能配置
+CACHE_TTL=300
+MAX_CONNECTIONS=100
+```
+
+### Q: 如何进行数据库迁移？
+
+**A:** 使用 CLI 工具：
+
+```bash
+# 生成迁移文件
+npx entity-engine migration:generate AddUserTable
+
+# 运行迁移
+npx entity-engine migration:run
+
+# 回滚迁移
+npx entity-engine migration:revert
+
+# 查看迁移状态
+npx entity-engine migration:status
+```
+
+### Q: 如何监控应用性能？
+
+**A:** 集成监控工具：
+
+```typescript
+import { EntityEngine } from '@scenemesh/entity-engine';
+import { PrometheusMetrics } from '@scenemesh/entity-engine-metrics';
+
+const app = new EntityEngine({
+  // 启用内置监控
+  monitoring: {
+    enabled: true,
+    metrics: ['queries', 'performance', 'errors']
+  },
+  
+  // 集成 Prometheus
+  plugins: [
+    new PrometheusMetrics({
+      port: 9090,
+      path: '/metrics'
+    })
+  ]
+});
+```
+
+## ⚡ 性能问题
+
+### Q: 为什么查询很慢？
+
+**A:** 常见原因和解决方案：
+
+1. **缺少索引**
+   ```typescript
+   // 添加索引
+   @Field({ index: true })
+   userId: string;
+   ```
+
+2. **N+1 查询问题**
+   ```typescript
+   // 使用预加载
+   const posts = await em.find('Post', {
+     include: ['author', 'comments']
+   });
+   ```
+
+3. **查询过于复杂**
+   ```typescript
+   // 使用原生查询
+   const result = await em.query(`
+     SELECT p.*, u.name as author_name 
+     FROM posts p 
+     JOIN users u ON p.user_id = u.id 
+     WHERE p.status = 'published'
+   `);
+   ```
+
+### Q: 内存使用量过高怎么办？
+
+**A:** 优化内存使用：
+
+```typescript
+// 1. 启用查询流式处理
+const users = await em.findStream('User', {
+  batchSize: 1000,
+  onBatch: (batch) => processBatch(batch)
+});
+
+// 2. 清理未使用的缓存
+em.cache.clear('User');
+
+// 3. 限制查询结果数量
+const users = await em.find('User', {
+  limit: 100,
+  select: ['id', 'name'] // 只选择必要字段
+});
+```
+
+### Q: 并发处理能力不足？
+
+**A:** 提高并发性能：
+
+```typescript
+// 1. 调整连接池大小
+const entityEngine = new EntityEngine({
+  database: {
+    pool: {
+      min: 10,
+      max: 100,
+      acquireTimeoutMillis: 30000
+    }
+  }
+});
+
+// 2. 使用并发控制
+import { queue } from 'async';
+
+const processingQueue = queue(async (task) => {
+  return await processEntity(task);
+}, 10); // 并发数限制为 10
+
+// 3. 启用查询缓存
+const result = await em.find('User', {
+  cache: { ttl: 300, key: 'active_users' }
+});
+```
+
+## 🔧 故障排除
+
+### Q: "连接数据库失败" 错误？
+
+**A:** 检查以下几点：
+
+1. **数据库服务是否运行**
+   ```bash
+   # PostgreSQL
+   sudo systemctl status postgresql
+   
+   # MySQL
+   sudo systemctl status mysql
+   ```
+
+2. **连接配置是否正确**
+   ```typescript
+   const config = {
+     host: 'localhost',
+     port: 5432,
+     database: 'myapp',
+     username: 'user',
+     password: 'password'
+   };
+   ```
+
+3. **网络连接是否正常**
+   ```bash
+   # 测试连接
+   telnet localhost 5432
+   ```
+
+### Q: "实体未找到" 错误？
+
+**A:** 可能的原因：
+
+1. **实体未注册**
+   ```typescript
+   // 确保实体已注册
+   EntityEngine.register([User, Post, Comment]);
+   ```
+
+2. **导入路径错误**
+   ```typescript
+   // 检查导入路径
+   import { User } from './entities/User';
+   ```
+
+3. **实体名称不匹配**
+   ```typescript
+   // 确保名称一致
+   @Entity('users') // 表名
+   class User {
+     // ...
+   }
+   ```
+
+### Q: "权限被拒绝" 错误？
+
+**A:** 权限问题排查：
+
+1. **检查用户权限**
+   ```typescript
+   const hasPermission = await accessControl.check(
+     user, 
+     resource, 
+     'read'
+   );
+   ```
+
+2. **验证角色分配**
+   ```typescript
+   const userRoles = await roleManager.getUserRoles(userId);
+   console.log('User roles:', userRoles);
+   ```
+
+3. **检查策略配置**
+   ```typescript
+   const policies = await policyStore.findApplicable({
+     user: user,
+     resource: resource,
+     action: 'read'
+   });
+   ```
+
+## 💡 最佳实践
+
+### Q: 如何组织项目结构？
+
+**A:** 推荐的项目结构：
+
+```
+src/
+├── entities/          # 实体定义
+│   ├── User.ts
+│   ├── Post.ts
+│   └── index.ts
+├── services/          # 业务逻辑
+│   ├── UserService.ts
+│   └── PostService.ts
+├── controllers/       # 控制器
+│   ├── UserController.ts
+│   └── PostController.ts
+├── middleware/        # 中间件
+├── config/           # 配置文件
+├── migrations/       # 数据库迁移
+└── tests/           # 测试文件
+```
+
+### Q: 如何处理错误？
+
+**A:** 统一错误处理：
+
+```typescript
+// 自定义错误类
+class BusinessError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number = 400
+  ) {
+    super(message);
+    this.name = 'BusinessError';
+  }
+}
+
+// 全局错误处理中间件
+app.use((error, req, res, next) => {
+  if (error instanceof BusinessError) {
+    return res.status(error.statusCode).json({
+      error: error.message,
+      code: error.code
+    });
+  }
+  
+  // 记录未知错误
+  console.error(error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+```
+
+### Q: 如何编写测试？
+
+**A:** 完整的测试策略：
+
+```typescript
+// 单元测试
+describe('UserService', () => {
+  let userService: UserService;
+  let mockEntityManager: jest.Mocked<IEntityManager>;
+
+  beforeEach(() => {
+    mockEntityManager = createMockEntityManager();
+    userService = new UserService(mockEntityManager);
+  });
+
+  it('should create user successfully', async () => {
+    const userData = { name: 'John', email: 'john@example.com' };
+    const createdUser = { id: '1', ...userData };
+    
+    mockEntityManager.create.mockResolvedValue(createdUser);
+    
+    const result = await userService.createUser(userData);
+    
+    expect(result).toEqual(createdUser);
+    expect(mockEntityManager.create).toHaveBeenCalledWith('User', userData);
+  });
+});
+
+// 集成测试
+describe('User API', () => {
+  let app: Application;
+  
+  beforeAll(async () => {
+    app = await createTestApp();
+  });
+  
+  it('should create user via API', async () => {
+    const response = await request(app)
+      .post('/api/users')
+      .send({ name: 'John', email: 'john@example.com' })
+      .expect(201);
+      
+    expect(response.body).toMatchObject({
+      name: 'John',
+      email: 'john@example.com'
+    });
+  });
+});
+```
+
+## 🔄 迁移升级
+
+### Q: 如何从旧版本升级？
+
+**A:** 升级步骤：
+
+```bash
+# 1. 备份数据
+pg_dump myapp > backup.sql
+
+# 2. 更新依赖
+npm update @scenemesh/entity-engine
+
+# 3. 运行迁移
+npx entity-engine migration:run
+
+# 4. 验证升级
+npm test
+```
+
+### Q: 升级后出现兼容性问题？
+
+**A:** 检查兼容性：
+
+1. **查看变更日志**
+   ```bash
+   npx entity-engine changelog
+   ```
+
+2. **运行兼容性检查**
+   ```bash
+   npx entity-engine check-compatibility
+   ```
+
+3. **使用兼容模式**
+   ```typescript
+   const app = new EntityEngine({
+     compatibility: {
+       version: '2.0.0',
+       strict: false
+     }
+   });
+   ```
+
+### Q: 如何从其他 ORM 迁移？
+
+**A:** 提供迁移工具：
+
+```bash
+# 从 TypeORM 迁移
+npx entity-engine migrate:from-typeorm
+
+# 从 Sequelize 迁移  
+npx entity-engine migrate:from-sequelize
+
+# 从 Prisma 迁移
+npx entity-engine migrate:from-prisma
+```
+
+---
+
+## 💬 获取帮助
+
+如果您的问题没有在这里找到答案，可以通过以下方式获取帮助：
+
+- **GitHub Issues**: [报告问题或请求功能](https://github.com/scenemesh/entity-engine/issues)
+- **Discord 社区**: [实时讨论和支持](https://discord.gg/scenemesh)
+- **官方论坛**: [深度技术讨论](https://forum.scenemesh.io)
+- **企业支持**: [commercial@scenemesh.io](mailto:commercial@scenemesh.io)
+
+我们的社区非常活跃，通常在几小时内就会有回复。在提问时，请提供以下信息：
+
+- Entity Engine 版本
+- Node.js 版本
+- 数据库类型和版本
+- 完整的错误消息
+- 相关的代码片段
+
+这样可以帮助我们更快地定位和解决问题。

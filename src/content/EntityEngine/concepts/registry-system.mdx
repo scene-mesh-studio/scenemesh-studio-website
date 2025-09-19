@@ -1,0 +1,343 @@
+# 注册表系统
+
+Entity Engine 使用多个专门的注册表来管理不同类型的组件。每个注册表负责特定功能：元数据注册表管理模型和视图，字段类型注册表管理数据类型，组件注册表管理UI组件，等等。
+
+通过注册表系统，您可以动态扩展引擎的功能，注册自定义组件，并在运行时查找和使用这些组件。
+
+## 使用元数据注册表
+
+元数据注册表是最常用的注册表，负责管理所有的实体模型和视图定义。
+
+### 注册模型
+
+使用 `updateOrRegister` 方法向元数据注册表添加新的模型定义：
+
+```typescript
+const engine = await getEntityEngine();
+
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品管理',
+  fields: [
+    { name: 'id', title: 'ID', type: 'string', isRequired: true },
+    { name: 'name', title: '产品名称', type: 'string', isRequired: true },
+    { name: 'price', title: '价格', type: 'number', isRequired: true }
+  ]
+});
+```
+
+注册完成后，您就可以在整个应用中使用这个模型进行数据操作。引擎会自动处理模型的持久化和版本管理。
+
+### 查找已注册的模型
+
+使用 `getModel` 方法获取特定的模型定义：
+
+```typescript
+const productModel = await engine.metaRegistry.getModel('Product');
+if (productModel) {
+  console.log('产品模型有', productModel.fields.length, '个字段');
+}
+```
+
+您也可以获取所有已注册的模型列表：
+
+```typescript
+const allModels = engine.metaRegistry.models;
+console.log('系统中共有', allModels.length, '个模型');
+```
+
+### 注册视图
+
+视图定义了数据的展示方式。使用 `updateOrRegisterView` 方法注册视图：
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Product',
+  name: 'ProductFormView',
+  title: '产品编辑表单',
+  type: 'FormView',
+  config: {
+    fields: ['name', 'price'],
+    submitAction: 'save'
+  }
+});
+```
+
+查找视图时可以按模型名称和视图类型进行筛选：
+
+```typescript
+// 查找产品模型的表单视图
+const formView = engine.metaRegistry.findView('Product', 'FormView');
+
+// 获取特定的视图
+const gridView = engine.metaRegistry.getView('ProductGridView');
+```
+
+## 使用字段类型注册表
+
+字段类型注册表管理所有可用的数据类型处理器。引擎预置了常用的字段类型，您也可以注册自定义类型。
+
+### 注册自定义字段类型
+
+当您需要特殊的数据处理逻辑时，可以创建并注册自定义字段类型：
+
+```typescript
+// 定义自定义字段类型
+const emailFieldTyper = {
+  name: 'email',
+  validate: (value) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(value);
+  },
+  format: (value) => value.toLowerCase().trim(),
+  defaultValue: ''
+};
+
+// 注册到字段类型注册表
+engine.fieldTyperRegistry.registerFieldTyper(emailFieldTyper);
+```
+
+注册后，您就可以在模型字段中使用这个自定义类型：
+
+```typescript
+await engine.metaRegistry.updateOrRegister({
+  name: 'User',
+  title: '用户',
+  fields: [
+    { name: 'email', title: '邮箱', type: 'email', isRequired: true }
+  ]
+});
+```
+
+### 查找字段类型
+
+使用 `getFieldTyper` 方法获取特定的字段类型处理器：
+
+```typescript
+const stringTyper = engine.fieldTyperRegistry.getFieldTyper('string');
+const emailTyper = engine.fieldTyperRegistry.getFieldTyper('email');
+```
+
+查看所有可用的字段类型：
+
+```typescript
+const allTypers = engine.fieldTyperRegistry.getFieldTypers();
+console.log('可用的字段类型：', allTypers.map(t => t.name));
+```
+
+## 使用组件注册表
+
+组件注册表管理所有的UI组件，包括视图组件、渲染器和小部件。
+
+### 注册自定义视图组件
+
+当内置的视图组件无法满足需求时，您可以注册自定义的视图组件：
+
+```typescript
+// 创建自定义视图组件
+class CustomReportView extends EntityView {
+  name = 'CustomReportView';
+  displayName = '自定义报表';
+  // ... 组件实现
+}
+
+// 注册到组件注册表
+engine.componentRegistry.registerView(new CustomReportView());
+```
+
+注册后，这个视图组件就可以在视图定义中使用：
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'SalesData',
+  name: 'SalesReportView', 
+  title: '销售报表',
+  type: 'CustomReportView'
+});
+```
+
+### 查找视图组件
+
+使用 `getView` 方法获取已注册的视图组件：
+
+```typescript
+const formView = engine.componentRegistry.getView('FormView');
+const customView = engine.componentRegistry.getView('CustomReportView');
+```
+
+查看所有可用的视图组件：
+
+```typescript
+const allViews = engine.componentRegistry.getViews();
+console.log('可用的视图组件：', allViews.map(v => v.name));
+```
+
+### 注册自定义渲染器
+
+渲染器负责特定字段或组件的渲染逻辑：
+
+```typescript
+const customRenderer = {
+  name: 'currency-renderer',
+  component: CurrencyRenderer,
+  fieldTypes: ['number'],
+  props: { currency: 'CNY' }
+};
+
+engine.componentRegistry.registerRenderer(customRenderer);
+```
+
+## 使用动作注册表
+
+动作注册表管理所有的业务动作处理器，让您可以自定义数据操作的业务逻辑。
+
+### 注册动作处理器
+
+创建并注册处理特定业务逻辑的动作处理器：
+
+```typescript
+const publishProductHandler = {
+  actionNames: ['publishProduct'],
+  async handle(context) {
+    // 更新产品状态为已发布
+    await context.datasource.updateObject({
+      modelName: 'Product',
+      id: context.objectId,
+      values: { status: 'published', publishedAt: new Date() }
+    });
+    
+    // 发送通知邮件
+    await sendNotificationEmail(context.objectId);
+    
+    return { success: true, message: '产品已成功发布' };
+  }
+};
+
+engine.actionRegistry.registerActionHandler(publishProductHandler);
+```
+
+### 调用已注册的动作
+
+使用 `getActionHandler` 方法获取并执行动作：
+
+```typescript
+const handler = engine.actionRegistry.getActionHandler('publishProduct');
+if (handler) {
+  const result = await handler.handle({
+    objectId: 'product-123',
+    datasource: engine.datasourceFactory.create('Product')
+  });
+  console.log(result.message);
+}
+```
+
+## 实际应用场景
+
+### 创建主题化的组件套件
+
+您可以创建一套主题一致的组件并批量注册：
+
+```typescript
+// 注册企业主题的组件套件
+const enterpriseComponents = [
+  new EnterpriseFormView(),
+  new EnterpriseGridView(),
+  new EnterpriseDashboardView()
+];
+
+enterpriseComponents.forEach(component => {
+  engine.componentRegistry.registerView(component);
+});
+
+// 注册配套的渲染器
+const enterpriseRenderers = [
+  { name: 'enterprise-input', component: EnterpriseInput },
+  { name: 'enterprise-button', component: EnterpriseButton }
+];
+
+enterpriseRenderers.forEach(renderer => {
+  engine.componentRegistry.registerRenderer(renderer);
+});
+```
+
+### 动态模块加载
+
+在运行时动态加载和注册外部模块的组件：
+
+```typescript
+// 动态加载第三方模块
+const externalModule = await import('@company/advanced-charts');
+
+// 注册模块中的字段类型
+externalModule.fieldTypes.forEach(fieldType => {
+  engine.fieldTyperRegistry.registerFieldTyper(fieldType);
+});
+
+// 注册模块中的视图组件
+externalModule.viewComponents.forEach(component => {
+  engine.componentRegistry.registerView(component);
+});
+```
+
+### 环境特定的组件
+
+根据运行环境注册不同的组件实现：
+
+```typescript
+if (process.env.NODE_ENV === 'development') {
+  // 开发环境注册调试组件
+  engine.componentRegistry.registerView(new DebugFormView());
+  engine.componentRegistry.registerRenderer({
+    name: 'debug-info',
+    component: DebugInfoRenderer
+  });
+} else {
+  // 生产环境注册优化组件  
+  engine.componentRegistry.registerView(new OptimizedFormView());
+}
+```
+
+## 最佳实践
+
+### 统一命名规范
+
+建立清晰的组件命名规范，便于管理和使用：
+
+- 模型名称使用 PascalCase：`User`、`ProductCategory`
+- 视图名称包含模型和类型：`UserFormView`、`ProductGridView`  
+- 字段类型使用 camelCase：`email`、`phoneNumber`
+- 动作名称使用动词形式：`publishProduct`、`sendEmail`
+
+### 组件版本管理
+
+为自定义组件添加版本信息，便于升级和维护：
+
+```typescript
+const customComponent = {
+  name: 'AdvancedDataGrid',
+  version: '2.1.0',
+  author: 'Your Company',
+  description: '高级数据表格组件',
+  // ... 组件实现
+};
+```
+
+### 注册表清理
+
+在适当的时候清理不再使用的组件，避免内存泄漏：
+
+```typescript
+// 应用退出或模块卸载时清理注册表
+engine.metaRegistry.cleanup();
+engine.componentRegistry.cleanup();
+```
+
+注册表系统为 Entity Engine 提供了强大的扩展能力。通过合理使用各种注册表，您可以构建功能丰富、高度定制化的应用系统。
+
+## 下一步
+
+了解注册表系统后，您可能想要：
+
+- 学习[事件与动作](/concepts/event-and-action)来处理业务逻辑
+- 探索[字段类型](/concepts/field-typer)的详细用法
+- 查看[实体视图](/concepts/entity-view)的配置选项

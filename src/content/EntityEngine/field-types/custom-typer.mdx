@@ -1,0 +1,450 @@
+# 自定义字段类型
+
+当内置字段类型无法满足特定业务需求时，您可以创建自定义字段类型。自定义字段类型让您可以为特殊数据提供专门的验证逻辑、显示组件和查询方式。
+
+比如创建一个颜色字段类型，提供颜色选择器组件和颜色格式验证；或者创建一个坐标字段类型，用于地图位置数据的处理。
+
+## 创建基础自定义字段类型
+
+最简单的自定义字段类型只需要定义类型名称、显示标题和基本配置：
+
+```typescript
+import { BaseFieldTyper } from '@scenemesh/entity-engine';
+
+export class ColorFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '颜色',
+      type: 'color',
+      widgetType: 'color-picker',
+      defaultValue: '#ffffff',
+      description: '颜色选择字段',
+    });
+  }
+
+  // 提供颜色格式验证
+  getDefaultSchema(field) {
+    const colorRegex = /^#[0-9A-F]{6}$/i;
+    let schema = z.string().regex(colorRegex, '请输入有效的颜色值');
+    return field.isRequired ? schema : schema.optional();
+  }
+}
+```
+
+创建完成后，需要向引擎注册这个自定义字段类型：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+engine.fieldTyperRegistry.registerFieldTyper(new ColorFieldTyper());
+```
+
+注册后，您就可以在模型定义中使用这个字段类型：
+
+```typescript
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品',
+  fields: [
+    {
+      name: 'themeColor',
+      title: '主题颜色',
+      type: 'color',  // 使用自定义的颜色字段类型
+      isRequired: true
+    }
+  ]
+});
+```
+
+## 支持查询操作
+
+为自定义字段类型定义支持的查询操作符，让用户可以按这种字段类型进行数据搜索：
+
+```typescript
+export class ColorFieldTyper extends BaseFieldTyper {
+  // ... 其他代码
+
+  getQueryItemMeta(field) {
+    return {
+      field,
+      operators: [
+        'equals',           // 等于
+        'not_equals',      // 不等于
+        'is_null',         // 为空
+        'is_not_null'      // 不为空
+      ],
+      options: [
+        { label: '红色', value: '#FF0000' },
+        { label: '蓝色', value: '#0000FF' },
+        { label: '绿色', value: '#00FF00' }
+      ]
+    };
+  }
+}
+```
+
+这样用户在查询界面中就可以选择"颜色等于红色"或"颜色不为空"等条件。
+
+## 复杂字段类型示例
+
+创建一个地理坐标字段类型，用于存储和处理位置数据：
+
+```typescript
+export class CoordinateFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '坐标',
+      type: 'coordinate',
+      widgetType: 'map-picker',
+      defaultValue: { latitude: 0, longitude: 0 },
+      description: '地理坐标字段',
+    });
+  }
+
+  getDefaultSchema(field) {
+    const coordinateSchema = z.object({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180)
+    });
+    
+    return field.isRequired ? coordinateSchema : coordinateSchema.optional();
+  }
+
+  // 格式化显示坐标信息
+  formatDisplayValue(value, field) {
+    if (!value) return '未设置';
+    return `${value.latitude.toFixed(6)}, ${value.longitude.toFixed(6)}`;
+  }
+
+  // 支持距离查询
+  getQueryItemMeta(field) {
+    return {
+      field,
+      operators: [
+        'within_distance',  // 在指定距离内
+        'is_null',
+        'is_not_null'
+      ],
+      options: []
+    };
+  }
+}
+```
+
+在模型中使用坐标字段：
+
+```typescript
+{
+  name: 'location',
+  title: '店铺位置',
+  type: 'coordinate',
+  isRequired: true
+}
+```
+
+## 邮箱字段类型示例
+
+创建一个专门处理邮箱地址的字段类型：
+
+```typescript
+export class EmailFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '邮箱',
+      type: 'email',
+      widgetType: 'email-input',
+      defaultValue: '',
+      description: '邮箱地址字段',
+    });
+  }
+
+  getDefaultSchema(field) {
+    let schema = z.string().email('请输入有效的邮箱地址');
+    return field.isRequired ? schema : schema.optional();
+  }
+
+  // 格式化显示为可点击的邮箱链接
+  formatDisplayValue(value) {
+    if (!value) return '';
+    return `<a href="mailto:${value}">${value}</a>`;
+  }
+
+  // 支持邮箱域名查询
+  getQueryItemMeta(field) {
+    return {
+      field,
+      operators: [
+        'equals',
+        'contains',
+        'ends_with',  // 支持按域名查询，如 @company.com
+        'is_null',
+        'is_not_null'
+      ],
+      options: []
+    };
+  }
+}
+```
+
+## 价格字段类型示例
+
+创建一个专门处理货币金额的字段类型：
+
+```typescript
+export class PriceFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '价格',
+      type: 'price',
+      widgetType: 'currency-input',
+      defaultValue: 0,
+      description: '货币价格字段',
+    });
+  }
+
+  getDefaultSchema(field) {
+    let schema = z.number().min(0, '价格不能为负数');
+    return field.isRequired ? schema : schema.optional();
+  }
+
+  // 格式化显示为货币格式
+  formatDisplayValue(value, field) {
+    if (value === null || value === undefined) return '';
+    
+    const currency = field.config?.currency || 'CNY';
+    const locale = field.config?.locale || 'zh-CN';
+    
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency
+    }).format(value);
+  }
+
+  getQueryItemMeta(field) {
+    return {
+      field,
+      operators: [
+        'equals',
+        'greater_than',
+        'less_than',
+        'between',  // 价格区间查询
+        'is_null',
+        'is_not_null'
+      ],
+      options: []
+    };
+  }
+}
+```
+
+在模型中使用价格字段：
+
+```typescript
+{
+  name: 'price',
+  title: '售价',
+  type: 'price',
+  config: {
+    currency: 'CNY',
+    locale: 'zh-CN'
+  }
+}
+```
+
+## 评级字段类型示例
+
+创建一个星级评分字段类型：
+
+```typescript
+export class RatingFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '评级',
+      type: 'rating',
+      widgetType: 'star-rating',
+      defaultValue: 0,
+      description: '星级评分字段',
+    });
+  }
+
+  getDefaultSchema(field) {
+    const maxRating = field.config?.maxRating || 5;
+    let schema = z.number().min(0).max(maxRating);
+    return field.isRequired ? schema : schema.optional();
+  }
+
+  // 显示为星星图标
+  formatDisplayValue(value, field) {
+    if (!value) return '未评分';
+    const maxRating = field.config?.maxRating || 5;
+    const stars = '★'.repeat(value) + '☆'.repeat(maxRating - value);
+    return `${stars} (${value}/${maxRating})`;
+  }
+
+  getQueryItemMeta(field) {
+    const maxRating = field.config?.maxRating || 5;
+    const options = [];
+    for (let i = 1; i <= maxRating; i++) {
+      options.push({ label: `${i}星`, value: i });
+    }
+
+    return {
+      field,
+      operators: [
+        'equals',
+        'greater_than',
+        'less_than',
+        'is_null',
+        'is_not_null'
+      ],
+      options
+    };
+  }
+}
+```
+
+## 注册和使用自定义字段类型
+
+### 批量注册字段类型
+
+当您有多个自定义字段类型时，可以批量注册：
+
+```typescript
+const customFieldTypes = [
+  new ColorFieldTyper(),
+  new CoordinateFieldTyper(), 
+  new EmailFieldTyper(),
+  new PriceFieldTyper(),
+  new RatingFieldTyper()
+];
+
+customFieldTypes.forEach(fieldType => {
+  engine.fieldTyperRegistry.registerFieldTyper(fieldType);
+});
+```
+
+### 检查字段类型是否已注册
+
+```typescript
+// 检查特定字段类型是否可用
+const colorTyper = engine.fieldTyperRegistry.getFieldTyper('color');
+if (colorTyper) {
+  console.log('颜色字段类型已可用');
+}
+
+// 获取所有已注册的字段类型
+const allFieldTypes = engine.fieldTyperRegistry.getFieldTypers();
+console.log('可用的字段类型：', allFieldTypes.map(t => t.type));
+```
+
+### 在模块中使用
+
+您可以将自定义字段类型打包到模块中，方便在不同项目中重用：
+
+```typescript
+export const CustomFieldTypesModule = {
+  info: {
+    name: 'CustomFieldTypesModule',
+    description: '自定义字段类型集合',
+    version: '1.0.0'
+  },
+
+  async setupConfig(args) {
+    // 模块不需要添加模型，只注册字段类型
+  },
+
+  async setupComponents(args) {
+    // 注册自定义字段类型
+    const fieldTypes = [
+      new ColorFieldTyper(),
+      new CoordinateFieldTyper(),
+      new EmailFieldTyper(),
+      new PriceFieldTyper(),
+      new RatingFieldTyper()
+    ];
+
+    // 将字段类型添加到引擎中（需要通过模块加载机制）
+    fieldTypes.forEach(fieldType => {
+      args.fieldTypes.push(fieldType);
+    });
+  }
+};
+```
+
+## 最佳实践
+
+### 命名规范
+
+为自定义字段类型使用清晰的命名：
+
+- 类名使用 `PascalCase` 并以 `FieldTyper` 结尾
+- 类型名使用 `snake_case` 或 `camelCase`  
+- 显示标题使用中文，简洁明了
+
+### 提供完整的配置选项
+
+```typescript
+export class CustomFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '自定义字段',
+      type: 'custom',
+      widgetType: 'custom-widget',
+      defaultValue: null,
+      description: '详细的字段描述',
+      category: 'business'  // 字段分类
+    });
+  }
+}
+```
+
+### 验证和错误处理
+
+确保自定义字段类型有完整的数据验证：
+
+```typescript
+getDefaultSchema(field) {
+  try {
+    let schema = z.string().min(1, '字段不能为空');
+    
+    // 根据字段配置添加额外验证
+    if (field.config?.maxLength) {
+      schema = schema.max(field.config.maxLength, `长度不能超过${field.config.maxLength}个字符`);
+    }
+    
+    return field.isRequired ? schema : schema.optional();
+  } catch (error) {
+    console.error('字段验证配置错误:', error);
+    return z.any(); // 降级方案
+  }
+}
+```
+
+### 提供用户友好的显示
+
+```typescript
+formatDisplayValue(value, field, context) {
+  // 处理空值
+  if (value === null || value === undefined) {
+    return context?.showEmptyAsText ? '(空)' : '';
+  }
+
+  // 根据上下文调整显示格式
+  if (context?.format === 'short') {
+    return this.formatShortDisplay(value);
+  }
+  
+  return this.formatFullDisplay(value);
+}
+```
+
+通过创建自定义字段类型，您可以为特定的业务场景提供专门优化的数据处理和用户体验。
+
+## 下一步
+
+了解自定义字段类型后，您可能想要：
+
+- 学习[查询操作符](/field-types/query-operators)来定义字段的查询逻辑
+- 探索[组件映射](/field-types/widget-mapping)来为字段类型配置自定义UI组件
+- 查看[内置字段类型](/field-types/builtin-types)了解可以扩展的基础类型

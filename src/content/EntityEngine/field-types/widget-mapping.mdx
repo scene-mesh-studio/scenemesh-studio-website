@@ -1,0 +1,524 @@
+# 组件映射
+
+Entity Engine 为每种字段类型自动选择最合适的输入组件。您也可以根据具体需求自定义字段的显示组件，比如将普通文本框改为富文本编辑器，或者为数字字段使用滑块组件。
+
+组件映射让您可以在不修改模型定义的情况下，为不同的使用场景提供最佳的用户体验。同一个字段在不同的视图中可以使用不同的组件。
+
+## 默认组件映射
+
+每种字段类型都有默认的输入组件，适合大多数使用场景：
+
+### 文本字段组件
+
+```typescript
+// 单行文本 - 默认使用 textfield
+{
+  name: 'title',
+  type: 'string'
+  // 自动使用文本输入框
+}
+
+// 多行文本 - 自动使用 textarea
+{
+  name: 'description',
+  type: 'string',
+  config: {
+    multiline: true
+  }
+  // 自动使用多行文本框
+}
+
+// 邮箱 - 自动使用邮箱输入框
+{
+  name: 'email',
+  type: 'string',
+  config: {
+    format: 'email'
+  }
+  // 自动使用邮箱格式输入框
+}
+```
+
+### 数字字段组件
+
+```typescript
+// 基础数字 - 默认使用 number
+{
+  name: 'price',
+  type: 'number'
+  // 自动使用数字输入框
+}
+
+// 百分比 - 自动使用百分比组件
+{
+  name: 'discount',
+  type: 'number',
+  config: {
+    format: 'percentage'
+  }
+  // 自动使用百分比输入框
+}
+```
+
+### 选择字段组件
+
+```typescript
+// 枚举 - 默认使用 select
+{
+  name: 'status',
+  type: 'enum',
+  options: [
+    { label: '草稿', value: 'draft' },
+    { label: '发布', value: 'published' }
+  ]
+  // 自动使用下拉选择框
+}
+
+// 布尔值 - 默认使用 switch
+{
+  name: 'isActive',
+  type: 'boolean'
+  // 自动使用开关组件
+}
+```
+
+## 自定义字段组件
+
+您可以为特定字段指定使用不同的组件：
+
+### 在字段定义中指定组件
+
+```typescript
+// 使用富文本编辑器替代普通文本框
+{
+  name: 'content',
+  title: '文章内容',
+  type: 'string',
+  widget: 'rich-text-editor'
+}
+
+// 使用滑块替代数字输入框
+{
+  name: 'rating',
+  title: '评分',
+  type: 'number',
+  widget: 'slider',
+  config: {
+    min: 1,
+    max: 10
+  }
+}
+
+// 使用单选按钮替代下拉框
+{
+  name: 'priority',
+  title: '优先级',
+  type: 'enum',
+  widget: 'radio-group',
+  options: [
+    { label: '低', value: 'low' },
+    { label: '中', value: 'medium' },
+    { label: '高', value: 'high' }
+  ]
+}
+```
+
+### 在视图中指定组件
+
+同一个字段在不同视图中可以使用不同的组件：
+
+```typescript
+// 在表单视图中使用富文本编辑器
+{
+  modelName: 'Article',
+  name: 'ArticleFormView',
+  type: 'FormView',
+  config: {
+    fields: [
+      {
+        name: 'content',
+        widget: 'rich-text-editor'
+      }
+    ]
+  }
+}
+
+// 在网格视图中使用简单文本显示
+{
+  modelName: 'Article', 
+  name: 'ArticleGridView',
+  type: 'GridView',
+  config: {
+    columns: [
+      {
+        name: 'content',
+        widget: 'text-preview'  // 只显示文本摘要
+      }
+    ]
+  }
+}
+```
+
+## 常用组件类型
+
+### 文本输入组件
+
+```typescript
+// 基础文本框
+{ widget: 'textfield' }
+
+// 多行文本框
+{ widget: 'textarea' }
+
+// 富文本编辑器
+{ widget: 'rich-text-editor' }
+
+// Markdown 编辑器
+{ widget: 'markdown-editor' }
+
+// 代码编辑器
+{ widget: 'code-editor' }
+```
+
+### 数字输入组件
+
+```typescript
+// 数字输入框
+{ widget: 'number' }
+
+// 滑块
+{ widget: 'slider' }
+
+// 评级星星
+{ widget: 'rating' }
+
+// 货币输入
+{ widget: 'currency' }
+```
+
+### 选择组件
+
+```typescript
+// 下拉选择框
+{ widget: 'select' }
+
+// 单选按钮组
+{ widget: 'radio-group' }
+
+// 复选框组
+{ widget: 'checkbox-group' }
+
+// 标签选择器
+{ widget: 'tag-select' }
+```
+
+### 日期时间组件
+
+```typescript
+// 日期选择器
+{ widget: 'date-picker' }
+
+// 时间选择器
+{ widget: 'time-picker' }
+
+// 日期时间选择器
+{ widget: 'datetime-picker' }
+
+// 日期范围选择器
+{ widget: 'date-range-picker' }
+```
+
+### 文件上传组件
+
+```typescript
+// 文件上传
+{ widget: 'file-upload' }
+
+// 图片上传
+{ widget: 'image-upload' }
+
+// 头像上传
+{ widget: 'avatar-upload' }
+
+// 拖拽上传
+{ widget: 'drag-upload' }
+```
+
+## 组件配置选项
+
+不同的组件支持不同的配置选项：
+
+### 富文本编辑器配置
+
+```typescript
+{
+  name: 'content',
+  type: 'string',
+  widget: 'rich-text-editor',
+  config: {
+    toolbar: ['bold', 'italic', 'link', 'image'],
+    placeholder: '请输入文章内容...',
+    maxLength: 10000
+  }
+}
+```
+
+### 滑块组件配置
+
+```typescript
+{
+  name: 'volume',
+  type: 'number',
+  widget: 'slider',
+  config: {
+    min: 0,
+    max: 100,
+    step: 5,
+    showMarks: true,
+    showValue: true
+  }
+}
+```
+
+### 图片上传配置
+
+```typescript
+{
+  name: 'avatar',
+  type: 'binary',
+  widget: 'image-upload',
+  config: {
+    accept: 'image/*',
+    maxSize: '2MB',
+    cropAspectRatio: 1, // 正方形裁剪
+    preview: true
+  }
+}
+```
+
+### 标签选择器配置
+
+```typescript
+{
+  name: 'tags',
+  type: 'array',
+  widget: 'tag-select',
+  config: {
+    allowCustom: true,
+    maxTags: 10,
+    suggestions: ['JavaScript', 'React', 'Vue', 'Angular']
+  }
+}
+```
+
+## 条件组件显示
+
+根据其他字段的值来决定显示哪个组件：
+
+```typescript
+{
+  name: 'settings',
+  type: 'json',
+  widget: 'dynamic-form',
+  config: {
+    // 根据类型字段的值显示不同的表单
+    dependsOn: 'type',
+    widgets: {
+      'email': 'email-settings-form',
+      'sms': 'sms-settings-form',
+      'webhook': 'webhook-settings-form'
+    }
+  }
+}
+```
+
+## 自定义组件开发
+
+当内置组件无法满足需求时，您可以开发自定义组件：
+
+### 注册自定义组件
+
+```typescript
+import { CustomColorPicker } from './components/CustomColorPicker';
+
+const engine = await getEntityEngine();
+
+// 注册自定义组件
+engine.componentRegistry.registerWidget({
+  name: 'custom-color-picker',
+  component: CustomColorPicker,
+  fieldTypes: ['string'],
+  description: '自定义颜色选择器'
+});
+```
+
+### 使用自定义组件
+
+```typescript
+{
+  name: 'themeColor',
+  title: '主题颜色',
+  type: 'string',
+  widget: 'custom-color-picker',
+  config: {
+    palette: ['#ff0000', '#00ff00', '#0000ff'],
+    showHex: true
+  }
+}
+```
+
+## 响应式组件适配
+
+根据设备类型自动选择合适的组件：
+
+```typescript
+{
+  name: 'description',
+  type: 'string',
+  widget: {
+    desktop: 'rich-text-editor',  // 桌面端使用富文本编辑器
+    tablet: 'textarea',           // 平板使用多行文本框
+    mobile: 'textfield'           // 手机使用单行文本框
+  }
+}
+```
+
+## 组件性能优化
+
+### 延迟加载重型组件
+
+```typescript
+{
+  name: 'content',
+  type: 'string',
+  widget: 'rich-text-editor',
+  config: {
+    lazy: true,  // 延迟加载编辑器
+    placeholder: '点击开始编辑...'
+  }
+}
+```
+
+### 组件预加载
+
+```typescript
+// 在应用启动时预加载常用组件
+const engine = await getEntityEngine();
+
+await engine.componentRegistry.preloadWidgets([
+  'rich-text-editor',
+  'image-upload',
+  'date-picker'
+]);
+```
+
+## 组件主题定制
+
+为组件应用不同的主题样式：
+
+```typescript
+{
+  name: 'title',
+  type: 'string',
+  widget: 'textfield',
+  config: {
+    theme: 'primary',       // 主题色
+    size: 'large',          // 组件大小
+    variant: 'outlined'     // 样式变体
+  }
+}
+```
+
+## 实际应用场景
+
+### 内容管理系统
+
+为不同类型的内容选择合适的编辑组件：
+
+```typescript
+// 文章内容使用富文本编辑器
+{
+  name: 'content',
+  type: 'string',
+  widget: 'rich-text-editor'
+}
+
+// 摘要使用多行文本框
+{
+  name: 'summary',
+  type: 'string', 
+  widget: 'textarea',
+  config: { rows: 3 }
+}
+
+// 标签使用标签选择器
+{
+  name: 'tags',
+  type: 'array',
+  widget: 'tag-select'
+}
+```
+
+### 电商产品管理
+
+为商品信息选择专门的组件：
+
+```typescript
+// 价格使用货币输入
+{
+  name: 'price',
+  type: 'number',
+  widget: 'currency'
+}
+
+// 商品图片使用图片上传组件
+{
+  name: 'images',
+  type: 'array',
+  widget: 'image-gallery-upload'
+}
+
+// 商品评分使用星级组件
+{
+  name: 'rating',
+  type: 'number',
+  widget: 'rating'
+}
+```
+
+### 用户设置界面
+
+为用户偏好设置选择直观的组件：
+
+```typescript
+// 通知开关使用切换按钮
+{
+  name: 'emailNotifications',
+  type: 'boolean',
+  widget: 'switch'
+}
+
+// 主题选择使用单选按钮
+{
+  name: 'theme',
+  type: 'enum',
+  widget: 'radio-group'
+}
+
+// 音量设置使用滑块
+{
+  name: 'volume',
+  type: 'number',
+  widget: 'slider'
+}
+```
+
+通过合理的组件映射，您可以为用户提供最佳的数据输入和展示体验，让复杂的数据管理变得简单直观。
+
+## 下一步
+
+了解组件映射后，您可能想要：
+
+- 学习[内置字段类型](/field-types/builtin-types)了解每种类型的默认组件
+- 探索[自定义字段类型](/field-types/custom-typer)来创建专门的组件映射
+- 查看[查询操作符](/field-types/query-operators)了解如何在查询界面中使用合适的组件

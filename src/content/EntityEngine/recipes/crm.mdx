@@ -1,0 +1,1697 @@
+# 客户关系管理系统
+
+本文介绍如何使用 Entity Engine 构建一个功能完整的客户关系管理（CRM）系统，涵盖客户管理、销售管道、营销活动、服务支持和业务分析等核心功能。
+
+## 系统架构
+
+### 核心实体模型
+
+```typescript
+// 客户模型
+export const CustomerModel: IEntityModel = {
+  name: 'Customer',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    customerNumber: { type: 'string', unique: true, required: true },
+    type: {
+      type: 'enum',
+      enumValues: ['INDIVIDUAL', 'COMPANY'],
+      defaultValue: 'INDIVIDUAL'
+    },
+    // 个人信息
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    fullName: { type: 'string' },
+    title: { type: 'string' },
+    // 公司信息
+    companyName: { type: 'string' },
+    industry: { type: 'string' },
+    employeeCount: { type: 'number' },
+    annualRevenue: { type: 'decimal' },
+    // 联系信息
+    email: { type: 'string', required: true },
+    phone: { type: 'string' },
+    mobile: { type: 'string' },
+    website: { type: 'string' },
+    // 地址信息
+    addresses: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'CustomerAddress', foreignKey: 'customerId' }
+    },
+    // 状态和分类
+    status: {
+      type: 'enum',
+      enumValues: ['LEAD', 'PROSPECT', 'CUSTOMER', 'INACTIVE'],
+      defaultValue: 'LEAD'
+    },
+    priority: {
+      type: 'enum',
+      enumValues: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+      defaultValue: 'MEDIUM'
+    },
+    source: { type: 'string' }, // 客户来源
+    tags: { type: 'json', defaultValue: [] },
+    // 关系管理
+    assignedToId: { type: 'uuid' },
+    assignedTo: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    teamId: { type: 'uuid' },
+    team: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Team', targetKey: 'id' }
+    },
+    // 业务数据
+    opportunities: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Opportunity', foreignKey: 'customerId' }
+    },
+    activities: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Activity', foreignKey: 'customerId' }
+    },
+    tickets: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Ticket', foreignKey: 'customerId' }
+    },
+    invoices: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Invoice', foreignKey: 'customerId' }
+    },
+    // 统计数据
+    totalValue: { type: 'decimal', defaultValue: 0 },
+    lastContactDate: { type: 'datetime' },
+    nextContactDate: { type: 'datetime' },
+    lifetimeValue: { type: 'decimal', defaultValue: 0 },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    notes: { type: 'text' },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['customerNumber'], unique: true },
+    { fields: ['email'] },
+    { fields: ['status'] },
+    { fields: ['assignedToId'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 销售机会模型
+export const OpportunityModel: IEntityModel = {
+  name: 'Opportunity',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    title: { type: 'string', required: true },
+    description: { type: 'text' },
+    customerId: { type: 'uuid', required: true },
+    customer: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Customer', targetKey: 'id' }
+    },
+    // 销售信息
+    amount: { type: 'decimal', required: true },
+    currency: { type: 'string', defaultValue: 'USD' },
+    probability: { type: 'number', min: 0, max: 100, defaultValue: 50 },
+    expectedCloseDate: { type: 'date' },
+    actualCloseDate: { type: 'date' },
+    // 阶段管理
+    stageId: { type: 'uuid', required: true },
+    stage: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'OpportunityStage', targetKey: 'id' }
+    },
+    status: {
+      type: 'enum',
+      enumValues: ['OPEN', 'WON', 'LOST', 'CANCELLED'],
+      defaultValue: 'OPEN'
+    },
+    lostReason: { type: 'string' },
+    // 负责人
+    ownerId: { type: 'uuid', required: true },
+    owner: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    teamId: { type: 'uuid' },
+    team: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Team', targetKey: 'id' }
+    },
+    // 产品和服务
+    products: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Product', through: 'OpportunityProduct' }
+    },
+    // 活动记录
+    activities: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Activity', foreignKey: 'opportunityId' }
+    },
+    // 竞争对手
+    competitors: { type: 'json', defaultValue: [] },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['customerId'] },
+    { fields: ['stageId'] },
+    { fields: ['ownerId'] },
+    { fields: ['status'] },
+    { fields: ['expectedCloseDate'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 销售阶段模型
+export const OpportunityStageModel: IEntityModel = {
+  name: 'OpportunityStage',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    description: { type: 'string' },
+    probability: { type: 'number', min: 0, max: 100 },
+    sortOrder: { type: 'number', required: true },
+    color: { type: 'string' },
+    isActive: { type: 'boolean', defaultValue: true },
+    isWon: { type: 'boolean', defaultValue: false },
+    isLost: { type: 'boolean', defaultValue: false },
+    requirements: { type: 'json', defaultValue: [] }, // 进入此阶段的要求
+    opportunities: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Opportunity', foreignKey: 'stageId' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['sortOrder'] },
+    { fields: ['isActive'] }
+  ]
+};
+
+// 活动模型
+export const ActivityModel: IEntityModel = {
+  name: 'Activity',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    type: {
+      type: 'enum',
+      enumValues: ['CALL', 'EMAIL', 'MEETING', 'TASK', 'NOTE', 'SMS', 'DEMO'],
+      required: true
+    },
+    subject: { type: 'string', required: true },
+    description: { type: 'text' },
+    // 关联对象
+    customerId: { type: 'uuid' },
+    customer: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Customer', targetKey: 'id' }
+    },
+    opportunityId: { type: 'uuid' },
+    opportunity: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Opportunity', targetKey: 'id' }
+    },
+    ticketId: { type: 'uuid' },
+    ticket: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Ticket', targetKey: 'id' }
+    },
+    // 时间管理
+    startDate: { type: 'datetime', required: true },
+    endDate: { type: 'datetime' },
+    duration: { type: 'number' }, // 分钟
+    isAllDay: { type: 'boolean', defaultValue: false },
+    // 状态
+    status: {
+      type: 'enum',
+      enumValues: ['PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+      defaultValue: 'PLANNED'
+    },
+    priority: {
+      type: 'enum',
+      enumValues: ['LOW', 'NORMAL', 'HIGH', 'URGENT'],
+      defaultValue: 'NORMAL'
+    },
+    // 负责人和参与者
+    ownerId: { type: 'uuid', required: true },
+    owner: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    participants: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'User', through: 'ActivityParticipant' }
+    },
+    // 结果记录
+    outcome: { type: 'string' },
+    nextSteps: { type: 'text' },
+    followUpDate: { type: 'datetime' },
+    // 附件和链接
+    attachments: { type: 'json', defaultValue: [] },
+    links: { type: 'json', defaultValue: [] },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['customerId'] },
+    { fields: ['opportunityId'] },
+    { fields: ['ownerId'] },
+    { fields: ['type'] },
+    { fields: ['status'] },
+    { fields: ['startDate'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 营销活动模型
+export const CampaignModel: IEntityModel = {
+  name: 'Campaign',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    description: { type: 'text' },
+    type: {
+      type: 'enum',
+      enumValues: ['EMAIL', 'SMS', 'SOCIAL', 'WEBINAR', 'TRADE_SHOW', 'DIRECT_MAIL', 'OTHER'],
+      required: true
+    },
+    status: {
+      type: 'enum',
+      enumValues: ['PLANNING', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'],
+      defaultValue: 'PLANNING'
+    },
+    // 时间安排
+    startDate: { type: 'datetime' },
+    endDate: { type: 'datetime' },
+    // 预算和成本
+    budget: { type: 'decimal' },
+    actualCost: { type: 'decimal', defaultValue: 0 },
+    // 目标设置
+    targetAudience: { type: 'string' },
+    expectedRevenue: { type: 'decimal' },
+    expectedLeads: { type: 'number' },
+    // 内容
+    message: { type: 'text' },
+    creativeAssets: { type: 'json', defaultValue: [] },
+    // 渠道配置
+    channels: { type: 'json', defaultValue: [] },
+    // 负责人
+    ownerId: { type: 'uuid', required: true },
+    owner: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    teamId: { type: 'uuid' },
+    team: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Team', targetKey: 'id' }
+    },
+    // 目标客户
+    targets: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Customer', through: 'CampaignTarget' }
+    },
+    // 生成的线索
+    leads: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Customer', foreignKey: 'sourceId' }
+    },
+    // 统计数据
+    sentCount: { type: 'number', defaultValue: 0 },
+    deliveredCount: { type: 'number', defaultValue: 0 },
+    openCount: { type: 'number', defaultValue: 0 },
+    clickCount: { type: 'number', defaultValue: 0 },
+    responseCount: { type: 'number', defaultValue: 0 },
+    conversionCount: { type: 'number', defaultValue: 0 },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['status'] },
+    { fields: ['type'] },
+    { fields: ['ownerId'] },
+    { fields: ['startDate'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 服务工单模型
+export const TicketModel: IEntityModel = {
+  name: 'Ticket',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    ticketNumber: { type: 'string', unique: true, required: true },
+    subject: { type: 'string', required: true },
+    description: { type: 'text', required: true },
+    customerId: { type: 'uuid', required: true },
+    customer: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Customer', targetKey: 'id' }
+    },
+    // 分类
+    category: { type: 'string' },
+    subcategory: { type: 'string' },
+    type: {
+      type: 'enum',
+      enumValues: ['QUESTION', 'PROBLEM', 'REQUEST', 'INCIDENT'],
+      required: true
+    },
+    // 优先级和状态
+    priority: {
+      type: 'enum',
+      enumValues: ['LOW', 'NORMAL', 'HIGH', 'URGENT'],
+      defaultValue: 'NORMAL'
+    },
+    status: {
+      type: 'enum',
+      enumValues: ['NEW', 'OPEN', 'PENDING', 'ESCALATED', 'RESOLVED', 'CLOSED'],
+      defaultValue: 'NEW'
+    },
+    resolution: { type: 'text' },
+    // 负责人
+    assignedToId: { type: 'uuid' },
+    assignedTo: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    teamId: { type: 'uuid' },
+    team: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Team', targetKey: 'id' }
+    },
+    // 时间管理
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' },
+    firstResponseAt: { type: 'datetime' },
+    resolvedAt: { type: 'datetime' },
+    closedAt: { type: 'datetime' },
+    dueDate: { type: 'datetime' },
+    // SLA指标
+    responseTime: { type: 'number' }, // 分钟
+    resolutionTime: { type: 'number' }, // 分钟
+    escalationLevel: { type: 'number', defaultValue: 0 },
+    // 沟通记录
+    communications: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'TicketCommunication', foreignKey: 'ticketId' }
+    },
+    // 关联信息
+    relatedTickets: { type: 'json', defaultValue: [] },
+    tags: { type: 'json', defaultValue: [] },
+    // 满意度
+    satisfactionRating: { type: 'number', min: 1, max: 5 },
+    satisfactionComment: { type: 'text' },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} }
+  },
+  indexes: [
+    { fields: ['ticketNumber'], unique: true },
+    { fields: ['customerId'] },
+    { fields: ['status'] },
+    { fields: ['priority'] },
+    { fields: ['assignedToId'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 产品模型
+export const ProductModel: IEntityModel = {
+  name: 'Product',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    code: { type: 'string', unique: true, required: true },
+    description: { type: 'text' },
+    category: { type: 'string' },
+    // 定价
+    price: { type: 'decimal', required: true },
+    cost: { type: 'decimal' },
+    currency: { type: 'string', defaultValue: 'USD' },
+    // 状态
+    status: {
+      type: 'enum',
+      enumValues: ['ACTIVE', 'INACTIVE', 'DISCONTINUED'],
+      defaultValue: 'ACTIVE'
+    },
+    // 销售信息
+    opportunities: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Opportunity', through: 'OpportunityProduct' }
+    },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['code'], unique: true },
+    { fields: ['status'] },
+    { fields: ['category'] }
+  ]
+};
+
+// 团队模型
+export const TeamModel: IEntityModel = {
+  name: 'Team',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    description: { type: 'string' },
+    type: {
+      type: 'enum',
+      enumValues: ['SALES', 'MARKETING', 'SUPPORT', 'MANAGEMENT'],
+      required: true
+    },
+    managerId: { type: 'uuid' },
+    manager: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    members: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'User', through: 'TeamMember' }
+    },
+    customers: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Customer', foreignKey: 'teamId' }
+    },
+    isActive: { type: 'boolean', defaultValue: true },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['type'] },
+    { fields: ['managerId'] },
+    { fields: ['isActive'] }
+  ]
+};
+```
+
+## 业务逻辑实现
+
+### 客户管理动作处理器
+
+```typescript
+// 客户管理动作处理器
+class CustomerManagerActionHandler implements IActionHandler {
+  name = 'customer-manager';
+  displayName = '客户管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['create', 'update', 'merge', 'convert', 'assign', 'segment'],
+        required: true 
+      },
+      customerId: { type: 'string' },
+      data: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'create':
+          return await this.createCustomer(input, entityManager, user);
+        case 'update':
+          return await this.updateCustomer(input, entityManager, user);
+        case 'merge':
+          return await this.mergeCustomers(input, entityManager, user);
+        case 'convert':
+          return await this.convertLead(input, entityManager, user);
+        case 'assign':
+          return await this.assignCustomer(input, entityManager, user);
+        case 'segment':
+          return await this.segmentCustomers(input, entityManager, user);
+        default:
+          throw new Error(`Unknown customer action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'CUSTOMER_ACTION_ERROR' }
+      };
+    }
+  }
+  
+  private async createCustomer(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    // 验证邮箱唯一性
+    const existingCustomer = await entityManager.query({
+      entityType: 'Customer',
+      filter: { email: input.data.email },
+      limit: 1
+    });
+    
+    if (existingCustomer.data.length > 0) {
+      throw new Error('Customer with this email already exists');
+    }
+    
+    // 生成客户编号
+    const customerNumber = await this.generateCustomerNumber(entityManager);
+    
+    // 构建全名
+    const fullName = input.data.type === 'INDIVIDUAL' ? 
+      `${input.data.firstName} ${input.data.lastName}`.trim() :
+      input.data.companyName;
+    
+    // 创建客户
+    const customer = await entityManager.create('Customer', {
+      customerNumber,
+      type: input.data.type || 'INDIVIDUAL',
+      firstName: input.data.firstName,
+      lastName: input.data.lastName,
+      fullName,
+      title: input.data.title,
+      companyName: input.data.companyName,
+      industry: input.data.industry,
+      email: input.data.email,
+      phone: input.data.phone,
+      mobile: input.data.mobile,
+      website: input.data.website,
+      status: input.data.status || 'LEAD',
+      priority: input.data.priority || 'MEDIUM',
+      source: input.data.source,
+      tags: input.data.tags || [],
+      assignedToId: input.data.assignedToId || user.id,
+      teamId: input.data.teamId,
+      customFields: input.data.customFields || {},
+      notes: input.data.notes
+    });
+    
+    // 创建地址信息
+    if (input.data.addresses && input.data.addresses.length > 0) {
+      for (const addressData of input.data.addresses) {
+        await entityManager.create('CustomerAddress', {
+          customerId: customer.id,
+          type: addressData.type,
+          street: addressData.street,
+          city: addressData.city,
+          state: addressData.state,
+          zipCode: addressData.zipCode,
+          country: addressData.country,
+          isPrimary: addressData.isPrimary || false
+        });
+      }
+    }
+    
+    // 创建初始活动记录
+    await entityManager.create('Activity', {
+      type: 'NOTE',
+      subject: 'Customer created',
+      description: `New ${customer.type.toLowerCase()} customer created: ${customer.fullName}`,
+      customerId: customer.id,
+      startDate: new Date(),
+      status: 'COMPLETED',
+      ownerId: user.id
+    });
+    
+    return {
+      success: true,
+      data: { customer },
+      events: [{
+        type: 'customer.created',
+        data: {
+          customerId: customer.id,
+          customerNumber: customer.customerNumber,
+          type: customer.type,
+          createdBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async convertLead(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const customer = await entityManager.get('Customer', input.customerId);
+    
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+    
+    if (customer.status !== 'LEAD') {
+      throw new Error('Only leads can be converted');
+    }
+    
+    // 更新客户状态
+    const updatedCustomer = await entityManager.update('Customer', input.customerId, {
+      status: 'CUSTOMER',
+      updatedAt: new Date()
+    });
+    
+    // 创建转换记录
+    await entityManager.create('Activity', {
+      type: 'NOTE',
+      subject: 'Lead converted to customer',
+      description: `Lead ${customer.fullName} has been converted to a customer`,
+      customerId: customer.id,
+      startDate: new Date(),
+      status: 'COMPLETED',
+      ownerId: user.id
+    });
+    
+    // 如果提供了销售机会信息，创建销售机会
+    if (input.data.opportunity) {
+      const opportunity = await entityManager.create('Opportunity', {
+        title: input.data.opportunity.title,
+        description: input.data.opportunity.description,
+        customerId: customer.id,
+        amount: input.data.opportunity.amount,
+        probability: input.data.opportunity.probability || 25,
+        expectedCloseDate: input.data.opportunity.expectedCloseDate,
+        stageId: input.data.opportunity.stageId,
+        ownerId: user.id
+      });
+      
+      return {
+        success: true,
+        data: { customer: updatedCustomer, opportunity },
+        events: [{
+          type: 'customer.converted',
+          data: {
+            customerId: customer.id,
+            opportunityId: opportunity.id,
+            convertedBy: user.id
+          }
+        }]
+      };
+    }
+    
+    return {
+      success: true,
+      data: { customer: updatedCustomer },
+      events: [{
+        type: 'customer.converted',
+        data: {
+          customerId: customer.id,
+          convertedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async mergeCustomers(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const primaryCustomerId = input.data.primaryCustomerId;
+    const secondaryCustomerId = input.data.secondaryCustomerId;
+    
+    const primaryCustomer = await entityManager.get('Customer', primaryCustomerId);
+    const secondaryCustomer = await entityManager.get('Customer', secondaryCustomerId);
+    
+    if (!primaryCustomer || !secondaryCustomer) {
+      throw new Error('One or both customers not found');
+    }
+    
+    // 在事务中执行合并操作
+    return await context.transaction.run(async () => {
+      // 合并客户数据
+      const mergedData = this.mergeCustomerData(primaryCustomer, secondaryCustomer, input.data.mergeRules);
+      
+      // 更新主客户
+      const updatedCustomer = await entityManager.update('Customer', primaryCustomerId, mergedData);
+      
+      // 迁移关联数据
+      await this.migrateRelatedData(secondaryCustomerId, primaryCustomerId, entityManager);
+      
+      // 标记次要客户为已合并
+      await entityManager.update('Customer', secondaryCustomerId, {
+        status: 'INACTIVE',
+        notes: `Merged into customer ${primaryCustomer.customerNumber} on ${new Date().toISOString()}`
+      });
+      
+      // 创建合并记录
+      await entityManager.create('Activity', {
+        type: 'NOTE',
+        subject: 'Customer merge completed',
+        description: `Customer ${secondaryCustomer.fullName} (${secondaryCustomer.customerNumber}) merged into ${primaryCustomer.fullName} (${primaryCustomer.customerNumber})`,
+        customerId: primaryCustomerId,
+        startDate: new Date(),
+        status: 'COMPLETED',
+        ownerId: user.id
+      });
+      
+      return {
+        success: true,
+        data: { customer: updatedCustomer },
+        events: [{
+          type: 'customer.merged',
+          data: {
+            primaryCustomerId,
+            secondaryCustomerId,
+            mergedBy: user.id
+          }
+        }]
+      };
+    });
+  }
+  
+  private async generateCustomerNumber(entityManager: IEntityManager): Promise<string> {
+    // 获取当前年份
+    const year = new Date().getFullYear();
+    
+    // 获取今年创建的客户数量
+    const count = await entityManager.query({
+      entityType: 'Customer',
+      filter: {
+        createdAt: {
+          $gte: new Date(year, 0, 1),
+          $lt: new Date(year + 1, 0, 1)
+        }
+      },
+      operation: 'count'
+    });
+    
+    // 生成格式：CUST-YYYY-NNNNNN
+    const sequence = (count.total + 1).toString().padStart(6, '0');
+    return `CUST-${year}-${sequence}`;
+  }
+  
+  private mergeCustomerData(primary: any, secondary: any, mergeRules: any): any {
+    const merged = { ...primary };
+    
+    // 根据合并规则合并字段
+    for (const [field, rule] of Object.entries(mergeRules || {})) {
+      switch (rule) {
+        case 'primary':
+          // 保持主客户的值
+          break;
+        case 'secondary':
+          if (secondary[field]) {
+            merged[field] = secondary[field];
+          }
+          break;
+        case 'combine':
+          if (field === 'tags') {
+            merged[field] = [...new Set([...primary[field], ...secondary[field]])];
+          } else if (field === 'notes') {
+            merged[field] = [primary[field], secondary[field]].filter(Boolean).join('\n\n---\n\n');
+          }
+          break;
+        case 'latest':
+          if (secondary.updatedAt > primary.updatedAt && secondary[field]) {
+            merged[field] = secondary[field];
+          }
+          break;
+      }
+    }
+    
+    // 合并自定义字段
+    merged.customFields = { ...primary.customFields, ...secondary.customFields };
+    
+    return merged;
+  }
+  
+  private async migrateRelatedData(fromId: string, toId: string, entityManager: IEntityManager): Promise<void> {
+    // 迁移销售机会
+    await entityManager.query({
+      entityType: 'Opportunity',
+      filter: { customerId: fromId },
+      operation: 'update',
+      data: { customerId: toId }
+    });
+    
+    // 迁移活动记录
+    await entityManager.query({
+      entityType: 'Activity',
+      filter: { customerId: fromId },
+      operation: 'update',
+      data: { customerId: toId }
+    });
+    
+    // 迁移工单
+    await entityManager.query({
+      entityType: 'Ticket',
+      filter: { customerId: fromId },
+      operation: 'update',
+      data: { customerId: toId }
+    });
+    
+    // 迁移发票
+    await entityManager.query({
+      entityType: 'Invoice',
+      filter: { customerId: fromId },
+      operation: 'update',
+      data: { customerId: toId }
+    });
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (input.action === 'create' && !input.data) {
+      errors.push('data is required for create action');
+    }
+    
+    if (input.action === 'create' && !input.data.email) {
+      errors.push('email is required for create action');
+    }
+    
+    if (['update', 'convert', 'assign'].includes(input.action) && !input.customerId) {
+      errors.push('customerId is required for this action');
+    }
+    
+    if (input.action === 'merge' && (!input.data.primaryCustomerId || !input.data.secondaryCustomerId)) {
+      errors.push('both primaryCustomerId and secondaryCustomerId are required for merge action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['customer_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+### 销售管道管理动作处理器
+
+```typescript
+// 销售管道管理动作处理器
+class SalesPipelineActionHandler implements IActionHandler {
+  name = 'sales-pipeline';
+  displayName = '销售管道管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['create_opportunity', 'update_stage', 'forecast', 'win', 'lose'],
+        required: true 
+      },
+      opportunityId: { type: 'string' },
+      stageId: { type: 'string' },
+      data: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'create_opportunity':
+          return await this.createOpportunity(input, entityManager, user);
+        case 'update_stage':
+          return await this.updateStage(input, entityManager, user);
+        case 'forecast':
+          return await this.generateForecast(input, entityManager, user);
+        case 'win':
+          return await this.winOpportunity(input, entityManager, user);
+        case 'lose':
+          return await this.loseOpportunity(input, entityManager, user);
+        default:
+          throw new Error(`Unknown pipeline action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'PIPELINE_ACTION_ERROR' }
+      };
+    }
+  }
+  
+  private async createOpportunity(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    // 验证客户存在
+    const customer = await entityManager.get('Customer', input.data.customerId);
+    if (!customer) {
+      throw new Error('Customer not found');
+    }
+    
+    // 获取初始阶段
+    const initialStage = await entityManager.query({
+      entityType: 'OpportunityStage',
+      filter: { isActive: true },
+      sort: [{ field: 'sortOrder', direction: 'asc' }],
+      limit: 1
+    });
+    
+    if (initialStage.data.length === 0) {
+      throw new Error('No active opportunity stages found');
+    }
+    
+    // 创建销售机会
+    const opportunity = await entityManager.create('Opportunity', {
+      title: input.data.title,
+      description: input.data.description,
+      customerId: input.data.customerId,
+      amount: input.data.amount,
+      currency: input.data.currency || 'USD',
+      probability: initialStage.data[0].probability || 10,
+      expectedCloseDate: input.data.expectedCloseDate,
+      stageId: initialStage.data[0].id,
+      ownerId: input.data.ownerId || user.id,
+      teamId: input.data.teamId,
+      customFields: input.data.customFields || {}
+    });
+    
+    // 创建初始活动记录
+    await entityManager.create('Activity', {
+      type: 'NOTE',
+      subject: 'Opportunity created',
+      description: `New opportunity created: ${opportunity.title} - ${opportunity.amount} ${opportunity.currency}`,
+      customerId: opportunity.customerId,
+      opportunityId: opportunity.id,
+      startDate: new Date(),
+      status: 'COMPLETED',
+      ownerId: user.id
+    });
+    
+    // 更新客户总价值
+    await this.updateCustomerValue(opportunity.customerId, entityManager);
+    
+    return {
+      success: true,
+      data: { opportunity },
+      events: [{
+        type: 'opportunity.created',
+        data: {
+          opportunityId: opportunity.id,
+          customerId: opportunity.customerId,
+          amount: opportunity.amount,
+          ownerId: opportunity.ownerId,
+          createdBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async updateStage(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const opportunity = await entityManager.get('Opportunity', input.opportunityId, {
+      include: ['stage']
+    });
+    
+    if (!opportunity) {
+      throw new Error('Opportunity not found');
+    }
+    
+    const newStage = await entityManager.get('OpportunityStage', input.stageId);
+    if (!newStage) {
+      throw new Error('Stage not found');
+    }
+    
+    const oldStage = opportunity.stage;
+    
+    // 验证阶段变更是否允许
+    const canMove = await this.validateStageTransition(opportunity, oldStage, newStage);
+    if (!canMove.allowed) {
+      throw new Error(canMove.reason);
+    }
+    
+    // 更新机会阶段和概率
+    const updatedOpportunity = await entityManager.update('Opportunity', input.opportunityId, {
+      stageId: input.stageId,
+      probability: newStage.probability,
+      updatedAt: new Date()
+    });
+    
+    // 创建阶段变更记录
+    await entityManager.create('Activity', {
+      type: 'NOTE',
+      subject: 'Stage updated',
+      description: `Opportunity moved from "${oldStage.name}" to "${newStage.name}"`,
+      customerId: opportunity.customerId,
+      opportunityId: opportunity.id,
+      startDate: new Date(),
+      status: 'COMPLETED',
+      ownerId: user.id
+    });
+    
+    // 检查是否需要触发自动化操作
+    await this.triggerStageAutomation(opportunity, newStage, entityManager);
+    
+    return {
+      success: true,
+      data: { opportunity: updatedOpportunity },
+      events: [{
+        type: 'opportunity.stage_changed',
+        data: {
+          opportunityId: opportunity.id,
+          fromStage: oldStage.name,
+          toStage: newStage.name,
+          probability: newStage.probability,
+          changedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async winOpportunity(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const opportunity = await entityManager.get('Opportunity', input.opportunityId);
+    
+    if (!opportunity) {
+      throw new Error('Opportunity not found');
+    }
+    
+    if (opportunity.status !== 'OPEN') {
+      throw new Error('Only open opportunities can be won');
+    }
+    
+    // 获取赢单阶段
+    const wonStage = await entityManager.query({
+      entityType: 'OpportunityStage',
+      filter: { isWon: true, isActive: true },
+      limit: 1
+    });
+    
+    if (wonStage.data.length === 0) {
+      throw new Error('No won stage found');
+    }
+    
+    const actualCloseDate = new Date();
+    
+    // 更新机会状态
+    const updatedOpportunity = await entityManager.update('Opportunity', input.opportunityId, {
+      status: 'WON',
+      stageId: wonStage.data[0].id,
+      probability: 100,
+      actualCloseDate,
+      updatedAt: actualCloseDate
+    });
+    
+    // 创建赢单记录
+    await entityManager.create('Activity', {
+      type: 'NOTE',
+      subject: 'Opportunity won',
+      description: `Opportunity won! Amount: ${opportunity.amount} ${opportunity.currency}`,
+      customerId: opportunity.customerId,
+      opportunityId: opportunity.id,
+      startDate: actualCloseDate,
+      status: 'COMPLETED',
+      ownerId: user.id,
+      outcome: `Won: ${opportunity.amount} ${opportunity.currency}`
+    });
+    
+    // 更新客户生命周期价值
+    await this.updateCustomerLifetimeValue(opportunity.customerId, opportunity.amount, entityManager);
+    
+    // 触发赢单后续流程（如生成合同、发票等）
+    await this.triggerWinAutomation(opportunity, entityManager);
+    
+    return {
+      success: true,
+      data: { opportunity: updatedOpportunity },
+      events: [{
+        type: 'opportunity.won',
+        data: {
+          opportunityId: opportunity.id,
+          customerId: opportunity.customerId,
+          amount: opportunity.amount,
+          currency: opportunity.currency,
+          closedBy: user.id,
+          closeDate: actualCloseDate
+        }
+      }]
+    };
+  }
+  
+  private async generateForecast(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const period = input.options?.period || 'quarter'; // month, quarter, year
+    const ownerId = input.options?.ownerId || user.id;
+    
+    // 获取时间范围
+    const dateRange = this.getForecastDateRange(period);
+    
+    // 查询相关机会
+    const opportunities = await entityManager.query({
+      entityType: 'Opportunity',
+      filter: {
+        status: 'OPEN',
+        ownerId,
+        expectedCloseDate: {
+          $gte: dateRange.start,
+          $lte: dateRange.end
+        }
+      },
+      include: ['stage', 'customer']
+    });
+    
+    // 计算预测数据
+    const forecast = this.calculateForecast(opportunities.data);
+    
+    return {
+      success: true,
+      data: {
+        period,
+        dateRange,
+        forecast,
+        opportunities: opportunities.data
+      }
+    };
+  }
+  
+  private calculateForecast(opportunities: any[]): any {
+    const forecast = {
+      totalOpportunities: opportunities.length,
+      totalValue: 0,
+      weightedValue: 0,
+      bestCase: 0,
+      worstCase: 0,
+      mostLikely: 0,
+      byStage: {} as any,
+      confidence: 0
+    };
+    
+    opportunities.forEach(opp => {
+      const amount = parseFloat(opp.amount) || 0;
+      const probability = opp.probability || 0;
+      
+      forecast.totalValue += amount;
+      forecast.weightedValue += amount * (probability / 100);
+      
+      if (probability >= 75) {
+        forecast.bestCase += amount;
+      } else if (probability >= 25) {
+        forecast.mostLikely += amount;
+      } else {
+        forecast.worstCase += amount;
+      }
+      
+      // 按阶段统计
+      const stageName = opp.stage?.name || 'Unknown';
+      if (!forecast.byStage[stageName]) {
+        forecast.byStage[stageName] = {
+          count: 0,
+          totalValue: 0,
+          weightedValue: 0
+        };
+      }
+      forecast.byStage[stageName].count += 1;
+      forecast.byStage[stageName].totalValue += amount;
+      forecast.byStage[stageName].weightedValue += amount * (probability / 100);
+    });
+    
+    // 计算置信度
+    forecast.confidence = opportunities.length > 0 ? 
+      Math.min(95, Math.max(10, opportunities.length * 5)) : 0;
+    
+    return forecast;
+  }
+  
+  private async validateStageTransition(opportunity: any, fromStage: any, toStage: any): Promise<{ allowed: boolean; reason?: string }> {
+    // 检查阶段是否激活
+    if (!toStage.isActive) {
+      return { allowed: false, reason: 'Target stage is not active' };
+    }
+    
+    // 检查是否跳过了必要的阶段
+    if (toStage.sortOrder > fromStage.sortOrder + 1) {
+      const skippedStages = await this.getSkippedStages(fromStage.sortOrder, toStage.sortOrder);
+      if (skippedStages.some(stage => stage.requirements && stage.requirements.length > 0)) {
+        return { allowed: false, reason: 'Cannot skip stages with requirements' };
+      }
+    }
+    
+    // 检查当前阶段的完成要求
+    if (fromStage.requirements && fromStage.requirements.length > 0) {
+      const requirementsMet = await this.checkStageRequirements(opportunity, fromStage.requirements);
+      if (!requirementsMet) {
+        return { allowed: false, reason: 'Current stage requirements not met' };
+      }
+    }
+    
+    return { allowed: true };
+  }
+  
+  private getForecastDateRange(period: string): { start: Date; end: Date } {
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+    
+    switch (period) {
+      case 'month':
+        start.setDate(1);
+        end.setMonth(end.getMonth() + 1, 0);
+        break;
+      case 'quarter':
+        const quarterStart = Math.floor(now.getMonth() / 3) * 3;
+        start.setMonth(quarterStart, 1);
+        end.setMonth(quarterStart + 3, 0);
+        break;
+      case 'year':
+        start.setMonth(0, 1);
+        end.setFullYear(end.getFullYear() + 1, 0, 0);
+        break;
+    }
+    
+    return { start, end };
+  }
+  
+  private async updateCustomerValue(customerId: string, entityManager: IEntityManager): Promise<void> {
+    // 计算客户的所有开放机会总价值
+    const opportunities = await entityManager.query({
+      entityType: 'Opportunity',
+      filter: { customerId, status: 'OPEN' }
+    });
+    
+    const totalValue = opportunities.data.reduce((sum, opp) => sum + parseFloat(opp.amount || 0), 0);
+    
+    await entityManager.update('Customer', customerId, {
+      totalValue,
+      updatedAt: new Date()
+    });
+  }
+  
+  private async updateCustomerLifetimeValue(customerId: string, wonAmount: number, entityManager: IEntityManager): Promise<void> {
+    const customer = await entityManager.get('Customer', customerId);
+    const newLifetimeValue = (parseFloat(customer.lifetimeValue) || 0) + wonAmount;
+    
+    await entityManager.update('Customer', customerId, {
+      lifetimeValue: newLifetimeValue,
+      updatedAt: new Date()
+    });
+  }
+  
+  private async triggerStageAutomation(opportunity: any, stage: any, entityManager: IEntityManager): Promise<void> {
+    // 实现阶段自动化逻辑
+    // 例如：发送通知、创建任务、更新字段等
+  }
+  
+  private async triggerWinAutomation(opportunity: any, entityManager: IEntityManager): Promise<void> {
+    // 实现赢单自动化逻辑
+    // 例如：生成合同、创建发票、发送庆祝邮件等
+  }
+  
+  private async getSkippedStages(fromOrder: number, toOrder: number): Promise<any[]> {
+    // 获取跳过的阶段信息
+    return [];
+  }
+  
+  private async checkStageRequirements(opportunity: any, requirements: string[]): Promise<boolean> {
+    // 检查阶段完成要求
+    return true;
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (['update_stage', 'win', 'lose'].includes(input.action) && !input.opportunityId) {
+      errors.push('opportunityId is required for this action');
+    }
+    
+    if (input.action === 'update_stage' && !input.stageId) {
+      errors.push('stageId is required for update_stage action');
+    }
+    
+    if (input.action === 'create_opportunity' && !input.data) {
+      errors.push('data is required for create_opportunity action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['sales_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+## 视图定义
+
+### CRM仪表盘视图
+
+```typescript
+// CRM仪表盘视图
+export const CRMDashboardView: IViewDefinition = {
+  id: 'crm-dashboard',
+  name: 'CRMDashboard',
+  displayName: 'CRM仪表盘',
+  type: 'dashboard',
+  config: {
+    layout: {
+      type: 'grid',
+      columns: 12,
+      rows: 'auto'
+    },
+    widgets: [
+      {
+        id: 'sales-metrics',
+        type: 'metrics-card',
+        title: '销售指标',
+        position: { x: 0, y: 0, w: 6, h: 2 },
+        config: {
+          metrics: [
+            {
+              name: 'total_revenue',
+              displayName: '总收入',
+              query: {
+                entityType: 'Opportunity',
+                filter: { status: 'WON' },
+                aggregation: { field: 'amount', operation: 'sum' }
+              },
+              format: 'currency'
+            },
+            {
+              name: 'open_opportunities',
+              displayName: '开放机会',
+              query: {
+                entityType: 'Opportunity',
+                filter: { status: 'OPEN' },
+                aggregation: { operation: 'count' }
+              }
+            },
+            {
+              name: 'conversion_rate',
+              displayName: '转化率',
+              query: 'custom:conversion_rate',
+              format: 'percentage'
+            }
+          ]
+        }
+      },
+      {
+        id: 'sales-pipeline',
+        type: 'pipeline-chart',
+        title: '销售管道',
+        position: { x: 6, y: 0, w: 6, h: 4 },
+        config: {
+          query: {
+            entityType: 'Opportunity',
+            filter: { status: 'OPEN' },
+            include: ['stage'],
+            groupBy: 'stage.name'
+          },
+          chartType: 'funnel',
+          showValues: true
+        }
+      },
+      {
+        id: 'recent-activities',
+        type: 'activity-feed',
+        title: '最近活动',
+        position: { x: 0, y: 2, w: 6, h: 4 },
+        config: {
+          query: {
+            entityType: 'Activity',
+            sort: [{ field: 'createdAt', direction: 'desc' }],
+            limit: 10,
+            include: ['customer', 'owner']
+          },
+          showAvatars: true,
+          groupByDate: true
+        }
+      },
+      {
+        id: 'top-customers',
+        type: 'customer-list',
+        title: '重点客户',
+        position: { x: 0, y: 6, w: 12, h: 3 },
+        config: {
+          query: {
+            entityType: 'Customer',
+            filter: { status: 'CUSTOMER' },
+            sort: [{ field: 'lifetimeValue', direction: 'desc' }],
+            limit: 5,
+            include: ['assignedTo']
+          },
+          showValue: true,
+          showLastContact: true
+        }
+      }
+    ],
+    refreshInterval: 300000 // 5分钟
+  }
+};
+
+// 客户列表视图
+export const CustomerListView: IViewDefinition = {
+  id: 'customer-list',
+  name: 'CustomerList',
+  displayName: '客户列表',
+  type: 'table',
+  entityType: 'Customer',
+  config: {
+    columns: [
+      {
+        name: 'customerNumber',
+        displayName: '客户编号',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 120
+      },
+      {
+        name: 'fullName',
+        displayName: '客户名称',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 200,
+        renderer: 'customer-name-link'
+      },
+      {
+        name: 'type',
+        displayName: '类型',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 80,
+        renderer: 'customer-type-badge'
+      },
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'customer-status-badge'
+      },
+      {
+        name: 'email',
+        displayName: '邮箱',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 180
+      },
+      {
+        name: 'assignedTo.name',
+        displayName: '负责人',
+        type: 'string',
+        sortable: true,
+        filterable: true,
+        width: 120
+      },
+      {
+        name: 'totalValue',
+        displayName: '总价值',
+        type: 'currency',
+        sortable: true,
+        width: 120,
+        format: { currency: 'USD' }
+      },
+      {
+        name: 'lastContactDate',
+        displayName: '最后联系',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short' }
+      },
+      {
+        name: 'createdAt',
+        displayName: '创建时间',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short' }
+      }
+    ],
+    defaultSort: [{ field: 'createdAt', direction: 'desc' }],
+    pageSize: 25,
+    enableSearch: true,
+    enableFilters: true,
+    filters: [
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'select',
+        options: [
+          { label: '线索', value: 'LEAD' },
+          { label: '潜在客户', value: 'PROSPECT' },
+          { label: '客户', value: 'CUSTOMER' },
+          { label: '非活跃', value: 'INACTIVE' }
+        ]
+      },
+      {
+        name: 'type',
+        displayName: '类型',
+        type: 'select',
+        options: [
+          { label: '个人', value: 'INDIVIDUAL' },
+          { label: '公司', value: 'COMPANY' }
+        ]
+      },
+      {
+        name: 'assignedTo',
+        displayName: '负责人',
+        type: 'select',
+        dataSource: 'User',
+        labelField: 'name',
+        valueField: 'id'
+      }
+    ],
+    actions: [
+      {
+        name: 'create',
+        displayName: '新增客户',
+        type: 'primary',
+        icon: 'plus',
+        handler: 'navigate-to-create'
+      },
+      {
+        name: 'import',
+        displayName: '导入客户',
+        type: 'secondary',
+        icon: 'upload',
+        handler: 'import-customers-modal'
+      }
+    ],
+    rowActions: [
+      {
+        name: 'view',
+        displayName: '查看详情',
+        icon: 'eye',
+        handler: 'navigate-to-detail'
+      },
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'navigate-to-edit'
+      },
+      {
+        name: 'convert',
+        displayName: '转换',
+        icon: 'arrow-right',
+        handler: 'convert-lead',
+        condition: { status: 'LEAD' }
+      }
+    ]
+  }
+};
+
+// 销售管道视图
+export const SalesPipelineView: IViewDefinition = {
+  id: 'sales-pipeline',
+  name: 'SalesPipeline',
+  displayName: '销售管道',
+  type: 'kanban',
+  entityType: 'Opportunity',
+  config: {
+    groupBy: 'stage.name',
+    groupConfig: {
+      dataSource: 'OpportunityStage',
+      sortBy: 'sortOrder',
+      labelField: 'name',
+      colorField: 'color'
+    },
+    cardFields: [
+      {
+        name: 'title',
+        displayName: '标题',
+        type: 'string',
+        primary: true
+      },
+      {
+        name: 'customer.fullName',
+        displayName: '客户',
+        type: 'string'
+      },
+      {
+        name: 'amount',
+        displayName: '金额',
+        type: 'currency',
+        format: { currency: 'USD' }
+      },
+      {
+        name: 'probability',
+        displayName: '概率',
+        type: 'percentage'
+      },
+      {
+        name: 'expectedCloseDate',
+        displayName: '预计成交',
+        type: 'date'
+      },
+      {
+        name: 'owner.name',
+        displayName: '负责人',
+        type: 'string'
+      }
+    ],
+    cardActions: [
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'edit-opportunity'
+      },
+      {
+        name: 'activity',
+        displayName: '添加活动',
+        icon: 'plus',
+        handler: 'add-activity'
+      }
+    ],
+    enableDragDrop: true,
+    showSummary: true,
+    summaryFields: ['count', 'totalAmount', 'avgAmount']
+  }
+};
+```
+
+## 下一步
+
+完成CRM系统的基础架构后，可以继续学习：
+
+- [博客系统](./blog) - 博客和内容发布系统
+- [社交应用](./social) - 社交网络应用开发
+- [常用模式](./common-patterns) - 深入了解通用设计模式

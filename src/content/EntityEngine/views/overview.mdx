@@ -1,0 +1,333 @@
+# 视图概览
+
+Entity Engine 的视图系统让您可以为数据模型创建不同的用户界面，无需编写复杂的前端代码。通过简单的配置，您可以创建表单、列表、详情页等各种界面，满足不同的使用场景。
+
+视图系统支持表单视图（用于数据编辑）、网格视图（用于数据列表）、详情视图（用于数据展示）等多种类型，每种视图都针对特定的使用场景进行了优化。
+
+## 视图类型概述
+
+Entity Engine 提供了多种预置的视图类型，每种都适用于不同的数据展示和交互需求：
+
+### 表单视图 (FormView)
+用于创建和编辑单条记录，提供完整的数据输入界面。适用于用户注册、产品信息编辑、订单创建等场景。表单视图会自动根据字段类型选择合适的输入组件，并提供数据验证功能。
+
+### 网格视图 (GridView)
+以表格形式展示多条记录，支持排序、筛选、分页等功能。适用于用户列表、产品目录、订单管理等场景。网格视图让用户可以快速浏览大量数据并进行批量操作。
+
+### 详情视图 (DetailView)
+以只读方式展示单条记录的完整信息。适用于用户资料查看、产品详情页、订单详情等场景。详情视图提供了清晰的信息展示布局，方便用户查看完整信息。
+
+### 主从视图 (MasterDetailView)
+在一个界面中同时显示列表和详情，提高操作效率。适用于邮件客户端、文件管理器、订单处理等需要频繁切换查看的场景。
+
+### 看板视图 (KanbanView)
+以卡片形式展示数据，支持拖拽操作。适用于项目管理、任务跟踪、流程管理等需要可视化状态变化的场景。
+
+### 仪表板视图 (DashboardView)
+提供数据统计和分析的综合界面。适用于数据监控、业务分析、运营报表等场景。
+
+## 创建视图
+
+为模型创建视图需要指定视图类型、配置字段显示方式和设置相关选项：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+// 为用户模型创建表单视图
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserFormView',
+  title: '用户信息',
+  type: 'FormView',
+  config: {
+    fields: ['name', 'email', 'phone'],
+    submitText: '保存用户',
+    layout: 'grid'
+  }
+});
+
+// 为用户模型创建列表视图
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserGridView', 
+  title: '用户列表',
+  type: 'GridView',
+  config: {
+    columns: ['name', 'email', 'createdAt'],
+    searchable: true,
+    sortable: true
+  }
+});
+```
+
+创建视图后，您就可以在应用中使用这些视图来展示和操作数据。系统会自动处理数据加载、表单验证、状态管理等复杂逻辑。
+
+## 视图配置选项
+
+每种视图类型都有特定的配置选项，让您可以自定义界面的外观和行为：
+
+### 字段配置
+指定视图中要显示的字段以及它们的显示方式：
+
+```typescript
+// 配置显示的字段
+fields: ['name', 'email', 'status']
+
+// 配置字段的显示属性
+fieldConfig: {
+  email: {
+    label: '邮箱地址',
+    placeholder: '请输入邮箱',
+    required: true
+  },
+  status: {
+    label: '用户状态',
+    widget: 'select'
+  }
+}
+```
+
+### 布局配置
+控制视图中元素的排列方式：
+
+```typescript
+// 网格布局
+layout: 'grid',
+columns: 2,
+spacing: 'medium'
+
+// 标签页布局
+layout: 'tabs',
+tabs: [
+  { name: '基本信息', fields: ['name', 'email'] },
+  { name: '详细信息', fields: ['phone', 'address'] }
+]
+```
+
+### 行为配置
+设置视图的交互行为：
+
+```typescript
+// 表单行为
+behavior: {
+  autoSave: true,
+  validateOnChange: true,
+  showResetButton: false
+}
+
+// 网格行为
+behavior: {
+  selectable: true,
+  editable: false,
+  showToolbar: true
+}
+```
+
+## 视图之间的导航
+
+您可以配置视图之间的导航关系，创建完整的用户流程：
+
+```typescript
+// 从列表视图导航到详情视图
+{
+  modelName: 'Product',
+  name: 'ProductGridView',
+  type: 'GridView',
+  config: {
+    actions: [
+      {
+        name: 'view',
+        label: '查看详情',
+        targetView: 'ProductDetailView'
+      },
+      {
+        name: 'edit',
+        label: '编辑',
+        targetView: 'ProductFormView'
+      }
+    ]
+  }
+}
+```
+
+这样用户就可以从产品列表点击"查看详情"跳转到详情页，或点击"编辑"跳转到编辑表单。
+
+## 权限控制
+
+视图可以根据用户权限显示不同的内容和操作：
+
+```typescript
+{
+  modelName: 'Order',
+  name: 'OrderFormView',
+  type: 'FormView',
+  config: {
+    permissions: {
+      'role:admin': {
+        fields: ['all'],
+        actions: ['create', 'update', 'delete']
+      },
+      'role:user': {
+        fields: ['title', 'description'],
+        actions: ['create', 'update']
+      }
+    }
+  }
+}
+```
+
+不同角色的用户在使用同一个视图时会看到不同的字段和操作按钮。
+
+## 自定义视图样式
+
+您可以为视图应用自定义样式，匹配您的应用设计：
+
+```typescript
+{
+  modelName: 'Article',
+  name: 'ArticleFormView',
+  type: 'FormView',
+  config: {
+    theme: {
+      primaryColor: '#1976d2',
+      borderRadius: '8px',
+      spacing: 'comfortable'
+    },
+    className: 'custom-article-form'
+  }
+}
+```
+
+## 响应式设计
+
+视图会自动适应不同的屏幕尺寸，您也可以为不同设备配置专门的显示方式：
+
+```typescript
+{
+  modelName: 'Product',
+  name: 'ProductGridView',
+  type: 'GridView',
+  config: {
+    responsive: {
+      desktop: {
+        columns: ['name', 'price', 'category', 'status', 'actions'],
+        pageSize: 20
+      },
+      tablet: {
+        columns: ['name', 'price', 'status'],
+        pageSize: 15
+      },
+      mobile: {
+        columns: ['name', 'price'],
+        pageSize: 10,
+        layout: 'card'
+      }
+    }
+  }
+}
+```
+
+## 实际应用场景
+
+### 内容管理系统
+
+为文章管理创建完整的视图体系：
+
+```typescript
+// 文章列表 - 网格视图
+{
+  name: 'ArticleGridView',
+  type: 'GridView',
+  config: {
+    columns: ['title', 'author', 'status', 'publishedAt'],
+    filters: ['status', 'author'],
+    actions: ['edit', 'delete', 'publish']
+  }
+}
+
+// 文章编辑 - 表单视图
+{
+  name: 'ArticleFormView',
+  type: 'FormView',
+  config: {
+    fields: ['title', 'content', 'tags', 'status'],
+    layout: 'tabs',
+    autoSave: true
+  }
+}
+
+// 文章预览 - 详情视图
+{
+  name: 'ArticleDetailView',
+  type: 'DetailView',
+  config: {
+    fields: ['title', 'content', 'author', 'publishedAt'],
+    showComments: true
+  }
+}
+```
+
+### 电商后台
+
+为商品管理构建管理界面：
+
+```typescript
+// 商品列表 - 带搜索的网格视图
+{
+  name: 'ProductGridView',
+  type: 'GridView', 
+  config: {
+    columns: ['image', 'name', 'price', 'stock', 'status'],
+    searchFields: ['name', 'description'],
+    batchActions: ['updatePrice', 'updateStatus']
+  }
+}
+
+// 商品编辑 - 分步骤表单视图
+{
+  name: 'ProductFormView',
+  type: 'FormView',
+  config: {
+    layout: 'steps',
+    steps: [
+      { name: 'basic', fields: ['name', 'description', 'category'] },
+      { name: 'pricing', fields: ['price', 'costPrice', 'taxRate'] },
+      { name: 'inventory', fields: ['stock', 'sku', 'warehouse'] }
+    ]
+  }
+}
+```
+
+### 用户管理
+
+创建用户管理的完整界面：
+
+```typescript
+// 用户列表 - 主从视图
+{
+  name: 'UserMasterDetailView',
+  type: 'MasterDetailView',
+  config: {
+    masterView: {
+      columns: ['avatar', 'name', 'email', 'status'],
+      searchable: true
+    },
+    detailView: {
+      fields: ['avatar', 'name', 'email', 'phone', 'address', 'joinDate'],
+      editable: true
+    }
+  }
+}
+```
+
+通过合理使用不同类型的视图，您可以快速构建出功能完整、用户体验良好的管理界面，大大提高开发效率。
+
+## 下一步
+
+了解视图概览后，您可以深入学习：
+
+- [表单视图](/views/form-view) - 学习如何创建数据编辑界面
+- [网格视图](/views/grid-view) - 学习如何创建数据列表界面  
+- [详情视图](/views/detail-view) - 学习如何创建数据展示界面

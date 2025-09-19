@@ -1,0 +1,526 @@
+# 详情视图
+
+详情视图专门用于展示单条记录的完整信息，适合查看用户资料、产品详情、订单信息等场景。通过分组布局、标签页和自定义组件，您可以创建结构清晰、信息丰富的详情页面。
+
+## 创建详情视图
+
+创建详情视图时，您需要选择合适的布局方式和指定要显示的字段。详情视图支持多种布局类型，包括分组布局、标签页布局和手风琴布局等。
+
+### 分组布局
+
+分组布局适合按照逻辑分类组织信息，用户可以在同一个页面上查看所有分组的内容。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserDetailView',
+  title: '用户详情',
+  type: 'DetailView',
+  config: {
+    layout: 'sections',
+    sections: [
+      {
+        title: '基本信息',
+        fields: ['name', 'email', 'phone', 'department', 'role', 'status']
+      },
+      {
+        title: '详细资料',
+        fields: ['bio', 'address', 'avatar']
+      },
+      {
+        title: '系统信息',
+        fields: ['createdAt', 'updatedAt', 'createdBy', 'updatedBy']
+      }
+    ],
+    showEditButton: true,
+    showDeleteButton: true,
+    showBackButton: true
+  }
+});
+```
+
+### 标签页布局
+
+标签页布局适合信息量较大的场景，可以将不同类型的信息分到不同的标签页中，避免单个页面过于复杂。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Product',
+  name: 'ProductDetailView',
+  title: '产品详情',
+  type: 'DetailView',
+  config: {
+    layout: 'tabs',
+    tabs: [
+      {
+        title: '基本信息',
+        icon: 'info',
+        fields: ['name', 'sku', 'category', 'brand', 'description']
+      },
+      {
+        title: '图片信息',
+        icon: 'image',
+        fields: ['images']
+      },
+      {
+        title: '价格库存',
+        icon: 'dollar',
+        fields: ['price', 'costPrice', 'profit', 'stock', 'lowStockThreshold', 'stockStatus']
+      },
+      {
+        title: '销售数据',
+        icon: 'chart',
+        fields: ['totalSales', 'totalRevenue', 'avgRating'],
+        customComponents: ['salesChart']
+      }
+    ],
+    
+    actions: [
+      {
+        name: 'duplicate',
+        title: '复制产品',
+        icon: 'copy',
+        type: 'secondary'
+      },
+      {
+        name: 'addToCart',
+        title: '加入购物车',
+        icon: 'shopping-cart',
+        type: 'primary',
+        condition: 'status == "active"'
+      }
+    ]
+  }
+});
+```
+
+## 详情视图类型
+
+### 关联数据显示
+
+当需要在详情页中显示相关联的数据时，可以使用关联数据标签页。这种方式特别适合订单详情、用户资料等具有复杂关系的数据。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderDetailView',
+  title: '订单详情',
+  type: 'DetailView',
+  config: {
+    layout: 'tabs',
+    tabs: [
+      {
+        title: '订单信息',
+        icon: 'order',
+        sections: [
+          {
+            title: '基本信息',
+            fields: ['orderNumber', 'status', 'customer', 'totalAmount']
+          },
+          {
+            title: '订单进度',
+            customComponents: ['orderProgress']
+          }
+        ]
+      }
+    ],
+    
+    relatedTabs: [
+      {
+        name: 'items',
+        title: '订单项',
+        icon: 'list',
+        modelName: 'OrderItem',
+        relationField: 'orderId',
+        viewType: 'grid',
+        lazy: false
+      },
+      {
+        name: 'payments',
+        title: '支付记录',
+        icon: 'credit-card',
+        modelName: 'Payment',
+        relationField: 'orderId',
+        viewType: 'timeline',
+        lazy: true
+      },
+      {
+        name: 'shipments',
+        title: '发货记录',
+        icon: 'truck',
+        modelName: 'Shipment',
+        relationField: 'orderId',
+        viewType: 'card',
+        lazy: true
+      }
+    ],
+    
+    actions: [
+      {
+        name: 'cancel',
+        title: '取消订单',
+        icon: 'close',
+        type: 'danger',
+        condition: 'status in ["pending", "confirmed"] and paymentStatus != "paid"'
+      },
+      {
+        name: 'ship',
+        title: '安排发货',
+        icon: 'truck',
+        type: 'primary',
+        condition: 'status == "confirmed"'
+      }
+    ]
+  }
+});
+```
+
+### 手风琴布局
+
+手风琴布局适合内容较多但用户只需要查看部分内容的场景。用户可以选择性地展开感兴趣的部分，节省页面空间。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Project',
+  name: 'ProjectDetailView',
+  title: '项目详情',
+  type: 'DetailView',
+  config: {
+    layout: 'accordion',
+    sections: [
+      {
+        title: '项目概述',
+        expanded: true,
+        collapsible: false,
+        fields: ['name', 'status', 'description'],
+        customComponents: ['projectProgress']
+      },
+      {
+        title: '团队成员',
+        expanded: false,
+        badge: 'memberCount',
+        customComponents: ['teamMembers']
+      },
+      {
+        title: '任务管理',
+        expanded: false,
+        badge: 'taskCount',
+        customComponents: ['taskBoard']
+      },
+      {
+        title: '项目文档',
+        expanded: false,
+        lazy: true,
+        customComponents: ['documentTree']
+      }
+    ]
+  }
+});
+```
+
+## 详情视图高级功能
+
+### 自定义组件
+
+对于复杂的数据展示需求，您可以使用自定义组件来实现特殊的显示效果。这种方式特别适合仪表板、报表等需要大量数据可视化的场景。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Dashboard',
+  name: 'DashboardDetailView',
+  title: '仪表板详情',
+  type: 'DetailView',
+  config: {
+    layout: 'masonry',
+    customComponents: [
+      {
+        name: 'dashboardHeader',
+        title: '仪表板头部',
+        widget: 'dashboard-header',
+        props: {
+          showStats: true,
+          showRefreshTime: true,
+          allowExport: true
+        }
+      },
+      {
+        name: 'kpiCards',
+        title: 'KPI 指标',
+        widget: 'kpi-card-grid',
+        props: {
+          layout: 'responsive',
+          refreshInterval: 30000,
+          animateChanges: true
+        }
+      },
+      {
+        name: 'salesChart',
+        title: '销售趋势',
+        widget: 'interactive-chart',
+        props: {
+          chartType: 'line',
+          timeRange: '30d',
+          allowDrillDown: true
+        }
+      },
+      {
+        name: 'regionMap',
+        title: '地区分布',
+        widget: 'sales-map',
+        props: {
+          mapType: 'heat',
+          interactive: true
+        },
+        lazy: true
+      }
+    ],
+    
+    actions: [
+      {
+        name: 'fullscreen',
+        title: '全屏显示',
+        icon: 'fullscreen',
+        type: 'secondary'
+      },
+      {
+        name: 'share',
+        title: '分享仪表板',
+        icon: 'share',
+        type: 'secondary'
+      },
+      {
+        name: 'configure',
+        title: '配置仪表板',
+        icon: 'settings',
+        type: 'secondary'
+      }
+    ]
+  }
+});
+```
+
+### 权限控制
+
+详情视图支持字段级的权限控制，可以根据用户角色或权限显示或隐藏敏感信息。这种功能对于员工信息、财务数据等需要严格权限管理的场景非常重要。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Employee',
+  name: 'EmployeeDetailView',
+  title: '员工详情',
+  type: 'DetailView',
+  config: {
+    layout: 'tabs',
+    tabs: [
+      {
+        title: '基本信息',
+        fields: ['name', 'email', 'salary', 'socialSecurityNumber']
+      },
+      {
+        title: '敏感信息',
+        fields: ['bankAccount', 'emergencyContact']
+      }
+    ],
+    
+    fieldPermissions: [
+      {
+        field: 'salary',
+        roles: ['hr', 'admin'],
+        conditions: {
+          type: 'or',
+          rules: [
+            { field: 'managerId', operator: 'eq', value: '${user.id}' },
+            { field: 'departmentId', operator: 'eq', value: '${user.departmentId}' }
+          ]
+        }
+      },
+      {
+        field: 'socialSecurityNumber',
+        roles: ['hr', 'admin'],
+        masking: {
+          pattern: '***-**-{last4}',
+          revealable: true
+        }
+      },
+      {
+        field: 'bankAccount',
+        permission: 'employee:bank:read'
+      },
+      {
+        field: 'emergencyContact',
+        permission: 'employee:emergency:read'
+      }
+    ],
+    
+    actions: [
+      {
+        name: 'viewSalaryHistory',
+        title: '查看薪资历史',
+        icon: 'history',
+        type: 'secondary',
+        permission: 'employee:salary:history:read'
+      }
+    ]
+  }
+});
+```
+
+### 打印和导出功能
+
+详情视图支持打印和导出功能，特别适合发票、合同、报告等需要正式输出的文档。您可以自定义打印样式和导出格式。
+```
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Invoice',
+  name: 'InvoiceDetailView',
+  title: '发票详情',
+  type: 'DetailView',
+  config: {
+    layout: 'sections',
+    sections: [
+      {
+        title: '发票头部',
+        customComponents: ['invoiceHeader'],
+        className: 'print-header'
+      },
+      {
+        title: '开票信息',
+        fields: ['billingAddress'],
+        className: 'billing-info'
+      },
+      {
+        title: '收票信息',
+        fields: ['shippingAddress'],
+        className: 'shipping-info'
+      },
+      {
+        title: '发票明细',
+        customComponents: ['invoiceItems'],
+        className: 'print-table'
+      },
+      {
+        title: '发票底部',
+        customComponents: ['invoiceFooter'],
+        className: 'print-footer'
+      }
+    ],
+    
+    showPrintButton: true,
+    
+    printConfig: {
+      paperSize: 'A4',
+      orientation: 'portrait',
+      margins: { top: 20, right: 20, bottom: 20, left: 20 },
+      header: { show: true, content: '发票 - {invoiceNumber}' },
+      footer: { show: true, content: '第 {pageNumber} 页，共 {totalPages} 页' }
+    },
+    
+    actions: [
+      {
+        name: 'downloadPdf',
+        title: '下载 PDF',
+        icon: 'download',
+        type: 'secondary'
+      },
+      {
+        name: 'emailInvoice',
+        title: '邮件发送',
+        icon: 'mail',
+        type: 'secondary'
+      }
+    ]
+  }
+});
+```
+
+### 版本管理功能
+
+对于需要版本控制的文档、合同等数据，详情视图提供了完整的版本管理功能。用户可以查看历史版本、对比版本差异和恢复到旧版本。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Document',
+  name: 'DocumentDetailView',
+  title: '文档详情',
+  type: 'DetailView',
+  config: {
+    layout: 'tabs',
+    tabs: [
+      {
+        title: '文档内容',
+        fields: ['title', 'content']
+      }
+    ],
+    
+    versionHistory: true,
+    auditTrail: true,
+    
+    relatedTabs: [
+      {
+        name: 'versions',
+        title: '版本历史',
+        icon: 'history',
+        modelName: 'DocumentVersion',
+        relationField: 'documentId',
+        viewType: 'timeline',
+        lazy: true
+      },
+      {
+        name: 'audit',
+        title: '操作日志',
+        icon: 'audit',
+        modelName: 'AuditLog',
+        relationField: 'objectId',
+        viewType: 'timeline',
+        lazy: true
+      }
+    ],
+    
+    actions: [
+      {
+        name: 'compareVersions',
+        title: '版本对比',
+        icon: 'compare',
+        type: 'secondary'
+      },
+      {
+        name: 'revertVersion',
+        title: '恢复版本',
+        icon: 'undo',
+        type: 'secondary'
+      }
+    ]
+  }
+});
+```
+
+## 最佳实践
+
+### 详情页设计原则
+
+在设计详情视图时，建议遵循以下原则：
+
+- **信息层次化**：将最重要的信息放在最上方，按重要性递减排列
+- **合理分组**：将相关的字段组织在一起，使用分组或标签页进行划分
+- **操作便利**：将常用操作放在显眼位置，危险操作需要二次确认
+- **数据安全**：对敏感信息实施权限控制和数据蒙版
+- **响应式设计**：确保详情页在不同设备上都有良好的显示效果
+
+### 常见使用场景
+
+详情视图适用于以下业务场景：
+
+- **用户资料**：用户个人信息、设置、权限等的查看和管理
+- **产品详情**：产品信息、图片、价格、库存、销售数据等
+- **订单管理**：订单信息、商品列表、支付状态、物流进度等
+- **文档管理**：文档内容、版本历史、权限控制、审批流程等
+- **项目详情**：项目信息、进度跟踪、团队成员、任务分配等
+
+## 下一步
+
+了解详情视图后，继续学习：
+
+- [网格视图](/views/grid-view) - 学习如何创建数据列表界面
+- [表单视图](/views/form-view) - 学习如何创建数据编辑界面
+- [视图概览](/views/overview) - 回顾所有视图类型的使用场景

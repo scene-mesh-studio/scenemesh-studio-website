@@ -1,0 +1,1700 @@
+# 内容管理系统
+
+本文介绍如何使用 Entity Engine 构建一个功能完整的内容管理系统（CMS），涵盖内容创建、编辑、发布、多媒体管理、SEO优化和用户权限控制等核心功能。
+
+## 系统架构
+
+### 核心实体模型
+
+```typescript
+// 内容类型模型
+export const ContentTypeModel: IEntityModel = {
+  name: 'ContentType',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true, unique: true },
+    slug: { type: 'string', required: true, unique: true },
+    displayName: { type: 'string', required: true },
+    description: { type: 'string' },
+    icon: { type: 'string' },
+    category: { 
+      type: 'enum',
+      enumValues: ['PAGE', 'POST', 'MEDIA', 'FORM', 'CUSTOM'],
+      defaultValue: 'CUSTOM'
+    },
+    schema: { type: 'json', required: true }, // 字段定义
+    templates: { type: 'json' }, // 模板配置
+    permissions: { type: 'json' }, // 权限配置
+    isBuiltIn: { type: 'boolean', defaultValue: false },
+    isActive: { type: 'boolean', defaultValue: true },
+    sortOrder: { type: 'number', defaultValue: 0 },
+    contents: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Content', foreignKey: 'contentTypeId' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['slug'], unique: true },
+    { fields: ['category'] },
+    { fields: ['isActive', 'sortOrder'] }
+  ]
+};
+
+// 内容模型
+export const ContentModel: IEntityModel = {
+  name: 'Content',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    contentTypeId: { type: 'uuid', required: true },
+    contentType: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'ContentType', targetKey: 'id' }
+    },
+    title: { type: 'string', required: true },
+    slug: { type: 'string', required: true },
+    excerpt: { type: 'string' },
+    content: { type: 'text' },
+    metadata: { type: 'json' }, // 动态字段数据
+    status: {
+      type: 'enum',
+      enumValues: ['DRAFT', 'PENDING', 'PUBLISHED', 'ARCHIVED'],
+      defaultValue: 'DRAFT'
+    },
+    visibility: {
+      type: 'enum',
+      enumValues: ['PUBLIC', 'PRIVATE', 'PASSWORD', 'MEMBERS_ONLY'],
+      defaultValue: 'PUBLIC'
+    },
+    password: { type: 'string' },
+    publishedAt: { type: 'datetime' },
+    expiresAt: { type: 'datetime' },
+    authorId: { type: 'uuid', required: true },
+    author: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    editorId: { type: 'uuid' },
+    editor: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Content', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Content', foreignKey: 'parentId' }
+    },
+    featuredImage: { type: 'string' },
+    gallery: { type: 'json' }, // 图片集
+    tags: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Tag', through: 'ContentTag' }
+    },
+    categories: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Category', through: 'ContentCategory' }
+    },
+    versions: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'ContentVersion', foreignKey: 'contentId' }
+    },
+    comments: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Comment', foreignKey: 'contentId' }
+    },
+    // SEO字段
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    socialImage: { type: 'string' },
+    // 统计字段
+    viewCount: { type: 'number', defaultValue: 0 },
+    likeCount: { type: 'number', defaultValue: 0 },
+    commentCount: { type: 'number', defaultValue: 0 },
+    shareCount: { type: 'number', defaultValue: 0 },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['contentTypeId', 'slug'], unique: true },
+    { fields: ['status'] },
+    { fields: ['publishedAt'] },
+    { fields: ['authorId'] },
+    { fields: ['parentId'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 内容版本模型
+export const ContentVersionModel: IEntityModel = {
+  name: 'ContentVersion',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    contentId: { type: 'uuid', required: true },
+    content: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Content', targetKey: 'id' }
+    },
+    versionNumber: { type: 'number', required: true },
+    title: { type: 'string', required: true },
+    excerpt: { type: 'string' },
+    contentData: { type: 'text' },
+    metadata: { type: 'json' },
+    changes: { type: 'json' }, // 变更摘要
+    changeType: {
+      type: 'enum',
+      enumValues: ['MINOR', 'MAJOR', 'PATCH'],
+      defaultValue: 'MINOR'
+    },
+    createdById: { type: 'uuid', required: true },
+    createdBy: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    comment: { type: 'string' },
+    isAutoSave: { type: 'boolean', defaultValue: false },
+    createdAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['contentId', 'versionNumber'], unique: true },
+    { fields: ['contentId', 'createdAt'] },
+    { fields: ['createdById'] }
+  ]
+};
+
+// 分类模型
+export const CategoryModel: IEntityModel = {
+  name: 'Category',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', required: true, unique: true },
+    description: { type: 'string' },
+    color: { type: 'string' },
+    icon: { type: 'string' },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Category', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Category', foreignKey: 'parentId' }
+    },
+    contents: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Content', through: 'ContentCategory' }
+    },
+    sortOrder: { type: 'number', defaultValue: 0 },
+    isActive: { type: 'boolean', defaultValue: true },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['slug'], unique: true },
+    { fields: ['parentId'] },
+    { fields: ['isActive', 'sortOrder'] }
+  ]
+};
+
+// 标签模型
+export const TagModel: IEntityModel = {
+  name: 'Tag',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true, unique: true },
+    slug: { type: 'string', required: true, unique: true },
+    description: { type: 'string' },
+    color: { type: 'string' },
+    contents: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Content', through: 'ContentTag' }
+    },
+    usageCount: { type: 'number', defaultValue: 0 },
+    createdAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['name'], unique: true },
+    { fields: ['slug'], unique: true },
+    { fields: ['usageCount'] }
+  ]
+};
+
+// 媒体文件模型
+export const MediaModel: IEntityModel = {
+  name: 'Media',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    filename: { type: 'string', required: true },
+    originalName: { type: 'string', required: true },
+    mimeType: { type: 'string', required: true },
+    size: { type: 'number', required: true },
+    width: { type: 'number' },
+    height: { type: 'number' },
+    duration: { type: 'number' }, // 视频/音频时长
+    url: { type: 'string', required: true },
+    thumbnailUrl: { type: 'string' },
+    alt: { type: 'string' },
+    caption: { type: 'string' },
+    description: { type: 'string' },
+    category: {
+      type: 'enum',
+      enumValues: ['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT', 'OTHER'],
+      required: true
+    },
+    folderId: { type: 'uuid' },
+    folder: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'MediaFolder', targetKey: 'id' }
+    },
+    uploadedById: { type: 'uuid', required: true },
+    uploadedBy: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    metadata: { type: 'json' }, // EXIF等元数据
+    tags: { type: 'json' },
+    isPublic: { type: 'boolean', defaultValue: true },
+    downloadCount: { type: 'number', defaultValue: 0 },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['category'] },
+    { fields: ['mimeType'] },
+    { fields: ['folderId'] },
+    { fields: ['uploadedById'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 媒体文件夹模型
+export const MediaFolderModel: IEntityModel = {
+  name: 'MediaFolder',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    description: { type: 'string' },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'MediaFolder', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'MediaFolder', foreignKey: 'parentId' }
+    },
+    media: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Media', foreignKey: 'folderId' }
+    },
+    createdById: { type: 'uuid', required: true },
+    createdBy: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['parentId', 'name'], unique: true },
+    { fields: ['createdById'] }
+  ]
+};
+
+// 评论模型
+export const CommentModel: IEntityModel = {
+  name: 'Comment',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    contentId: { type: 'uuid', required: true },
+    content: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Content', targetKey: 'id' }
+    },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Comment', targetKey: 'id' }
+    },
+    replies: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Comment', foreignKey: 'parentId' }
+    },
+    authorName: { type: 'string', required: true },
+    authorEmail: { type: 'string', required: true },
+    authorUrl: { type: 'string' },
+    authorIP: { type: 'string' },
+    authorUserAgent: { type: 'string' },
+    userId: { type: 'uuid' },
+    user: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    commentText: { type: 'text', required: true },
+    status: {
+      type: 'enum',
+      enumValues: ['PENDING', 'APPROVED', 'REJECTED', 'SPAM'],
+      defaultValue: 'PENDING'
+    },
+    isAnonymous: { type: 'boolean', defaultValue: false },
+    likeCount: { type: 'number', defaultValue: 0 },
+    replyCount: { type: 'number', defaultValue: 0 },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['contentId'] },
+    { fields: ['parentId'] },
+    { fields: ['status'] },
+    { fields: ['userId'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 菜单模型
+export const MenuModel: IEntityModel = {
+  name: 'Menu',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    location: { type: 'string', required: true },
+    description: { type: 'string' },
+    items: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'MenuItem', foreignKey: 'menuId' }
+    },
+    isActive: { type: 'boolean', defaultValue: true },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['location'], unique: true },
+    { fields: ['isActive'] }
+  ]
+};
+
+// 菜单项模型
+export const MenuItemModel: IEntityModel = {
+  name: 'MenuItem',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    menuId: { type: 'uuid', required: true },
+    menu: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Menu', targetKey: 'id' }
+    },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'MenuItem', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'MenuItem', foreignKey: 'parentId' }
+    },
+    title: { type: 'string', required: true },
+    url: { type: 'string' },
+    contentId: { type: 'uuid' },
+    targetContent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Content', targetKey: 'id' }
+    },
+    icon: { type: 'string' },
+    cssClass: { type: 'string' },
+    target: {
+      type: 'enum',
+      enumValues: ['_self', '_blank', '_parent', '_top'],
+      defaultValue: '_self'
+    },
+    sortOrder: { type: 'number', defaultValue: 0 },
+    isActive: { type: 'boolean', defaultValue: true },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['menuId', 'sortOrder'] },
+    { fields: ['parentId'] },
+    { fields: ['contentId'] }
+  ]
+};
+```
+
+## 业务逻辑实现
+
+### 内容管理动作处理器
+
+```typescript
+// 内容操作动作处理器
+class ContentActionHandler implements IActionHandler {
+  name = 'content-manager';
+  displayName = '内容管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['create', 'update', 'publish', 'unpublish', 'archive', 'delete', 'duplicate'],
+        required: true 
+      },
+      contentId: { type: 'string' },
+      contentTypeId: { type: 'string' },
+      data: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'create':
+          return await this.createContent(input, entityManager, user);
+        case 'update':
+          return await this.updateContent(input, entityManager, user);
+        case 'publish':
+          return await this.publishContent(input, entityManager, user);
+        case 'unpublish':
+          return await this.unpublishContent(input, entityManager, user);
+        case 'archive':
+          return await this.archiveContent(input, entityManager, user);
+        case 'delete':
+          return await this.deleteContent(input, entityManager, user);
+        case 'duplicate':
+          return await this.duplicateContent(input, entityManager, user);
+        default:
+          throw new Error(`Unknown content action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'CONTENT_ACTION_ERROR' }
+      };
+    }
+  }
+  
+  private async createContent(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    // 验证内容类型
+    const contentType = await entityManager.get('ContentType', input.contentTypeId);
+    if (!contentType || !contentType.isActive) {
+      throw new Error('Invalid or inactive content type');
+    }
+    
+    // 验证数据结构
+    const validationResult = await this.validateContentData(input.data, contentType.schema);
+    if (!validationResult.valid) {
+      throw new Error(`Data validation failed: ${validationResult.errors.join(', ')}`);
+    }
+    
+    // 生成唯一slug
+    const slug = await this.generateUniqueSlug(input.data.title, input.contentTypeId, entityManager);
+    
+    // 创建内容
+    const content = await entityManager.create('Content', {
+      contentTypeId: input.contentTypeId,
+      title: input.data.title,
+      slug,
+      excerpt: input.data.excerpt,
+      content: input.data.content,
+      metadata: input.data.metadata || {},
+      status: input.data.status || 'DRAFT',
+      visibility: input.data.visibility || 'PUBLIC',
+      authorId: user.id,
+      featuredImage: input.data.featuredImage,
+      gallery: input.data.gallery || [],
+      seoTitle: input.data.seoTitle,
+      seoDescription: input.data.seoDescription,
+      seoKeywords: input.data.seoKeywords,
+      socialImage: input.data.socialImage
+    });
+    
+    // 处理分类和标签
+    if (input.data.categoryIds) {
+      await this.assignCategories(content.id, input.data.categoryIds, entityManager);
+    }
+    
+    if (input.data.tags) {
+      await this.assignTags(content.id, input.data.tags, entityManager);
+    }
+    
+    // 创建初始版本
+    await this.createVersion(content, user.id, 'Initial version', entityManager);
+    
+    return {
+      success: true,
+      data: { content },
+      events: [{
+        type: 'content.created',
+        data: {
+          contentId: content.id,
+          contentType: contentType.name,
+          title: content.title,
+          authorId: user.id
+        }
+      }]
+    };
+  }
+  
+  private async updateContent(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const content = await entityManager.get('Content', input.contentId, {
+      include: ['contentType', 'versions']
+    });
+    
+    if (!content) {
+      throw new Error('Content not found');
+    }
+    
+    // 权限检查
+    if (content.authorId !== user.id && !this.hasEditPermission(user, content)) {
+      throw new Error('Permission denied');
+    }
+    
+    // 创建版本备份
+    if (input.options?.createVersion !== false) {
+      await this.createVersion(content, user.id, input.options?.versionComment, entityManager);
+    }
+    
+    // 验证数据
+    if (input.data.metadata) {
+      const validationResult = await this.validateContentData(
+        { ...content.metadata, ...input.data.metadata }, 
+        content.contentType.schema
+      );
+      if (!validationResult.valid) {
+        throw new Error(`Data validation failed: ${validationResult.errors.join(', ')}`);
+      }
+    }
+    
+    // 更新slug（如果标题改变）
+    let slug = content.slug;
+    if (input.data.title && input.data.title !== content.title) {
+      slug = await this.generateUniqueSlug(input.data.title, content.contentTypeId, entityManager, content.id);
+    }
+    
+    // 更新内容
+    const updatedContent = await entityManager.update('Content', input.contentId, {
+      title: input.data.title || content.title,
+      slug,
+      excerpt: input.data.excerpt !== undefined ? input.data.excerpt : content.excerpt,
+      content: input.data.content !== undefined ? input.data.content : content.content,
+      metadata: { ...content.metadata, ...input.data.metadata },
+      featuredImage: input.data.featuredImage !== undefined ? input.data.featuredImage : content.featuredImage,
+      gallery: input.data.gallery || content.gallery,
+      seoTitle: input.data.seoTitle !== undefined ? input.data.seoTitle : content.seoTitle,
+      seoDescription: input.data.seoDescription !== undefined ? input.data.seoDescription : content.seoDescription,
+      seoKeywords: input.data.seoKeywords !== undefined ? input.data.seoKeywords : content.seoKeywords,
+      socialImage: input.data.socialImage !== undefined ? input.data.socialImage : content.socialImage,
+      editorId: user.id
+    });
+    
+    // 更新分类和标签
+    if (input.data.categoryIds) {
+      await this.updateCategories(content.id, input.data.categoryIds, entityManager);
+    }
+    
+    if (input.data.tags) {
+      await this.updateTags(content.id, input.data.tags, entityManager);
+    }
+    
+    return {
+      success: true,
+      data: { content: updatedContent },
+      events: [{
+        type: 'content.updated',
+        data: {
+          contentId: content.id,
+          changes: this.getChanges(content, input.data),
+          editorId: user.id
+        }
+      }]
+    };
+  }
+  
+  private async publishContent(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const content = await entityManager.get('Content', input.contentId);
+    
+    if (!content) {
+      throw new Error('Content not found');
+    }
+    
+    // 权限检查
+    if (!this.hasPublishPermission(user, content)) {
+      throw new Error('Permission denied');
+    }
+    
+    // 验证发布条件
+    const validationResult = await this.validateForPublishing(content, entityManager);
+    if (!validationResult.valid) {
+      throw new Error(`Publishing validation failed: ${validationResult.errors.join(', ')}`);
+    }
+    
+    const publishedAt = new Date();
+    
+    // 更新状态
+    const updatedContent = await entityManager.update('Content', input.contentId, {
+      status: 'PUBLISHED',
+      publishedAt,
+      editorId: user.id
+    });
+    
+    // 触发发布后处理
+    await this.processPostPublish(updatedContent, entityManager);
+    
+    return {
+      success: true,
+      data: { content: updatedContent },
+      events: [{
+        type: 'content.published',
+        data: {
+          contentId: content.id,
+          title: content.title,
+          publishedAt,
+          publishedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async validateContentData(data: any, schema: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    // 基于schema验证数据结构
+    for (const field of schema.fields) {
+      if (field.required && (data[field.name] === undefined || data[field.name] === null)) {
+        errors.push(`Field '${field.name}' is required`);
+      }
+      
+      if (data[field.name] !== undefined) {
+        const fieldValidation = await this.validateField(data[field.name], field);
+        if (!fieldValidation.valid) {
+          errors.push(...fieldValidation.errors);
+        }
+      }
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private async validateField(value: any, field: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    switch (field.type) {
+      case 'string':
+        if (typeof value !== 'string') {
+          errors.push(`Field '${field.name}' must be a string`);
+        } else if (field.maxLength && value.length > field.maxLength) {
+          errors.push(`Field '${field.name}' exceeds maximum length of ${field.maxLength}`);
+        }
+        break;
+        
+      case 'number':
+        if (typeof value !== 'number' || isNaN(value)) {
+          errors.push(`Field '${field.name}' must be a valid number`);
+        } else {
+          if (field.min !== undefined && value < field.min) {
+            errors.push(`Field '${field.name}' must be at least ${field.min}`);
+          }
+          if (field.max !== undefined && value > field.max) {
+            errors.push(`Field '${field.name}' must be at most ${field.max}`);
+          }
+        }
+        break;
+        
+      case 'email':
+        if (!this.isValidEmail(value)) {
+          errors.push(`Field '${field.name}' must be a valid email address`);
+        }
+        break;
+        
+      case 'url':
+        if (!this.isValidUrl(value)) {
+          errors.push(`Field '${field.name}' must be a valid URL`);
+        }
+        break;
+        
+      case 'array':
+        if (!Array.isArray(value)) {
+          errors.push(`Field '${field.name}' must be an array`);
+        } else {
+          if (field.minItems && value.length < field.minItems) {
+            errors.push(`Field '${field.name}' must have at least ${field.minItems} items`);
+          }
+          if (field.maxItems && value.length > field.maxItems) {
+            errors.push(`Field '${field.name}' must have at most ${field.maxItems} items`);
+          }
+        }
+        break;
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private async generateUniqueSlug(
+    title: string, 
+    contentTypeId: string, 
+    entityManager: IEntityManager,
+    excludeId?: string
+  ): Promise<string> {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    
+    let slug = baseSlug;
+    let counter = 1;
+    
+    while (await this.slugExists(slug, contentTypeId, entityManager, excludeId)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
+    return slug;
+  }
+  
+  private async slugExists(
+    slug: string, 
+    contentTypeId: string, 
+    entityManager: IEntityManager,
+    excludeId?: string
+  ): Promise<boolean> {
+    const filter: any = { contentTypeId, slug };
+    if (excludeId) {
+      filter.id = { $ne: excludeId };
+    }
+    
+    const existing = await entityManager.query({
+      entityType: 'Content',
+      filter,
+      limit: 1
+    });
+    
+    return existing.data.length > 0;
+  }
+  
+  private async createVersion(
+    content: any, 
+    userId: string, 
+    comment: string,
+    entityManager: IEntityManager
+  ): Promise<any> {
+    // 获取下一个版本号
+    const latestVersion = await entityManager.query({
+      entityType: 'ContentVersion',
+      filter: { contentId: content.id },
+      sort: [{ field: 'versionNumber', direction: 'desc' }],
+      limit: 1
+    });
+    
+    const versionNumber = latestVersion.data.length > 0 ? 
+      latestVersion.data[0].versionNumber + 1 : 1;
+    
+    return await entityManager.create('ContentVersion', {
+      contentId: content.id,
+      versionNumber,
+      title: content.title,
+      excerpt: content.excerpt,
+      contentData: content.content,
+      metadata: content.metadata,
+      createdById: userId,
+      comment: comment || 'Auto-saved version'
+    });
+  }
+  
+  private async assignCategories(
+    contentId: string, 
+    categoryIds: string[], 
+    entityManager: IEntityManager
+  ): Promise<void> {
+    // 删除现有分类关联
+    await entityManager.query({
+      entityType: 'ContentCategory',
+      filter: { contentId },
+      operation: 'delete'
+    });
+    
+    // 创建新的分类关联
+    for (const categoryId of categoryIds) {
+      await entityManager.create('ContentCategory', {
+        contentId,
+        categoryId
+      });
+    }
+  }
+  
+  private async assignTags(
+    contentId: string, 
+    tags: string[], 
+    entityManager: IEntityManager
+  ): Promise<void> {
+    // 删除现有标签关联
+    await entityManager.query({
+      entityType: 'ContentTag',
+      filter: { contentId },
+      operation: 'delete'
+    });
+    
+    // 处理标签（创建新标签或使用现有标签）
+    for (const tagName of tags) {
+      let tag = await this.findOrCreateTag(tagName, entityManager);
+      
+      await entityManager.create('ContentTag', {
+        contentId,
+        tagId: tag.id
+      });
+    }
+  }
+  
+  private async findOrCreateTag(name: string, entityManager: IEntityManager): Promise<any> {
+    const slug = name.toLowerCase().replace(/\s+/g, '-');
+    
+    // 查找现有标签
+    const existing = await entityManager.query({
+      entityType: 'Tag',
+      filter: { name },
+      limit: 1
+    });
+    
+    if (existing.data.length > 0) {
+      // 更新使用计数
+      await entityManager.update('Tag', existing.data[0].id, {
+        usageCount: existing.data[0].usageCount + 1
+      });
+      return existing.data[0];
+    }
+    
+    // 创建新标签
+    return await entityManager.create('Tag', {
+      name,
+      slug,
+      usageCount: 1
+    });
+  }
+  
+  private hasEditPermission(user: any, content: any): boolean {
+    return user.permissions.includes('edit_all_content') || 
+           user.permissions.includes(`edit_content:${content.contentType.name}`);
+  }
+  
+  private hasPublishPermission(user: any, content: any): boolean {
+    return user.permissions.includes('publish_content') ||
+           user.permissions.includes(`publish_content:${content.contentType.name}`);
+  }
+  
+  private async validateForPublishing(content: any, entityManager: IEntityManager): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!content.title || content.title.trim() === '') {
+      errors.push('Title is required for publishing');
+    }
+    
+    if (!content.content || content.content.trim() === '') {
+      errors.push('Content is required for publishing');
+    }
+    
+    // 验证SEO字段
+    if (!content.seoTitle) {
+      errors.push('SEO title is required for publishing');
+    }
+    
+    if (!content.seoDescription) {
+      errors.push('SEO description is required for publishing');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private async processPostPublish(content: any, entityManager: IEntityManager): Promise<void> {
+    // 更新统计
+    await this.updateContentStats(content.id, entityManager);
+    
+    // 清理缓存
+    await this.clearContentCache(content.id);
+    
+    // 触发搜索引擎索引
+    await this.triggerSearchIndexing(content);
+  }
+  
+  private getChanges(oldContent: any, newData: any): any[] {
+    const changes: any[] = [];
+    
+    for (const [key, value] of Object.entries(newData)) {
+      if (oldContent[key] !== value) {
+        changes.push({
+          field: key,
+          oldValue: oldContent[key],
+          newValue: value
+        });
+      }
+    }
+    
+    return changes;
+  }
+  
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+  
+  private isValidUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  
+  private async updateContentStats(contentId: string, entityManager: IEntityManager): Promise<void> {
+    // 实现统计更新
+  }
+  
+  private async clearContentCache(contentId: string): Promise<void> {
+    // 实现缓存清理
+  }
+  
+  private async triggerSearchIndexing(content: any): Promise<void> {
+    // 实现搜索引擎索引触发
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (['update', 'publish', 'unpublish', 'archive', 'delete', 'duplicate'].includes(input.action) && !input.contentId) {
+      errors.push('contentId is required for this action');
+    }
+    
+    if (input.action === 'create' && !input.contentTypeId) {
+      errors.push('contentTypeId is required for create action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['content_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+### 媒体管理动作处理器
+
+```typescript
+// 媒体管理动作处理器
+class MediaManagerActionHandler implements IActionHandler {
+  name = 'media-manager';
+  displayName = '媒体管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['upload', 'update', 'delete', 'organize', 'resize', 'optimize'],
+        required: true 
+      },
+      mediaId: { type: 'string' },
+      file: { type: 'object' },
+      folderId: { type: 'string' },
+      metadata: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  private storageProvider: IStorageProvider;
+  private imageProcessor: IImageProcessor;
+  
+  async initialize(context: ActionHandlerContext): Promise<void> {
+    this.storageProvider = new CloudStorageProvider();
+    this.imageProcessor = new SharpImageProcessor();
+    
+    await this.storageProvider.initialize();
+    await this.imageProcessor.initialize();
+  }
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'upload':
+          return await this.uploadMedia(input, entityManager, user);
+        case 'update':
+          return await this.updateMedia(input, entityManager, user);
+        case 'delete':
+          return await this.deleteMedia(input, entityManager, user);
+        case 'organize':
+          return await this.organizeMedia(input, entityManager, user);
+        case 'resize':
+          return await this.resizeMedia(input, entityManager, user);
+        case 'optimize':
+          return await this.optimizeMedia(input, entityManager, user);
+        default:
+          throw new Error(`Unknown media action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'MEDIA_ACTION_ERROR' }
+      };
+    }
+  }
+  
+  private async uploadMedia(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const file = input.file;
+    
+    // 验证文件类型和大小
+    const validationResult = await this.validateFile(file);
+    if (!validationResult.valid) {
+      throw new Error(`File validation failed: ${validationResult.errors.join(', ')}`);
+    }
+    
+    // 生成文件名
+    const filename = this.generateUniqueFilename(file.originalName);
+    
+    // 上传文件
+    const uploadResult = await this.storageProvider.upload(file.buffer, {
+      filename,
+      contentType: file.mimetype,
+      folder: input.options?.folder || 'uploads'
+    });
+    
+    // 处理图片（生成缩略图、提取元数据）
+    let metadata: any = {};
+    let thumbnailUrl: string | undefined;
+    let width: number | undefined;
+    let height: number | undefined;
+    
+    if (this.isImageFile(file.mimetype)) {
+      const imageInfo = await this.imageProcessor.getImageInfo(file.buffer);
+      width = imageInfo.width;
+      height = imageInfo.height;
+      metadata = imageInfo.metadata;
+      
+      // 生成缩略图
+      const thumbnail = await this.imageProcessor.resize(file.buffer, {
+        width: 300,
+        height: 300,
+        fit: 'cover'
+      });
+      
+      const thumbnailResult = await this.storageProvider.upload(thumbnail, {
+        filename: `thumb_${filename}`,
+        contentType: file.mimetype,
+        folder: 'thumbnails'
+      });
+      
+      thumbnailUrl = thumbnailResult.url;
+    }
+    
+    // 创建媒体记录
+    const media = await entityManager.create('Media', {
+      filename,
+      originalName: file.originalName,
+      mimeType: file.mimetype,
+      size: file.size,
+      width,
+      height,
+      url: uploadResult.url,
+      thumbnailUrl,
+      category: this.categorizeFile(file.mimetype),
+      folderId: input.folderId,
+      uploadedById: user.id,
+      metadata,
+      alt: input.metadata?.alt || '',
+      caption: input.metadata?.caption || '',
+      description: input.metadata?.description || ''
+    });
+    
+    return {
+      success: true,
+      data: { media },
+      events: [{
+        type: 'media.uploaded',
+        data: {
+          mediaId: media.id,
+          filename: media.filename,
+          category: media.category,
+          uploadedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async validateFile(file: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    // 检查文件大小（默认最大50MB）
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      errors.push(`File size exceeds maximum allowed size of ${maxSize / 1024 / 1024}MB`);
+    }
+    
+    // 检查文件类型
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+      'video/mp4', 'video/webm', 'video/ogg',
+      'audio/mp3', 'audio/wav', 'audio/ogg',
+      'application/pdf', 'text/plain',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (!allowedTypes.includes(file.mimetype)) {
+      errors.push(`File type '${file.mimetype}' is not allowed`);
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private generateUniqueFilename(originalName: string): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 8);
+    const extension = originalName.split('.').pop();
+    return `${timestamp}_${random}.${extension}`;
+  }
+  
+  private isImageFile(mimeType: string): boolean {
+    return mimeType.startsWith('image/');
+  }
+  
+  private categorizeFile(mimeType: string): string {
+    if (mimeType.startsWith('image/')) return 'IMAGE';
+    if (mimeType.startsWith('video/')) return 'VIDEO';
+    if (mimeType.startsWith('audio/')) return 'AUDIO';
+    if (mimeType === 'application/pdf' || mimeType.includes('document')) return 'DOCUMENT';
+    return 'OTHER';
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (input.action === 'upload' && !input.file) {
+      errors.push('file is required for upload action');
+    }
+    
+    if (['update', 'delete', 'resize', 'optimize'].includes(input.action) && !input.mediaId) {
+      errors.push('mediaId is required for this action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['media_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: true,
+      timeout: 60000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+## 视图定义
+
+### 内容管理视图
+
+```typescript
+// 内容列表视图
+export const ContentListView: IViewDefinition = {
+  id: 'content-list',
+  name: 'ContentList',
+  displayName: '内容列表',
+  type: 'table',
+  entityType: 'Content',
+  config: {
+    columns: [
+      {
+        name: 'title',
+        displayName: '标题',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 250,
+        renderer: 'content-title-link'
+      },
+      {
+        name: 'contentType.displayName',
+        displayName: '内容类型',
+        type: 'string',
+        sortable: true,
+        filterable: true,
+        width: 120
+      },
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'content-status-badge'
+      },
+      {
+        name: 'author.name',
+        displayName: '作者',
+        type: 'string',
+        sortable: true,
+        filterable: true,
+        width: 120
+      },
+      {
+        name: 'publishedAt',
+        displayName: '发布时间',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short', timeStyle: 'short' }
+      },
+      {
+        name: 'viewCount',
+        displayName: '浏览量',
+        type: 'number',
+        sortable: true,
+        width: 80
+      },
+      {
+        name: 'updatedAt',
+        displayName: '更新时间',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short', timeStyle: 'short' }
+      }
+    ],
+    defaultSort: [{ field: 'updatedAt', direction: 'desc' }],
+    pageSize: 25,
+    enableSearch: true,
+    enableFilters: true,
+    enableExport: true,
+    filters: [
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'select',
+        options: [
+          { label: '草稿', value: 'DRAFT' },
+          { label: '待审核', value: 'PENDING' },
+          { label: '已发布', value: 'PUBLISHED' },
+          { label: '已归档', value: 'ARCHIVED' }
+        ]
+      },
+      {
+        name: 'contentType',
+        displayName: '内容类型',
+        type: 'select',
+        dataSource: 'ContentType',
+        labelField: 'displayName',
+        valueField: 'id'
+      },
+      {
+        name: 'publishedAt',
+        displayName: '发布日期',
+        type: 'dateRange'
+      }
+    ],
+    actions: [
+      {
+        name: 'create',
+        displayName: '新建内容',
+        type: 'primary',
+        icon: 'plus',
+        handler: 'navigate-to-create'
+      },
+      {
+        name: 'bulk-publish',
+        displayName: '批量发布',
+        type: 'secondary',
+        icon: 'publish',
+        handler: 'bulk-publish-modal',
+        requiresSelection: true
+      }
+    ],
+    rowActions: [
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'navigate-to-edit'
+      },
+      {
+        name: 'preview',
+        displayName: '预览',
+        icon: 'eye',
+        handler: 'preview-content'
+      },
+      {
+        name: 'publish',
+        displayName: '发布',
+        icon: 'publish',
+        handler: 'publish-content',
+        condition: { status: 'DRAFT' }
+      },
+      {
+        name: 'duplicate',
+        displayName: '复制',
+        icon: 'copy',
+        handler: 'duplicate-content'
+      }
+    ]
+  }
+};
+
+// 内容编辑视图
+export const ContentEditView: IViewDefinition = {
+  id: 'content-edit',
+  name: 'ContentEdit',
+  displayName: '内容编辑',
+  type: 'form',
+  entityType: 'Content',
+  config: {
+    layout: {
+      type: 'sections',
+      sections: [
+        {
+          title: '基本信息',
+          columns: 2,
+          fields: [
+            { 
+              name: 'title', 
+              displayName: '标题', 
+              type: 'string',
+              required: true,
+              placeholder: '请输入内容标题'
+            },
+            { 
+              name: 'slug', 
+              displayName: 'URL标识', 
+              type: 'string',
+              readonly: true,
+              help: '根据标题自动生成'
+            },
+            {
+              name: 'status',
+              displayName: '状态',
+              type: 'select',
+              options: [
+                { label: '草稿', value: 'DRAFT' },
+                { label: '待审核', value: 'PENDING' },
+                { label: '已发布', value: 'PUBLISHED' }
+              ],
+              required: true
+            },
+            {
+              name: 'visibility',
+              displayName: '可见性',
+              type: 'select',
+              options: [
+                { label: '公开', value: 'PUBLIC' },
+                { label: '私有', value: 'PRIVATE' },
+                { label: '密码保护', value: 'PASSWORD' },
+                { label: '仅会员', value: 'MEMBERS_ONLY' }
+              ],
+              required: true
+            }
+          ]
+        },
+        {
+          title: '内容',
+          columns: 1,
+          fields: [
+            {
+              name: 'excerpt',
+              displayName: '摘要',
+              type: 'textarea',
+              rows: 3,
+              placeholder: '请输入内容摘要'
+            },
+            {
+              name: 'content',
+              displayName: '正文',
+              type: 'rich-text',
+              required: true,
+              config: {
+                toolbar: 'full',
+                plugins: ['image', 'video', 'table', 'code'],
+                height: 400
+              }
+            }
+          ]
+        },
+        {
+          title: '媒体',
+          columns: 2,
+          fields: [
+            {
+              name: 'featuredImage',
+              displayName: '特色图片',
+              type: 'image',
+              config: {
+                accept: 'image/*',
+                maxSize: '10MB',
+                dimensions: { width: 1200, height: 630 }
+              }
+            },
+            {
+              name: 'gallery',
+              displayName: '图片集',
+              type: 'image-gallery',
+              config: {
+                maxImages: 10,
+                allowReorder: true
+              }
+            }
+          ]
+        },
+        {
+          title: '分类和标签',
+          columns: 2,
+          fields: [
+            {
+              name: 'categoryIds',
+              displayName: '分类',
+              type: 'multi-select',
+              dataSource: 'Category',
+              labelField: 'name',
+              valueField: 'id',
+              config: {
+                hierarchical: true,
+                maxSelection: 3
+              }
+            },
+            {
+              name: 'tags',
+              displayName: '标签',
+              type: 'tag-input',
+              config: {
+                allowCreate: true,
+                maxTags: 10
+              }
+            }
+          ]
+        },
+        {
+          title: 'SEO设置',
+          columns: 1,
+          collapsible: true,
+          fields: [
+            {
+              name: 'seoTitle',
+              displayName: 'SEO标题',
+              type: 'string',
+              maxLength: 60,
+              help: '建议长度：50-60个字符'
+            },
+            {
+              name: 'seoDescription',
+              displayName: 'SEO描述',
+              type: 'textarea',
+              rows: 3,
+              maxLength: 160,
+              help: '建议长度：120-160个字符'
+            },
+            {
+              name: 'seoKeywords',
+              displayName: 'SEO关键词',
+              type: 'string',
+              placeholder: '用逗号分隔多个关键词'
+            },
+            {
+              name: 'socialImage',
+              displayName: '社交媒体图片',
+              type: 'image',
+              config: {
+                dimensions: { width: 1200, height: 630 }
+              }
+            }
+          ]
+        },
+        {
+          title: '发布设置',
+          columns: 2,
+          collapsible: true,
+          fields: [
+            {
+              name: 'publishedAt',
+              displayName: '发布时间',
+              type: 'datetime',
+              help: '留空则立即发布'
+            },
+            {
+              name: 'expiresAt',
+              displayName: '过期时间',
+              type: 'datetime',
+              help: '留空则永不过期'
+            },
+            {
+              name: 'password',
+              displayName: '访问密码',
+              type: 'string',
+              condition: { field: 'visibility', value: 'PASSWORD' }
+            }
+          ]
+        }
+      ]
+    },
+    actions: [
+      {
+        name: 'save-draft',
+        displayName: '保存草稿',
+        type: 'secondary',
+        handler: 'save-as-draft'
+      },
+      {
+        name: 'preview',
+        displayName: '预览',
+        type: 'secondary',
+        handler: 'preview-content'
+      },
+      {
+        name: 'publish',
+        displayName: '发布',
+        type: 'primary',
+        handler: 'publish-content'
+      }
+    ],
+    validation: {
+      rules: [
+        {
+          field: 'title',
+          type: 'required',
+          message: '标题不能为空'
+        },
+        {
+          field: 'content',
+          type: 'required',
+          message: '正文不能为空'
+        },
+        {
+          field: 'seoTitle',
+          type: 'maxLength',
+          value: 60,
+          message: 'SEO标题不能超过60个字符'
+        }
+      ]
+    }
+  }
+};
+
+// 媒体库视图
+export const MediaLibraryView: IViewDefinition = {
+  id: 'media-library',
+  name: 'MediaLibrary',
+  displayName: '媒体库',
+  type: 'gallery',
+  entityType: 'Media',
+  config: {
+    displayMode: 'grid', // grid, list, masonry
+    itemSize: 'medium', // small, medium, large
+    showMetadata: true,
+    groupBy: 'category',
+    filters: [
+      {
+        name: 'category',
+        displayName: '媒体类型',
+        type: 'select',
+        options: [
+          { label: '图片', value: 'IMAGE' },
+          { label: '视频', value: 'VIDEO' },
+          { label: '音频', value: 'AUDIO' },
+          { label: '文档', value: 'DOCUMENT' }
+        ]
+      },
+      {
+        name: 'folder',
+        displayName: '文件夹',
+        type: 'tree-select',
+        dataSource: 'MediaFolder',
+        labelField: 'name',
+        valueField: 'id'
+      },
+      {
+        name: 'uploadedAt',
+        displayName: '上传日期',
+        type: 'dateRange'
+      }
+    ],
+    actions: [
+      {
+        name: 'upload',
+        displayName: '上传媒体',
+        type: 'primary',
+        icon: 'upload',
+        handler: 'upload-media-modal'
+      },
+      {
+        name: 'create-folder',
+        displayName: '新建文件夹',
+        type: 'secondary',
+        icon: 'folder-plus',
+        handler: 'create-folder-modal'
+      }
+    ],
+    itemActions: [
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'edit-media-modal'
+      },
+      {
+        name: 'copy-url',
+        displayName: '复制链接',
+        icon: 'link',
+        handler: 'copy-media-url'
+      },
+      {
+        name: 'move',
+        displayName: '移动',
+        icon: 'move',
+        handler: 'move-media-modal'
+      },
+      {
+        name: 'delete',
+        displayName: '删除',
+        icon: 'trash',
+        handler: 'delete-media-confirm'
+      }
+    ]
+  }
+};
+```
+
+## 下一步
+
+完成CMS系统的基础架构后，可以继续学习：
+
+- [客户关系管理](./crm) - CRM系统的最佳实践
+- [博客系统](./blog) - 博客和内容发布系统
+- [社交应用](./social) - 社交网络应用开发

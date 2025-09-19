@@ -1,0 +1,1192 @@
+# 添加字段类型
+
+Entity Engine 支持通过插件系统扩展新的字段类型，允许开发者创建符合业务需求的自定义数据类型。系统提供了完整的字段类型注册、验证、渲染和存储机制。
+
+## 字段类型架构
+
+### 字段类型接口
+
+```typescript
+/**
+ * 字段类型定义接口
+ */
+interface IFieldType {
+  // 基础信息
+  name: string;
+  displayName: string;
+  description?: string;
+  category: FieldTypeCategory;
+  version: string;
+  
+  // 配置选项
+  defaultOptions: FieldTypeOptions;
+  configSchema: FieldConfigSchema;
+  
+  // 验证规则
+  validate(value: any, options: FieldTypeOptions): ValidationResult;
+  serialize(value: any, options: FieldTypeOptions): any;
+  deserialize(value: any, options: FieldTypeOptions): any;
+  
+  // 渲染支持
+  getRenderer(context: RenderContext): IFieldRenderer;
+  getEditor(context: EditContext): IFieldEditor;
+  
+  // 数据库映射
+  toDatabaseType(options: FieldTypeOptions): DatabaseTypeMapping;
+  fromDatabaseValue(value: any, options: FieldTypeOptions): any;
+  
+  // 查询支持
+  getSupportedOperators(): QueryOperator[];
+  buildWhereClause(field: string, operator: QueryOperator, value: any): WhereClause;
+  
+  // 元数据
+  getMetadata(): FieldTypeMetadata;
+}
+
+/**
+ * 字段类型选项
+ */
+interface FieldTypeOptions {
+  required?: boolean;
+  defaultValue?: any;
+  unique?: boolean;
+  indexed?: boolean;
+  
+  // 类型特定选项
+  [key: string]: any;
+}
+
+/**
+ * 字段配置模式
+ */
+interface FieldConfigSchema {
+  type: 'object';
+  properties: Record<string, SchemaProperty>;
+  required?: string[];
+  additionalProperties?: boolean;
+}
+
+/**
+ * 验证结果
+ */
+interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+  normalized?: any;
+}
+
+/**
+ * 数据库类型映射
+ */
+interface DatabaseTypeMapping {
+  postgresql: string;
+  mysql: string;
+  sqlite: string;
+  mongodb?: string;
+}
+
+/**
+ * 字段类型元数据
+ */
+interface FieldTypeMetadata {
+  supportsIndexing: boolean;
+  supportsUnique: boolean;
+  supportsDefaultValue: boolean;
+  supportsNull: boolean;
+  supportsArray: boolean;
+  maxLength?: number;
+  minLength?: number;
+  pattern?: string;
+}
+```
+
+### 字段类型注册器
+
+```typescript
+/**
+ * 字段类型注册器
+ */
+class FieldTypeRegistry {
+  private fieldTypes = new Map<string, IFieldType>();
+  private categories = new Map<FieldTypeCategory, IFieldType[]>();
+  
+  register(fieldType: IFieldType): void {
+    // 验证字段类型
+    this.validateFieldType(fieldType);
+    
+    // 检查名称冲突
+    if (this.fieldTypes.has(fieldType.name)) {
+      throw new FieldTypeError(`Field type '${fieldType.name}' already registered`);
+    }
+    
+    // 注册字段类型
+    this.fieldTypes.set(fieldType.name, fieldType);
+    
+    // 按类别分组
+    if (!this.categories.has(fieldType.category)) {
+      this.categories.set(fieldType.category, []);
+    }
+    this.categories.get(fieldType.category)!.push(fieldType);
+    
+    // 触发注册事件
+    this.emitEvent('fieldTypeRegistered', { fieldType });
+  }
+  
+  unregister(name: string): boolean {
+    const fieldType = this.fieldTypes.get(name);
+    if (!fieldType) return false;
+    
+    // 检查依赖关系
+    const dependencies = this.findDependencies(name);
+    if (dependencies.length > 0) {
+      throw new FieldTypeError(
+        `Cannot unregister field type '${name}': used by ${dependencies.join(', ')}`
+      );
+    }
+    
+    // 移除注册
+    this.fieldTypes.delete(name);
+    
+    // 从类别中移除
+    const categoryTypes = this.categories.get(fieldType.category);
+    if (categoryTypes) {
+      const index = categoryTypes.indexOf(fieldType);
+      if (index > -1) {
+        categoryTypes.splice(index, 1);
+      }
+    }
+    
+    // 触发注销事件
+    this.emitEvent('fieldTypeUnregistered', { fieldType });
+    
+    return true;
+  }
+  
+  get(name: string): IFieldType | undefined {
+    return this.fieldTypes.get(name);
+  }
+  
+  getByCategory(category: FieldTypeCategory): IFieldType[] {
+    return this.categories.get(category) || [];
+  }
+  
+  list(): IFieldType[] {
+    return Array.from(this.fieldTypes.values());
+  }
+  
+  listCategories(): FieldTypeCategory[] {
+    return Array.from(this.categories.keys());
+  }
+  
+  validate(typeName: string, value: any, options: FieldTypeOptions): ValidationResult {
+    const fieldType = this.fieldTypes.get(typeName);
+    if (!fieldType) {
+      return {
+        valid: false,
+        errors: [{ message: `Unknown field type: ${typeName}`, code: 'UNKNOWN_TYPE' }],
+        warnings: []
+      };
+    }
+    
+    return fieldType.validate(value, options);
+  }
+  
+  serialize(typeName: string, value: any, options: FieldTypeOptions): any {
+    const fieldType = this.fieldTypes.get(typeName);
+    if (!fieldType) {
+      throw new FieldTypeError(`Unknown field type: ${typeName}`);
+    }
+    
+    return fieldType.serialize(value, options);
+  }
+  
+  deserialize(typeName: string, value: any, options: FieldTypeOptions): any {
+    const fieldType = this.fieldTypes.get(typeName);
+    if (!fieldType) {
+      throw new FieldTypeError(`Unknown field type: ${typeName}`);
+    }
+    
+    return fieldType.deserialize(value, options);
+  }
+  
+  private validateFieldType(fieldType: IFieldType): void {
+    const errors: string[] = [];
+    
+    if (!fieldType.name || typeof fieldType.name !== 'string') {
+      errors.push('Field type must have a valid name');
+    }
+    
+    if (!fieldType.displayName || typeof fieldType.displayName !== 'string') {
+      errors.push('Field type must have a display name');
+    }
+    
+    if (!fieldType.version || typeof fieldType.version !== 'string') {
+      errors.push('Field type must have a version');
+    }
+    
+    if (!fieldType.category) {
+      errors.push('Field type must have a category');
+    }
+    
+    if (typeof fieldType.validate !== 'function') {
+      errors.push('Field type must implement validate method');
+    }
+    
+    if (typeof fieldType.serialize !== 'function') {
+      errors.push('Field type must implement serialize method');
+    }
+    
+    if (typeof fieldType.deserialize !== 'function') {
+      errors.push('Field type must implement deserialize method');
+    }
+    
+    if (errors.length > 0) {
+      throw new FieldTypeError(`Invalid field type: ${errors.join(', ')}`);
+    }
+  }
+  
+  private findDependencies(typeName: string): string[] {
+    // 查找使用该字段类型的模型
+    const dependencies: string[] = [];
+    // 实现依赖查找逻辑
+    return dependencies;
+  }
+  
+  private emitEvent(eventName: string, data: any): void {
+    // 触发事件
+    // 实现事件发射逻辑
+  }
+}
+```
+
+## 自定义字段类型示例
+
+### URL字段类型
+
+```typescript
+/**
+ * URL字段类型实现
+ */
+class URLFieldType implements IFieldType {
+  name = 'url';
+  displayName = 'URL';
+  description = 'Valid HTTP/HTTPS URL address';
+  category = FieldTypeCategory.TEXT;
+  version = '1.0.0';
+  
+  defaultOptions: FieldTypeOptions = {
+    required: false,
+    protocols: ['http', 'https'],
+    allowLocalhost: false,
+    maxLength: 2048
+  };
+  
+  configSchema: FieldConfigSchema = {
+    type: 'object',
+    properties: {
+      protocols: {
+        type: 'array',
+        items: { type: 'string', enum: ['http', 'https', 'ftp'] },
+        default: ['http', 'https']
+      },
+      allowLocalhost: {
+        type: 'boolean',
+        default: false
+      },
+      maxLength: {
+        type: 'number',
+        minimum: 1,
+        maximum: 8192,
+        default: 2048
+      },
+      requireTLD: {
+        type: 'boolean',
+        default: true
+      }
+    }
+  };
+  
+  validate(value: any, options: FieldTypeOptions): ValidationResult {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+    
+    // 空值检查
+    if (value == null || value === '') {
+      if (options.required) {
+        errors.push({
+          message: 'URL is required',
+          code: 'REQUIRED',
+          path: []
+        });
+      }
+      return { valid: errors.length === 0, errors, warnings };
+    }
+    
+    // 类型检查
+    if (typeof value !== 'string') {
+      errors.push({
+        message: 'URL must be a string',
+        code: 'INVALID_TYPE',
+        path: []
+      });
+      return { valid: false, errors, warnings };
+    }
+    
+    // 长度检查
+    if (value.length > (options.maxLength || this.defaultOptions.maxLength!)) {
+      errors.push({
+        message: `URL exceeds maximum length of ${options.maxLength}`,
+        code: 'MAX_LENGTH_EXCEEDED',
+        path: []
+      });
+    }
+    
+    // URL格式验证
+    try {
+      const url = new URL(value);
+      
+      // 协议检查
+      const allowedProtocols = options.protocols || this.defaultOptions.protocols!;
+      if (!allowedProtocols.includes(url.protocol.slice(0, -1))) {
+        errors.push({
+          message: `Protocol '${url.protocol}' not allowed. Allowed: ${allowedProtocols.join(', ')}`,
+          code: 'INVALID_PROTOCOL',
+          path: []
+        });
+      }
+      
+      // localhost检查
+      if (!options.allowLocalhost && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+        errors.push({
+          message: 'Localhost URLs not allowed',
+          code: 'LOCALHOST_NOT_ALLOWED',
+          path: []
+        });
+      }
+      
+      // TLD检查
+      if (options.requireTLD !== false && url.hostname.indexOf('.') === -1 && url.hostname !== 'localhost') {
+        errors.push({
+          message: 'URL must have a valid top-level domain',
+          code: 'INVALID_TLD',
+          path: []
+        });
+      }
+      
+    } catch (error) {
+      errors.push({
+        message: `Invalid URL format: ${error.message}`,
+        code: 'INVALID_FORMAT',
+        path: []
+      });
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      normalized: value.trim()
+    };
+  }
+  
+  serialize(value: any, options: FieldTypeOptions): any {
+    if (value == null) return null;
+    return String(value).trim();
+  }
+  
+  deserialize(value: any, options: FieldTypeOptions): any {
+    if (value == null) return null;
+    return String(value);
+  }
+  
+  getRenderer(context: RenderContext): IFieldRenderer {
+    return new URLFieldRenderer(this, context);
+  }
+  
+  getEditor(context: EditContext): IFieldEditor {
+    return new URLFieldEditor(this, context);
+  }
+  
+  toDatabaseType(options: FieldTypeOptions): DatabaseTypeMapping {
+    const maxLength = options.maxLength || this.defaultOptions.maxLength!;
+    
+    return {
+      postgresql: maxLength <= 255 ? 'VARCHAR(255)' : 'TEXT',
+      mysql: maxLength <= 255 ? `VARCHAR(${maxLength})` : 'TEXT',
+      sqlite: 'TEXT'
+    };
+  }
+  
+  fromDatabaseValue(value: any, options: FieldTypeOptions): any {
+    return value;
+  }
+  
+  getSupportedOperators(): QueryOperator[] {
+    return [
+      QueryOperator.EQUALS,
+      QueryOperator.NOT_EQUALS,
+      QueryOperator.LIKE,
+      QueryOperator.NOT_LIKE,
+      QueryOperator.IN,
+      QueryOperator.NOT_IN,
+      QueryOperator.IS_NULL,
+      QueryOperator.IS_NOT_NULL,
+      QueryOperator.STARTS_WITH,
+      QueryOperator.ENDS_WITH,
+      QueryOperator.CONTAINS
+    ];
+  }
+  
+  buildWhereClause(field: string, operator: QueryOperator, value: any): WhereClause {
+    switch (operator) {
+      case QueryOperator.EQUALS:
+        return { [field]: value };
+      case QueryOperator.NOT_EQUALS:
+        return { [field]: { not: value } };
+      case QueryOperator.LIKE:
+        return { [field]: { contains: value } };
+      case QueryOperator.NOT_LIKE:
+        return { [field]: { not: { contains: value } } };
+      case QueryOperator.STARTS_WITH:
+        return { [field]: { startsWith: value } };
+      case QueryOperator.ENDS_WITH:
+        return { [field]: { endsWith: value } };
+      case QueryOperator.CONTAINS:
+        return { [field]: { contains: value } };
+      case QueryOperator.IN:
+        return { [field]: { in: Array.isArray(value) ? value : [value] } };
+      case QueryOperator.NOT_IN:
+        return { [field]: { notIn: Array.isArray(value) ? value : [value] } };
+      case QueryOperator.IS_NULL:
+        return { [field]: null };
+      case QueryOperator.IS_NOT_NULL:
+        return { [field]: { not: null } };
+      default:
+        throw new Error(`Unsupported operator: ${operator}`);
+    }
+  }
+  
+  getMetadata(): FieldTypeMetadata {
+    return {
+      supportsIndexing: true,
+      supportsUnique: true,
+      supportsDefaultValue: true,
+      supportsNull: true,
+      supportsArray: true,
+      maxLength: 8192,
+      minLength: 1,
+      pattern: '^https?://.+'
+    };
+  }
+}
+```
+
+### 地理坐标字段类型
+
+```typescript
+/**
+ * 地理坐标接口
+ */
+interface GeoCoordinate {
+  latitude: number;
+  longitude: number;
+  altitude?: number;
+}
+
+/**
+ * 地理坐标字段类型
+ */
+class GeoCoordinateFieldType implements IFieldType {
+  name = 'geo_coordinate';
+  displayName = '地理坐标';
+  description = '地理位置坐标 (纬度, 经度)';
+  category = FieldTypeCategory.LOCATION;
+  version = '1.0.0';
+  
+  defaultOptions: FieldTypeOptions = {
+    required: false,
+    precision: 6,
+    includeAltitude: false,
+    bounds: {
+      north: 90,
+      south: -90,
+      east: 180,
+      west: -180
+    }
+  };
+  
+  configSchema: FieldConfigSchema = {
+    type: 'object',
+    properties: {
+      precision: {
+        type: 'number',
+        minimum: 1,
+        maximum: 15,
+        default: 6
+      },
+      includeAltitude: {
+        type: 'boolean',
+        default: false
+      },
+      bounds: {
+        type: 'object',
+        properties: {
+          north: { type: 'number', minimum: -90, maximum: 90 },
+          south: { type: 'number', minimum: -90, maximum: 90 },
+          east: { type: 'number', minimum: -180, maximum: 180 },
+          west: { type: 'number', minimum: -180, maximum: 180 }
+        }
+      }
+    }
+  };
+  
+  validate(value: any, options: FieldTypeOptions): ValidationResult {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+    
+    // 空值检查
+    if (value == null) {
+      if (options.required) {
+        errors.push({
+          message: 'Geographic coordinate is required',
+          code: 'REQUIRED',
+          path: []
+        });
+      }
+      return { valid: errors.length === 0, errors, warnings };
+    }
+    
+    // 类型检查
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      errors.push({
+        message: 'Geographic coordinate must be an object',
+        code: 'INVALID_TYPE',
+        path: []
+      });
+      return { valid: false, errors, warnings };
+    }
+    
+    // 必需字段检查
+    if (typeof value.latitude !== 'number') {
+      errors.push({
+        message: 'Latitude must be a number',
+        code: 'INVALID_LATITUDE',
+        path: ['latitude']
+      });
+    } else {
+      // 纬度范围检查
+      if (value.latitude < -90 || value.latitude > 90) {
+        errors.push({
+          message: 'Latitude must be between -90 and 90 degrees',
+          code: 'LATITUDE_OUT_OF_RANGE',
+          path: ['latitude']
+        });
+      }
+    }
+    
+    if (typeof value.longitude !== 'number') {
+      errors.push({
+        message: 'Longitude must be a number',
+        code: 'INVALID_LONGITUDE',
+        path: ['longitude']
+      });
+    } else {
+      // 经度范围检查
+      if (value.longitude < -180 || value.longitude > 180) {
+        errors.push({
+          message: 'Longitude must be between -180 and 180 degrees',
+          code: 'LONGITUDE_OUT_OF_RANGE',
+          path: ['longitude']
+        });
+      }
+    }
+    
+    // 高度检查
+    if (value.altitude !== undefined) {
+      if (typeof value.altitude !== 'number') {
+        errors.push({
+          message: 'Altitude must be a number',
+          code: 'INVALID_ALTITUDE',
+          path: ['altitude']
+        });
+      } else if (!options.includeAltitude) {
+        warnings.push({
+          message: 'Altitude provided but not enabled in field options',
+          code: 'ALTITUDE_NOT_ENABLED',
+          path: ['altitude']
+        });
+      }
+    }
+    
+    // 边界检查
+    if (options.bounds && typeof value.latitude === 'number' && typeof value.longitude === 'number') {
+      const bounds = options.bounds;
+      if (value.latitude < bounds.south || value.latitude > bounds.north ||
+          value.longitude < bounds.west || value.longitude > bounds.east) {
+        errors.push({
+          message: 'Coordinate is outside allowed bounds',
+          code: 'OUT_OF_BOUNDS',
+          path: []
+        });
+      }
+    }
+    
+    // 精度检查和标准化
+    let normalized: GeoCoordinate | undefined;
+    if (errors.length === 0) {
+      const precision = options.precision || this.defaultOptions.precision!;
+      normalized = {
+        latitude: Math.round(value.latitude * Math.pow(10, precision)) / Math.pow(10, precision),
+        longitude: Math.round(value.longitude * Math.pow(10, precision)) / Math.pow(10, precision)
+      };
+      
+      if (options.includeAltitude && value.altitude !== undefined) {
+        normalized.altitude = value.altitude;
+      }
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      normalized
+    };
+  }
+  
+  serialize(value: any, options: FieldTypeOptions): any {
+    if (value == null) return null;
+    
+    const result: any = {
+      lat: value.latitude,
+      lng: value.longitude
+    };
+    
+    if (options.includeAltitude && value.altitude !== undefined) {
+      result.alt = value.altitude;
+    }
+    
+    return result;
+  }
+  
+  deserialize(value: any, options: FieldTypeOptions): any {
+    if (value == null) return null;
+    
+    const result: GeoCoordinate = {
+      latitude: value.lat || value.latitude,
+      longitude: value.lng || value.longitude
+    };
+    
+    if (options.includeAltitude && (value.alt !== undefined || value.altitude !== undefined)) {
+      result.altitude = value.alt || value.altitude;
+    }
+    
+    return result;
+  }
+  
+  toDatabaseType(options: FieldTypeOptions): DatabaseTypeMapping {
+    return {
+      postgresql: 'POINT',
+      mysql: 'POINT',
+      sqlite: 'TEXT', // SQLite doesn't have native geometric types
+      mongodb: '2dsphere' // MongoDB geospatial index
+    };
+  }
+  
+  fromDatabaseValue(value: any, options: FieldTypeOptions): any {
+    if (value == null) return null;
+    
+    // Handle different database formats
+    if (typeof value === 'string') {
+      // Parse PostgreSQL POINT format: "(lat,lng)"
+      const match = value.match(/\(([^,]+),([^)]+)\)/);
+      if (match) {
+        return {
+          latitude: parseFloat(match[1]),
+          longitude: parseFloat(match[2])
+        };
+      }
+      
+      // Parse JSON string
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+    
+    // Handle object format
+    return value;
+  }
+  
+  getSupportedOperators(): QueryOperator[] {
+    return [
+      QueryOperator.EQUALS,
+      QueryOperator.NOT_EQUALS,
+      QueryOperator.IS_NULL,
+      QueryOperator.IS_NOT_NULL,
+      // 地理空间特定操作符
+      'NEAR' as QueryOperator,
+      'WITHIN' as QueryOperator,
+      'INTERSECTS' as QueryOperator
+    ];
+  }
+  
+  buildWhereClause(field: string, operator: QueryOperator, value: any): WhereClause {
+    switch (operator) {
+      case QueryOperator.EQUALS:
+        return { [field]: value };
+      case QueryOperator.NOT_EQUALS:
+        return { [field]: { not: value } };
+      case QueryOperator.IS_NULL:
+        return { [field]: null };
+      case QueryOperator.IS_NOT_NULL:
+        return { [field]: { not: null } };
+      case 'NEAR' as QueryOperator:
+        return {
+          [field]: {
+            near: value.center,
+            radius: value.radius
+          }
+        };
+      case 'WITHIN' as QueryOperator:
+        return {
+          [field]: {
+            within: value.geometry
+          }
+        };
+      default:
+        throw new Error(`Unsupported operator: ${operator}`);
+    }
+  }
+  
+  getRenderer(context: RenderContext): IFieldRenderer {
+    return new GeoCoordinateRenderer(this, context);
+  }
+  
+  getEditor(context: EditContext): IFieldEditor {
+    return new GeoCoordinateEditor(this, context);
+  }
+  
+  getMetadata(): FieldTypeMetadata {
+    return {
+      supportsIndexing: true,
+      supportsUnique: false,
+      supportsDefaultValue: true,
+      supportsNull: true,
+      supportsArray: true
+    };
+  }
+}
+```
+
+## 字段类型注册
+
+### 注册自定义字段类型
+
+```typescript
+// 在应用启动时注册字段类型
+const fieldTypeRegistry = EntityEngine.getFieldTypeRegistry();
+
+// 注册URL字段类型
+fieldTypeRegistry.register(new URLFieldType());
+
+// 注册地理坐标字段类型
+fieldTypeRegistry.register(new GeoCoordinateFieldType());
+
+// 批量注册
+const customFieldTypes = [
+  new PhoneNumberFieldType(),
+  new ColorFieldType(),
+  new CurrencyFieldType(),
+  new MarkdownFieldType()
+];
+
+customFieldTypes.forEach(fieldType => {
+  fieldTypeRegistry.register(fieldType);
+});
+```
+
+### 在模型中使用自定义字段类型
+
+```typescript
+// 使用URL字段类型
+export const WebsiteModel: IEntityModel = {
+  name: 'Website',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    url: { 
+      type: 'url',
+      required: true,
+      options: {
+        protocols: ['https'],
+        requireTLD: true,
+        maxLength: 512
+      }
+    },
+    backupUrl: { 
+      type: 'url',
+      options: {
+        protocols: ['http', 'https'],
+        allowLocalhost: true
+      }
+    }
+  }
+};
+
+// 使用地理坐标字段类型
+export const LocationModel: IEntityModel = {
+  name: 'Location',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    coordinates: {
+      type: 'geo_coordinate',
+      required: true,
+      options: {
+        precision: 8,
+        includeAltitude: true,
+        bounds: {
+          north: 85,
+          south: -85,
+          east: 180,
+          west: -180
+        }
+      }
+    }
+  }
+};
+```
+
+## 渲染器和编辑器
+
+### 字段渲染器接口
+
+```typescript
+/**
+ * 字段渲染器接口
+ */
+interface IFieldRenderer {
+  render(value: any, options: RenderOptions): RenderedContent;
+  canRender(context: RenderContext): boolean;
+  getPriority(): number;
+}
+
+/**
+ * URL字段渲染器
+ */
+class URLFieldRenderer implements IFieldRenderer {
+  constructor(
+    private fieldType: URLFieldType,
+    private context: RenderContext
+  ) {}
+  
+  render(value: any, options: RenderOptions): RenderedContent {
+    if (value == null || value === '') {
+      return { type: 'text', content: '-' };
+    }
+    
+    const url = String(value);
+    
+    if (this.context.format === 'html') {
+      return {
+        type: 'html',
+        content: `<a href="${this.escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(url)}</a>`
+      };
+    }
+    
+    if (this.context.format === 'markdown') {
+      return {
+        type: 'markdown',
+        content: `[${url}](${url})`
+      };
+    }
+    
+    return {
+      type: 'text',
+      content: url
+    };
+  }
+  
+  canRender(context: RenderContext): boolean {
+    return ['html', 'text', 'markdown'].includes(context.format);
+  }
+  
+  getPriority(): number {
+    return 100;
+  }
+  
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+}
+```
+
+### 字段编辑器接口
+
+```typescript
+/**
+ * 字段编辑器接口
+ */
+interface IFieldEditor {
+  render(value: any, options: EditOptions): EditorComponent;
+  validate(value: any): ValidationResult;
+  serialize(editorValue: any): any;
+  deserialize(fieldValue: any): any;
+}
+
+/**
+ * URL字段编辑器
+ */
+class URLFieldEditor implements IFieldEditor {
+  constructor(
+    private fieldType: URLFieldType,
+    private context: EditContext
+  ) {}
+  
+  render(value: any, options: EditOptions): EditorComponent {
+    const currentValue = value || '';
+    
+    return {
+      type: 'input',
+      inputType: 'url',
+      value: currentValue,
+      placeholder: 'https://example.com',
+      attributes: {
+        'data-field-type': 'url',
+        pattern: 'https?://.+',
+        maxlength: options.maxLength || 2048
+      },
+      validation: {
+        required: options.required || false,
+        pattern: options.pattern,
+        custom: (value: string) => this.fieldType.validate(value, options)
+      },
+      onChange: (newValue: string) => {
+        // 实时验证
+        const validation = this.fieldType.validate(newValue, options);
+        return {
+          value: newValue,
+          valid: validation.valid,
+          errors: validation.errors,
+          warnings: validation.warnings
+        };
+      }
+    };
+  }
+  
+  validate(value: any): ValidationResult {
+    return this.fieldType.validate(value, this.context.fieldOptions);
+  }
+  
+  serialize(editorValue: any): any {
+    return this.fieldType.serialize(editorValue, this.context.fieldOptions);
+  }
+  
+  deserialize(fieldValue: any): any {
+    return this.fieldType.deserialize(fieldValue, this.context.fieldOptions);
+  }
+}
+```
+
+## 高级功能
+
+### 字段类型中间件
+
+```typescript
+/**
+ * 字段类型中间件接口
+ */
+interface IFieldTypeMiddleware {
+  name: string;
+  before?(context: FieldOperationContext): Promise<void> | void;
+  after?(context: FieldOperationContext, result: any): Promise<any> | any;
+  onError?(context: FieldOperationContext, error: Error): Promise<void> | void;
+}
+
+/**
+ * 审计中间件
+ */
+class AuditMiddleware implements IFieldTypeMiddleware {
+  name = 'audit';
+  
+  async before(context: FieldOperationContext): Promise<void> {
+    if (context.operation === 'set' || context.operation === 'update') {
+      // 记录变更前的值
+      context.metadata.oldValue = await this.getCurrentValue(context);
+    }
+  }
+  
+  async after(context: FieldOperationContext, result: any): Promise<any> {
+    if (context.operation === 'set' || context.operation === 'update') {
+      // 记录变更日志
+      await this.logChange({
+        entityId: context.entityId,
+        fieldName: context.fieldName,
+        oldValue: context.metadata.oldValue,
+        newValue: result,
+        timestamp: new Date(),
+        userId: context.userId
+      });
+    }
+    
+    return result;
+  }
+  
+  async onError(context: FieldOperationContext, error: Error): Promise<void> {
+    // 记录错误日志
+    await this.logError({
+      entityId: context.entityId,
+      fieldName: context.fieldName,
+      operation: context.operation,
+      error: error.message,
+      timestamp: new Date(),
+      userId: context.userId
+    });
+  }
+  
+  private async getCurrentValue(context: FieldOperationContext): Promise<any> {
+    // 获取当前值的实现
+    return null;
+  }
+  
+  private async logChange(changeLog: any): Promise<void> {
+    // 记录变更日志的实现
+  }
+  
+  private async logError(errorLog: any): Promise<void> {
+    // 记录错误日志的实现
+  }
+}
+
+// 注册中间件
+fieldTypeRegistry.registerMiddleware(new AuditMiddleware());
+```
+
+### 字段类型工厂
+
+```typescript
+/**
+ * 字段类型工厂
+ */
+class FieldTypeFactory {
+  static createEnumFieldType(name: string, values: string[], options?: Partial<IFieldType>): IFieldType {
+    return {
+      name: `enum_${name.toLowerCase()}`,
+      displayName: name,
+      description: `Enumeration with values: ${values.join(', ')}`,
+      category: FieldTypeCategory.SELECTION,
+      version: '1.0.0',
+      defaultOptions: {
+        required: false,
+        values,
+        allowMultiple: false
+      },
+      configSchema: {
+        type: 'object',
+        properties: {
+          values: {
+            type: 'array',
+            items: { type: 'string' },
+            default: values
+          },
+          allowMultiple: {
+            type: 'boolean',
+            default: false
+          }
+        }
+      },
+      validate: (value: any, opts: FieldTypeOptions) => {
+        const errors: ValidationError[] = [];
+        
+        if (value == null) {
+          if (opts.required) {
+            errors.push({ message: 'Value is required', code: 'REQUIRED', path: [] });
+          }
+          return { valid: errors.length === 0, errors, warnings: [] };
+        }
+        
+        const allowedValues = opts.values || values;
+        if (opts.allowMultiple) {
+          if (!Array.isArray(value)) {
+            errors.push({ message: 'Value must be an array', code: 'INVALID_TYPE', path: [] });
+          } else {
+            const invalidValues = value.filter(v => !allowedValues.includes(v));
+            if (invalidValues.length > 0) {
+              errors.push({
+                message: `Invalid values: ${invalidValues.join(', ')}`,
+                code: 'INVALID_VALUE',
+                path: []
+              });
+            }
+          }
+        } else {
+          if (!allowedValues.includes(value)) {
+            errors.push({
+              message: `Invalid value. Must be one of: ${allowedValues.join(', ')}`,
+              code: 'INVALID_VALUE',
+              path: []
+            });
+          }
+        }
+        
+        return { valid: errors.length === 0, errors, warnings: [] };
+      },
+      serialize: (value: any) => value,
+      deserialize: (value: any) => value,
+      toDatabaseType: () => ({
+        postgresql: 'VARCHAR(255)',
+        mysql: 'VARCHAR(255)',
+        sqlite: 'TEXT'
+      }),
+      fromDatabaseValue: (value: any) => value,
+      getSupportedOperators: () => [QueryOperator.EQUALS, QueryOperator.NOT_EQUALS, QueryOperator.IN, QueryOperator.NOT_IN],
+      buildWhereClause: (field: string, operator: QueryOperator, value: any) => {
+        switch (operator) {
+          case QueryOperator.EQUALS:
+            return { [field]: value };
+          case QueryOperator.NOT_EQUALS:
+            return { [field]: { not: value } };
+          case QueryOperator.IN:
+            return { [field]: { in: Array.isArray(value) ? value : [value] } };
+          case QueryOperator.NOT_IN:
+            return { [field]: { notIn: Array.isArray(value) ? value : [value] } };
+          default:
+            throw new Error(`Unsupported operator: ${operator}`);
+        }
+      },
+      getRenderer: () => new EnumFieldRenderer(name, values),
+      getEditor: () => new EnumFieldEditor(name, values),
+      getMetadata: () => ({
+        supportsIndexing: true,
+        supportsUnique: false,
+        supportsDefaultValue: true,
+        supportsNull: true,
+        supportsArray: !!options?.defaultOptions?.allowMultiple
+      }),
+      ...options
+    };
+  }
+}
+
+// 使用工厂创建状态枚举
+const statusEnumType = FieldTypeFactory.createEnumFieldType('Status', [
+  'DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED'
+]);
+
+fieldTypeRegistry.register(statusEnumType);
+```
+
+## 下一步
+
+了解如何添加字段类型后，继续学习：
+
+- [添加模块](./modules) - 扩展Entity Engine功能模块
+- [自定义渲染器](./renderers) - 自定义数据显示方式
+- [自定义视图类型](./view-types) - 创建新的视图类型

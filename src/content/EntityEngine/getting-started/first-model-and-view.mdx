@@ -1,0 +1,677 @@
+# 第一个完整应用
+
+构建一个产品管理系统，学习 Entity Engine 的模型定义、视图配置和关联关系。
+
+## 我们将构建什么
+
+一个包含产品和分类管理的完整应用：
+
+- 📦 **产品管理** - 创建、编辑、查看产品
+- 📂 **分类管理** - 组织产品分类层级 
+- 🔗 **关联关系** - 产品属于分类
+- ✅ **数据验证** - 表单验证和业务规则
+
+## 第一步：定义分类模型
+
+先创建分类模型，因为产品会引用分类。
+
+创建 `lib/models.ts`：
+
+```typescript filename="lib/models.ts"
+import type { IEntityModel } from '@scenemesh/entity-engine';
+import { z } from 'zod';
+
+export const CategoryModel: IEntityModel = {
+  name: 'Category',
+  title: '产品分类',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '分类名称',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+      schema: z.string().min(1, '分类名称不能为空').max(50, '分类名称不能超过50个字符')
+    },
+    {
+      name: 'description',
+      title: '分类描述',
+      type: 'string',
+      schema: z.string().max(200, '描述不能超过200个字符').optional()
+    }
+  ]
+};
+
+export const models = [CategoryModel];
+```
+
+## 第二步：添加产品模型
+
+现在添加产品模型并建立与分类的关联：
+
+```typescript filename="lib/models.ts" highlight="2,29-72"
+import type { IEntityModel } from '@scenemesh/entity-engine';
+import { z } from 'zod';
+
+export const CategoryModel: IEntityModel = {
+  name: 'Category',
+  title: '产品分类',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '分类名称',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+      schema: z.string().min(1, '分类名称不能为空').max(50, '分类名称不能超过50个字符')
+    },
+    {
+      name: 'description',
+      title: '分类描述',
+      type: 'string',
+      schema: z.string().max(200, '描述不能超过200个字符').optional()
+    }
+  ]
+};
+
+export const ProductModel: IEntityModel = {
+  name: 'Product',
+  title: '产品',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '产品名称',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+      schema: z.string().min(2, '产品名称至少2个字符').max(100, '产品名称最多100个字符')
+    },
+    {
+      name: 'sku',
+      title: 'SKU编码',
+      type: 'string',
+      isRequired: true,
+      isUnique: true,
+      searchable: true,
+      schema: z.string().regex(/^[A-Z0-9-]+$/, 'SKU只能包含大写字母、数字和连字符').min(3, 'SKU至少3个字符')
+    },
+    {
+      name: 'price',
+      title: '价格',
+      type: 'number',
+      isRequired: true,
+      schema: z.number().min(0, '价格不能为负数').max(999999.99, '价格不能超过999999.99')
+    },
+    {
+      name: 'description',
+      title: '产品描述',
+      type: 'string',
+      schema: z.string().max(1000, '描述最多1000个字符').optional()
+    },
+    {
+      name: 'category',
+      title: '产品分类',
+      type: 'many_to_one',
+      refModel: 'Category',
+      isRequired: true
+    }
+  ]
+};
+
+// 注意：被引用的模型要先注册
+export const models = [CategoryModel, ProductModel];
+```
+
+## 第三步：创建视图
+
+定义用户界面布局。创建 `lib/views.ts`：
+
+```typescript filename="lib/views.ts"
+import type { IEntityView } from '@scenemesh/entity-engine';
+
+// 分类视图
+export const CategoryGridView: IEntityView = {
+  name: 'category_grid',
+  title: '分类列表',
+  modelName: 'Category',
+  viewType: 'grid',
+  items: [
+    {
+      type: 'field',
+      name: 'name',
+      spanCols: 4,
+    },
+    {
+      type: 'field',
+      name: 'description',
+      spanCols: 8,
+    }
+  ]
+};
+
+export const CategoryFormView: IEntityView = {
+  name: 'category_form',
+  title: '分类表单',
+  modelName: 'Category',
+  viewType: 'form',
+  items: [
+    {
+      type: 'field',
+      name: 'name',
+    },
+    {
+      type: 'field',
+      name: 'description',
+    }
+  ]
+};
+
+// 产品视图
+export const ProductGridView: IEntityView = {
+  name: 'product_grid',
+  title: '产品列表',
+  modelName: 'Product',
+  viewType: 'grid',
+  items: [
+    {
+      type: 'field',
+      name: 'name',
+      spanCols: 3,
+    },
+    {
+      type: 'field',
+      name: 'sku',
+      spanCols: 2,
+    },
+    {
+      type: 'field',
+      name: 'price',
+      spanCols: 2,
+    },
+    {
+      type: 'field',
+      name: 'category',
+      spanCols: 3,
+    }
+  ]
+};
+
+export const ProductFormView: IEntityView = {
+  name: 'product_form',
+  title: '产品表单',
+  modelName: 'Product',
+  viewType: 'form',
+  items: [
+    {
+      type: 'panel',
+      title: '基本信息',
+      items: [
+        {
+          type: 'field',
+          name: 'name',
+        },
+        {
+          type: 'field',
+          name: 'sku',
+        },
+        {
+          type: 'field',
+          name: 'category',
+        },
+        {
+          type: 'field',
+          name: 'price',
+        }
+      ]
+    },
+    {
+      type: 'panel',
+      title: '详细信息',
+      items: [
+        {
+          type: 'field',
+          name: 'description',
+        }
+      ]
+    }
+  ]
+};
+
+export const views = [
+  CategoryGridView,
+  CategoryFormView,
+  ProductGridView,
+  ProductFormView,
+];
+```
+
+## 第四步：设置 API 和 Provider
+
+创建服务端配置。创建 `app/api/ee/[[...slug]]/route.ts`：
+
+```typescript filename="app/api/ee/[[...slug]]/route.ts"
+import { EnginePrimitiveInitializer, fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { models } from '../../../../lib/models';
+import { views } from '../../../../lib/views';
+
+const initializer = new EnginePrimitiveInitializer({
+  models,
+  views,
+});
+
+const handler = (req: Request) => 
+  fetchEntityEntranceHandler({
+    request: req,
+    endpoint: '/api/ee',
+    initializer
+  });
+
+export { handler as GET, handler as POST };
+```
+
+创建客户端 Provider。创建 `lib/entity-provider.tsx`：
+
+```tsx filename="lib/entity-provider.tsx"
+'use client';
+import { createEntityEngineProvider } from '@scenemesh/entity-engine';
+import { models } from './models';
+import { views } from './views';
+
+export const EntityEngineProvider = createEntityEngineProvider({
+  config: { models, views },
+  settings: {
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || '',
+    endpoint: '/api/ee',
+    authenticationEnabled: false,
+  },
+  router: {
+    navigate: (path: string) => {
+      if (typeof window !== 'undefined') {
+        window.location.href = path;
+      }
+    }
+  },
+  permissionGuard: {
+    checkPermission: async () => true,
+  },
+});
+```
+
+## 第五步：构建用户界面
+
+创建产品管理页面。创建 `app/products/page.tsx`：
+
+```tsx filename="app/products/page.tsx"
+'use client';
+import { EntityViewContainer } from '@scenemesh/entity-engine';
+import { EntityEngineProvider } from '../../lib/entity-provider';
+import { useState } from 'react';
+import Link from 'next/link';
+
+function ProductManagement() {
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto py-8">
+        {/* 页面头部 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">产品管理</h1>
+              <p className="text-gray-600 mt-2">管理您的产品库存和信息</p>
+            </div>
+            <div className="flex gap-3">
+              <Link 
+                href="/categories"
+                className="px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
+              >
+                管理分类
+              </Link>
+              <Link 
+                href="/products/new"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                新增产品
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* 产品列表 */}
+        <div className="bg-white rounded-lg shadow-sm">
+          <EntityViewContainer
+            key={refreshKey}
+            modelName="Product"
+            viewType="grid"
+            viewName="product_grid"
+            behavior={{ 
+              mode: 'display' 
+            }}
+            callbacks={{
+              onSaved: () => setRefreshKey(prev => prev + 1),
+              onDeleted: () => setRefreshKey(prev => prev + 1)
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <EntityEngineProvider>
+      <ProductManagement />
+    </EntityEngineProvider>
+  );
+}
+```
+
+创建新增产品页面。创建 `app/products/new/page.tsx`：
+
+```tsx filename="app/products/new/page.tsx"
+'use client';
+import { EntityViewContainer } from '@scenemesh/entity-engine';
+import { EntityEngineProvider } from '../../../lib/entity-provider';
+import { useRouter } from 'next/navigation';
+
+function NewProductForm() {
+  const router = useRouter();
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto py-8">
+        <div className="max-w-4xl mx-auto">
+          {/* 页面头部 */}
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">新增产品</h1>
+                <p className="text-gray-600 mt-2">添加新的产品到您的库存中</p>
+              </div>
+              <button
+                onClick={() => router.back()}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                返回
+              </button>
+            </div>
+          </div>
+
+          {/* 产品表单 */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <EntityViewContainer
+              modelName="Product"
+              viewType="form"
+              viewName="product_form"
+              behavior={{ 
+                mode: 'edit'
+              }}
+              callbacks={{
+                onSaved: () => {
+                  router.push('/products');
+                },
+                onCancelled: () => {
+                  router.push('/products');
+                }
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function NewProductPage() {
+  return (
+    <EntityEngineProvider>
+      <NewProductForm />
+    </EntityEngineProvider>
+  );
+}
+```
+
+创建分类管理页面。创建 `app/categories/page.tsx`：
+
+```tsx filename="app/categories/page.tsx"
+'use client';
+import { EntityViewContainer } from '@scenemesh/entity-engine';
+import { EntityEngineProvider } from '../../lib/entity-provider';
+import { useState } from 'react';
+
+function CategoryManagement() {
+  const [showForm, setShowForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto py-8">
+        {/* 页面头部 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">分类管理</h1>
+              <p className="text-gray-600 mt-2">组织您的产品分类结构</p>
+            </div>
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              新增分类
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 分类列表 */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm">
+              <EntityViewContainer
+                key={refreshKey}
+                modelName="Category"
+                viewType="grid"
+                viewName="category_grid"
+                behavior={{ mode: 'display' }}
+              />
+            </div>
+          </div>
+          
+          {/* 新增表单 */}
+          {showForm && (
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">新增分类</h2>
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <EntityViewContainer
+                  modelName="Category"
+                  viewType="form"
+                  viewName="category_form"
+                  behavior={{ mode: 'edit' }}
+                  callbacks={{
+                    onSaved: () => {
+                      setShowForm(false);
+                      setRefreshKey(prev => prev + 1);
+                    },
+                    onCancelled: () => {
+                      setShowForm(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CategoriesPage() {
+  return (
+    <EntityEngineProvider>
+      <CategoryManagement />
+    </EntityEngineProvider>
+  );
+}
+```
+
+## 第六步：配置样式和布局
+
+更新根布局。修改 `app/layout.tsx`：
+
+```tsx filename="app/layout.tsx"
+import '@scenemesh/entity-engine/main.css';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/modals/styles.css';
+import 'mantine-datatable/styles.css';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="zh">
+      <body>
+        <MantineProvider>
+          <Notifications />
+          {children}
+        </MantineProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+## 运行应用
+
+启动开发服务器：
+
+```bash
+npm run dev
+```
+
+现在您可以访问：
+
+- http://localhost:3000/categories - 分类管理
+- http://localhost:3000/products - 产品管理
+- http://localhost:3000/products/new - 新增产品
+
+## 测试完整功能
+
+验证以下功能是否正常工作：
+
+### 分类管理
+- ✅ 创建新分类
+- ✅ 查看分类列表
+- ✅ 表单验证（名称必填）
+
+### 产品管理  
+- ✅ 创建新产品并选择分类
+- ✅ 查看产品列表（显示关联分类）
+- ✅ SKU唯一性验证
+- ✅ 价格格式验证
+
+### 关联关系
+- ✅ 产品表单显示分类选择器
+- ✅ 产品列表显示分类名称
+- ✅ 分类删除前检查是否有产品使用
+
+## 扩展功能
+
+### 添加更多字段
+
+为产品模型添加状态和标签：
+
+```typescript filename="lib/models.ts" highlight="4-19"
+// 在 ProductModel 的 fields 数组中添加
+{
+  name: 'status',
+  title: '状态',
+  type: 'enum',
+  defaultValue: 'draft',
+  typeOptions: {
+    options: [
+      { value: 'draft', label: '草稿' },
+      { value: 'published', label: '已发布' },
+      { value: 'discontinued', label: '已停产' }
+    ]
+  }
+},
+{
+  name: 'tags',
+  title: '标签',
+  type: 'array',
+  typeOptions: {
+    itemType: 'string'
+  }
+}
+```
+
+### 添加搜索和筛选
+
+更新产品视图以支持搜索：
+
+```typescript filename="lib/views.ts" highlight="6-8"
+export const ProductGridView: IEntityView = {
+  name: 'product_grid',
+  title: '产品列表',
+  modelName: 'Product',
+  viewType: 'grid',
+  searchFields: ['name', 'sku', 'description'],
+  filters: ['category', 'status'],
+  sorting: { field: 'name', direction: 'asc' },
+  items: [
+    // ... 现有配置
+  ]
+};
+```
+
+## 下一步
+
+🎉 恭喜！您已经构建了一个完整的产品管理应用。现在可以：
+
+- [学习高级配置](./config-runtime-load) - 探索动态配置管理
+- [查看项目结构](./project-structure) - 了解最佳实践
+- [解决问题](./faq-beginner) - 常见问题解答
+
+## 核心概念总结
+
+通过这个教程，您学会了：
+
+- **模型关联**: 使用 `many_to_one` 建立外键关系
+- **数据验证**: 使用 Zod schema 确保数据质量
+- **视图配置**: 创建列表和表单界面
+- **组件使用**: 使用 EntityViewContainer 显示数据
+- **状态管理**: 处理表单回调和数据刷新

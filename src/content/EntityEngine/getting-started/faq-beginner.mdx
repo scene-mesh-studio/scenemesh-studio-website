@@ -1,0 +1,383 @@
+# 常见问题
+
+在使用 Entity Engine 过程中遇到问题？这里收集了最常见的问题和解决方案。
+
+## 安装问题
+
+### 数据库连接失败
+
+**错误信息**: `Can't reach database server at localhost:5432`
+
+**解决步骤**:
+
+1. **检查 PostgreSQL 服务**
+   ```bash
+   pg_isready -h localhost -p 5432
+   ```
+
+2. **验证环境变量**
+   ```env
+   EE_DATABASE_URL="postgresql://username:password@localhost:5432/database?schema=public"
+   ```
+
+3. **测试连接**
+   ```bash
+   npx prisma db pull
+   ```
+
+### TypeScript 模块找不到
+
+**错误信息**: `Cannot find module '@scenemesh/entity-engine'`
+
+**解决方法**:
+
+```bash
+# 清理并重新安装
+rm -rf node_modules package-lock.json
+npm install
+
+# 检查包是否正确安装
+npm ls @scenemesh/entity-engine
+```
+
+### Next.js 构建错误
+
+**错误信息**: `Module parse failed: Unexpected token`
+
+**解决方法**:
+
+在 `next.config.js` 中添加：
+
+```javascript filename="next.config.js"
+module.exports = {
+  transpilePackages: ['@scenemesh/entity-engine'],
+  experimental: {
+    esmExternals: true
+  }
+};
+```
+
+## 配置问题
+
+### API 路由不工作
+
+**错误信息**: `404 Not Found` 或 `fetch failed`
+
+**检查清单**:
+
+1. **API 路由文件位置**
+   ```
+   app/api/ee/[[...slug]]/route.ts  ✅ 正确
+   app/api/ee/route.ts              ❌ 错误
+   ```
+
+2. **导出正确的处理器**
+   ```typescript
+   export { handler as GET, handler as POST };
+   ```
+
+3. **检查 endpoint 配置**
+   ```typescript
+   // 服务端
+   endpoint: '/api/ee'
+   
+   // 客户端
+   endpoint: '/api/ee'  // 必须一致
+   ```
+
+### 模型注册失败
+
+**错误信息**: `Model validation error: Field 'name' is required`
+
+**常见原因**:
+
+```typescript
+// ❌ 错误：缺少必要字段
+const UserModel = {
+  name: 'User'
+  // 缺少 title 和 fields
+};
+
+// ✅ 正确：完整的模型定义
+const UserModel: IEntityModel = {
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true
+    }
+  ]
+};
+```
+
+### 关系字段不显示
+
+**问题**: many_to_one 字段显示为空
+
+**解决方法**:
+
+1. **检查模型注册顺序**
+   ```typescript
+   // ✅ 正确：被引用的模型在前
+   export const models = [CategoryModel, ProductModel];
+   
+   // ❌ 错误：引用关系混乱
+   export const models = [ProductModel, CategoryModel];
+   ```
+
+2. **验证 refModel 名称**
+   ```typescript
+   {
+     name: 'category',
+     type: 'many_to_one',
+     refModel: 'Category'  // 必须与模型 name 完全匹配
+   }
+   ```
+
+## 运行时问题
+
+### 视图不显示内容
+
+**可能原因**:
+
+1. **模型名不匹配**
+   ```typescript
+   // 视图中的 modelName 必须与模型的 name 一致
+   modelName: 'Product'  // 必须匹配 ProductModel.name
+   ```
+
+2. **字段名不存在**
+   ```typescript
+   // 检查视图中的字段是否在模型中定义
+   items: [
+     { type: 'field', name: 'nonexistent' }  // ❌ 字段不存在
+   ]
+   ```
+
+### 表单验证失败
+
+**错误信息**: `Validation failed: Required field 'xxx' is missing`
+
+**解决方法**:
+
+```typescript
+// 确保必填字段有默认值或用户输入
+{
+  name: 'status',
+  title: '状态',
+  type: 'enum',
+  isRequired: true,
+  defaultValue: 'draft',  // 提供默认值
+  typeOptions: {
+    options: [
+      { value: 'draft', label: '草稿' },
+      { value: 'published', label: '已发布' }
+    ]
+  }
+}
+```
+
+### 数据保存失败
+
+**常见问题**:
+
+1. **Zod 验证错误**
+   ```typescript
+   schema: z.string().min(1, '不能为空').max(50, '最多50个字符')
+   ```
+
+2. **唯一约束冲突**
+   ```typescript
+   {
+     name: 'email',
+     type: 'string',
+     isUnique: true,  // 确保值唯一
+     schema: z.string().email('邮箱格式不正确')
+   }
+   ```
+
+## 性能问题
+
+### 页面加载慢
+
+**优化建议**:
+
+1. **启用分页**
+   ```typescript
+   <EntityViewContainer
+     modelName="Product"
+     viewType="grid"
+     viewOptions={{
+       pagination: {
+         pageSize: 20
+       }
+     }}
+   />
+   ```
+
+2. **减少显示字段**
+   ```typescript
+   // 列表页面只显示必要字段
+   items: [
+     { type: 'field', name: 'name' },
+     { type: 'field', name: 'price' }
+     // 不要显示大文本字段如 description
+   ]
+   ```
+
+### 内存占用高
+
+**解决方法**:
+
+1. **使用正确的数据库连接**
+   ```typescript
+   // 使用正确的环境变量
+   url: env("EE_DATABASE_URL")  // 不是 DATABASE_URL
+   ```
+
+2. **实施缓存策略**
+   ```typescript
+   // 缓存模型配置避免重复解析
+   const modelCache = new Map<string, IEntityModel>();
+   ```
+
+## 开发调试
+
+### 启用调试模式
+
+```env filename=".env.local"
+# 启用 Entity Engine 调试
+ENTITY_ENGINE_DEBUG=true
+
+# 启用 Prisma 查询日志
+# 在 schema.prisma 中配置日志级别
+```
+
+### 查看详细错误
+
+```typescript
+// 开发环境显示详细错误
+const initializer = new EnginePrimitiveInitializer({
+  models,
+  views,
+  settings: {
+    debug: process.env.NODE_ENV === 'development'
+  }
+});
+```
+
+### 检查生成的 SQL
+
+```typescript
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
+```
+
+## 环境特定问题
+
+### Windows 开发环境
+
+1. **路径分隔符问题**
+   ```typescript
+   // 使用 path.join 而不是硬编码路径
+   import path from 'path';
+   const modelPath = path.join(__dirname, 'models', 'user.model.ts');
+   ```
+
+2. **PowerShell 权限问题**
+   ```powershell
+   # 以管理员身份运行 PowerShell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+### Docker 部署
+
+1. **数据库连接问题**
+   ```dockerfile
+   # 确保数据库服务在应用启动前就绪
+   depends_on:
+     - postgres
+   ```
+
+2. **环境变量传递**
+   ```yaml
+   # docker-compose.yml
+   environment:
+     - EE_DATABASE_URL=postgresql://user:pass@postgres:5432/db
+   ```
+
+## 版本兼容性
+
+### Node.js 版本
+
+- **最低要求**: Node.js 18.0.0+
+- **推荐版本**: Node.js 20+
+- **检查方法**: `node --version`
+
+### 依赖版本冲突
+
+```bash
+# 检查依赖冲突
+npm ls
+
+# 清理并重新安装
+rm -rf node_modules package-lock.json
+npm install
+```
+
+## 获取帮助
+
+如果问题仍未解决：
+
+1. **检查文档**
+   - [安装指南](./installation)
+   - [项目结构](./project-structure)
+   - [第一个应用](./first-model-and-view)
+
+2. **提交问题**
+   - [GitHub Issues](https://github.com/scenemesh/entity-engine/issues)
+   - 包含错误信息、配置代码和环境信息
+
+3. **社区支持**
+   - 搜索已有的类似问题
+   - 提供可复现的最小示例
+
+## 问题报告模板
+
+提交问题时，请包含以下信息：
+
+```
+**环境信息**
+- Node.js 版本：
+- Entity Engine 版本：
+- 操作系统：
+- 数据库版本：
+
+**问题描述**
+详细描述遇到的问题
+
+**重现步骤**
+1. 
+2. 
+3. 
+
+**期望行为**
+描述期望的正确行为
+
+**实际行为**
+描述实际发生的情况
+
+**错误日志**
+```
+完整的错误信息
+```
+
+**相关配置**
+```typescript
+// 相关的模型和视图配置
+```
+```

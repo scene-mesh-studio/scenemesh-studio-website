@@ -1,0 +1,768 @@
+# 模块定义
+
+Entity Engine 的模块定义提供了标准化的模块结构和声明方式。通过清晰的模块定义，可以实现模块化开发、依赖管理和功能扩展。每个模块都需要实现 `IEntityModule` 接口，包含基本信息和三个生命周期方法。
+
+## 模块基本结构
+
+### 1. 模块信息定义
+
+每个模块都需要定义基本信息，包含模块的标识、元数据和依赖关系：
+
+```typescript
+import type { EntityModuleInfo, ModuleDependency } from '@scenemesh/entity-engine';
+
+const moduleInfo: EntityModuleInfo = {
+  // 基本信息
+  name: 'my-module',              // 模块唯一名称
+  version: '1.0.0',               // 语义化版本号
+  description: '模块功能描述',      // 模块说明
+  author: 'Your Name',            // 作者信息
+
+  // 依赖声明
+  dependencies: [
+    { name: 'core-module', version: '^1.0.0' },
+    { name: 'utils-module', version: '>=2.0.0', optional: true }
+  ]
+};
+```
+
+### 2. 模块类实现
+
+```typescript
+import type { IEntityModule } from '@scenemesh/entity-engine';
+
+export class MyModule implements IEntityModule {
+  readonly info = moduleInfo;
+
+  async setupConfig(args) {
+    // 配置阶段：设置模块配置和验证
+  }
+
+  async setupComponents(args) {
+    // 组件阶段：注册服务、组件和处理器
+  }
+
+  async setupData(args) {
+    // 数据阶段：执行数据迁移和初始化
+  }
+}
+```
+
+## 模块信息字段详解
+
+### 基础标识信息
+
+```typescript
+const moduleInfo: EntityModuleInfo = {
+  name: 'user-management',        // 模块名称，必须唯一
+  version: '2.1.0',              // 版本号，遵循 semver 规范
+  description: '用户管理模块',     // 功能描述
+  displayName: '用户管理',        // 显示名称（可选）
+  author: 'Development Team',    // 作者信息
+  license: 'MIT',               // 许可证（可选）
+  homepage: 'https://...',      // 主页地址（可选）
+  keywords: ['user', 'auth']    // 关键词（可选）
+};
+```
+
+### 依赖声明
+
+通过 `dependencies` 数组声明模块依赖关系：
+
+```typescript
+const moduleInfo: EntityModuleInfo = {
+  name: 'advanced-module',
+  version: '1.0.0',
+  dependencies: [
+    // 必需依赖
+    { name: 'core-services', version: '^1.0.0' },
+    
+    // 精确版本依赖
+    { name: 'database-module', version: '2.1.0' },
+    
+    // 版本范围依赖
+    { name: 'auth-module', version: '>=1.5.0 <2.0.0' },
+    
+    // 可选依赖
+    { name: 'email-service', version: '^1.0.0', optional: true },
+    
+    // 带说明的依赖
+    { 
+      name: 'payment-gateway', 
+      version: '^2.0.0', 
+      optional: true,
+      reason: '用于处理在线支付功能'
+    }
+  ]
+};
+```
+
+## 生命周期方法详解
+
+### setupConfig 方法
+
+在配置阶段设置和验证模块配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    apiEndpoint: 'https://api.example.com',
+    timeout: 5000,
+    retryAttempts: 3,
+    enableCache: true
+  });
+
+  // 获取和验证配置
+  const config = configManager.get(this.info.name);
+  
+  // 必要的配置验证
+  if (!config.apiEndpoint) {
+    throw new Error('API endpoint is required');
+  }
+
+  if (config.timeout < 1000) {
+    logger.warn('Timeout is too low, using minimum value');
+    configManager.set(`${this.info.name}.timeout`, 1000);
+  }
+
+  // 环境特定配置
+  if (process.env.NODE_ENV === 'development') {
+    configManager.merge(this.info.name, {
+      debug: true,
+      logLevel: 'debug'
+    });
+  }
+}
+```
+
+### setupComponents 方法
+
+在组件阶段注册服务、组件和处理器：
+
+```typescript
+async setupComponents({ 
+  serviceRegistry, 
+  componentRegistry, 
+  configManager,
+  logger 
+}) {
+  const config = configManager.get(this.info.name);
+
+  // 注册主要服务
+  serviceRegistry.register('ApiService', new ApiService({
+    endpoint: config.apiEndpoint,
+    timeout: config.timeout
+  }));
+
+  // 注册依赖其他服务的服务
+  const dbService = serviceRegistry.get('DatabaseService');
+  const cacheService = serviceRegistry.get('CacheService');
+  
+  serviceRegistry.register('UserService', 
+    new UserService(dbService, cacheService)
+  );
+
+  // 注册组件
+  componentRegistry.registerView(new UserManagementView());
+  componentRegistry.registerAdapter(new UserDataAdapter());
+
+  // 注册事件处理器
+  const eventRegistry = serviceRegistry.get('EventRegistry');
+  eventRegistry.on('user.created', this.handleUserCreated.bind(this));
+
+  logger.info(`${this.info.name} components registered successfully`);
+}
+```
+
+### setupData 方法
+
+在数据阶段执行数据初始化和迁移：
+
+```typescript
+async setupData({ serviceRegistry, logger }) {
+  const dbService = serviceRegistry.get('DatabaseService');
+  
+  try {
+    // 检查数据表是否存在
+    const tablesExist = await dbService.checkTables(['users', 'user_roles']);
+    
+    if (!tablesExist) {
+      // 创建数据表
+      await dbService.createTable('users', {
+        id: { type: 'string', primaryKey: true },
+        username: { type: 'string', unique: true },
+        email: { type: 'string', unique: true },
+        passwordHash: 'string',
+        createdAt: { type: 'datetime', default: 'now()' },
+        updatedAt: { type: 'datetime', default: 'now()' }
+      });
+
+      await dbService.createTable('user_roles', {
+        id: { type: 'string', primaryKey: true },
+        userId: { type: 'string', foreignKey: 'users.id' },
+        role: 'string',
+        grantedAt: { type: 'datetime', default: 'now()' }
+      });
+
+      logger.info('Database tables created successfully');
+    }
+
+    // 执行数据迁移
+    await this.runDataMigrations(dbService);
+
+    // 创建默认数据
+    await this.createDefaultData(serviceRegistry);
+
+  } catch (error) {
+    logger.error(`Data initialization failed: ${error.message}`);
+    throw error;
+  }
+}
+
+private async runDataMigrations(dbService) {
+  // 执行版本迁移脚本
+  const migrations = [
+    { version: '1.0.1', script: 'add_user_status_column.sql' },
+    { version: '1.1.0', script: 'add_user_preferences_table.sql' }
+  ];
+
+  for (const migration of migrations) {
+    if (await dbService.needsMigration(migration.version)) {
+      await dbService.executeMigration(migration.script);
+      await dbService.recordMigration(migration.version);
+    }
+  }
+}
+
+private async createDefaultData(serviceRegistry) {
+  const userService = serviceRegistry.get('UserService');
+  
+  // 检查是否需要创建默认管理员
+  const adminExists = await userService.findByUsername('admin');
+  if (!adminExists) {
+    await userService.createDefaultAdmin({
+      username: 'admin',
+      email: 'admin@example.com',
+      password: 'temp-password-change-me'
+    });
+  }
+}
+```
+
+## 完整模块示例
+
+### 基础模块示例
+
+```typescript
+import type { IEntityModule, EntityModuleInfo } from '@scenemesh/entity-engine';
+
+const moduleInfo: EntityModuleInfo = {
+  name: 'notification-service',
+  version: '1.0.0',
+  description: '通知服务模块，支持邮件、短信和推送通知',
+  author: 'Notification Team',
+  dependencies: [
+    { name: 'core-services', version: '^1.0.0' },
+    { name: 'user-management', version: '^2.0.0' }
+  ]
+};
+
+export class NotificationModule implements IEntityModule {
+  readonly info = moduleInfo;
+
+  async setupConfig({ configManager, logger }) {
+    // 设置通知服务配置
+    configManager.setDefault(this.info.name, {
+      email: {
+        provider: 'smtp',
+        host: 'localhost',
+        port: 587,
+        secure: false,
+        from: 'noreply@example.com'
+      },
+      sms: {
+        provider: 'twilio',
+        enabled: false
+      },
+      push: {
+        enabled: true,
+        batchSize: 100
+      }
+    });
+
+    const config = configManager.get(this.info.name);
+    
+    // 验证邮件配置
+    if (!config.email.host) {
+      throw new Error('Email host is required');
+    }
+
+    logger.info('Notification module configured');
+  }
+
+  async setupComponents({ serviceRegistry, configManager, logger }) {
+    const config = configManager.get(this.info.name);
+
+    // 注册邮件服务
+    serviceRegistry.register('EmailService', 
+      new EmailService(config.email)
+    );
+
+    // 注册短信服务（如果启用）
+    if (config.sms.enabled) {
+      serviceRegistry.register('SmsService', 
+        new SmsService(config.sms)
+      );
+    }
+
+    // 注册推送通知服务
+    if (config.push.enabled) {
+      serviceRegistry.register('PushNotificationService', 
+        new PushNotificationService(config.push)
+      );
+    }
+
+    // 注册通知管理器
+    const userService = serviceRegistry.get('UserService');
+    serviceRegistry.register('NotificationManager', 
+      new NotificationManager(userService, {
+        emailService: serviceRegistry.get('EmailService'),
+        smsService: serviceRegistry.get('SmsService'),
+        pushService: serviceRegistry.get('PushNotificationService')
+      })
+    );
+
+    logger.info('Notification services registered');
+  }
+
+  async setupData({ serviceRegistry, logger }) {
+    const dbService = serviceRegistry.get('DatabaseService');
+
+    // 创建通知相关数据表
+    await dbService.ensureTable('notifications', {
+      id: { type: 'string', primaryKey: true },
+      userId: { type: 'string', foreignKey: 'users.id' },
+      type: { type: 'string', enum: ['email', 'sms', 'push'] },
+      title: 'string',
+      content: 'text',
+      status: { type: 'string', enum: ['pending', 'sent', 'failed'], default: 'pending' },
+      createdAt: { type: 'datetime', default: 'now()' },
+      sentAt: { type: 'datetime', nullable: true }
+    });
+
+    await dbService.ensureTable('notification_templates', {
+      id: { type: 'string', primaryKey: true },
+      name: { type: 'string', unique: true },
+      type: { type: 'string', enum: ['email', 'sms', 'push'] },
+      subject: { type: 'string', nullable: true },
+      content: 'text',
+      variables: { type: 'json', nullable: true }
+    });
+
+    // 创建默认通知模板
+    await this.createDefaultTemplates(dbService);
+
+    logger.info('Notification data initialized');
+  }
+
+  private async createDefaultTemplates(dbService) {
+    const templates = [
+      {
+        name: 'welcome_email',
+        type: 'email',
+        subject: '欢迎使用我们的服务',
+        content: '亲爱的 {{username}}，欢迎注册我们的服务！',
+        variables: ['username']
+      },
+      {
+        name: 'password_reset',
+        type: 'email',
+        subject: '密码重置请求',
+        content: '请点击以下链接重置您的密码：{{resetLink}}',
+        variables: ['resetLink']
+      }
+    ];
+
+    for (const template of templates) {
+      const exists = await dbService.findOne('notification_templates', { name: template.name });
+      if (!exists) {
+        await dbService.insert('notification_templates', template);
+      }
+    }
+  }
+}
+```
+
+### 复杂模块示例
+
+```typescript
+const blogModuleInfo: EntityModuleInfo = {
+  name: 'blog-system',
+  version: '2.0.0',
+  description: '博客系统模块，支持文章发布、评论和分类管理',
+  author: 'Blog Team',
+  dependencies: [
+    { name: 'user-management', version: '^2.0.0' },
+    { name: 'file-upload', version: '^1.0.0' },
+    { name: 'search-engine', version: '^1.0.0', optional: true }
+  ]
+};
+
+export class BlogModule implements IEntityModule {
+  readonly info = blogModuleInfo;
+
+  async setupConfig({ configManager, logger }) {
+    configManager.setDefault(this.info.name, {
+      posts: {
+        defaultStatus: 'draft',
+        autoSave: true,
+        autoSaveInterval: 30000,
+        maxTitleLength: 100,
+        maxContentLength: 50000
+      },
+      comments: {
+        enabled: true,
+        moderation: true,
+        maxLength: 1000,
+        allowAnonymous: false
+      },
+      categories: {
+        maxDepth: 3,
+        allowMultiple: true
+      },
+      seo: {
+        generateSlugs: true,
+        generateSitemap: true,
+        enableRichSnippets: true
+      }
+    });
+
+    // 验证配置
+    const config = configManager.get(this.info.name);
+    if (config.posts.maxContentLength < 1000) {
+      logger.warn('Content length limit is too low, increasing to minimum');
+      configManager.set(`${this.info.name}.posts.maxContentLength`, 1000);
+    }
+  }
+
+  async setupComponents({ serviceRegistry, componentRegistry, configManager, logger }) {
+    const config = configManager.get(this.info.name);
+
+    // 获取依赖服务
+    const dbService = serviceRegistry.get('DatabaseService');
+    const userService = serviceRegistry.get('UserService');
+    const fileService = serviceRegistry.get('FileUploadService');
+
+    // 注册博客核心服务
+    serviceRegistry.register('PostService', 
+      new PostService(dbService, userService, config.posts)
+    );
+
+    serviceRegistry.register('CategoryService', 
+      new CategoryService(dbService, config.categories)
+    );
+
+    if (config.comments.enabled) {
+      serviceRegistry.register('CommentService', 
+        new CommentService(dbService, userService, config.comments)
+      );
+    }
+
+    // 注册SEO服务
+    if (config.seo.generateSlugs || config.seo.generateSitemap) {
+      serviceRegistry.register('BlogSeoService', 
+        new BlogSeoService(dbService, config.seo)
+      );
+    }
+
+    // 注册搜索服务（如果搜索引擎模块可用）
+    const searchService = serviceRegistry.get('SearchService');
+    if (searchService) {
+      serviceRegistry.register('BlogSearchService', 
+        new BlogSearchService(searchService)
+      );
+    }
+
+    // 注册UI组件
+    componentRegistry.registerView(new BlogListView());
+    componentRegistry.registerView(new BlogPostView());
+    componentRegistry.registerView(new BlogAdminView());
+
+    // 注册数据适配器
+    componentRegistry.registerAdapter(new BlogDataAdapter());
+
+    logger.info('Blog system components registered');
+  }
+
+  async setupData({ serviceRegistry, logger }) {
+    const dbService = serviceRegistry.get('DatabaseService');
+
+    // 创建博客相关数据表
+    await this.createBlogTables(dbService);
+
+    // 创建默认分类
+    await this.createDefaultCategories(serviceRegistry);
+
+    // 初始化SEO数据
+    await this.initializeSeoData(serviceRegistry);
+
+    logger.info('Blog system data initialized');
+  }
+
+  private async createBlogTables(dbService) {
+    // 文章表
+    await dbService.ensureTable('blog_posts', {
+      id: { type: 'string', primaryKey: true },
+      title: { type: 'string', maxLength: 100 },
+      slug: { type: 'string', unique: true },
+      content: { type: 'text', maxLength: 50000 },
+      excerpt: { type: 'text', maxLength: 500, nullable: true },
+      authorId: { type: 'string', foreignKey: 'users.id' },
+      status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'draft' },
+      publishedAt: { type: 'datetime', nullable: true },
+      createdAt: { type: 'datetime', default: 'now()' },
+      updatedAt: { type: 'datetime', default: 'now()' },
+      viewCount: { type: 'integer', default: 0 },
+      metadata: { type: 'json', nullable: true }
+    });
+
+    // 分类表
+    await dbService.ensureTable('blog_categories', {
+      id: { type: 'string', primaryKey: true },
+      name: { type: 'string', maxLength: 50 },
+      slug: { type: 'string', unique: true },
+      description: { type: 'text', nullable: true },
+      parentId: { type: 'string', foreignKey: 'blog_categories.id', nullable: true },
+      order: { type: 'integer', default: 0 },
+      createdAt: { type: 'datetime', default: 'now()' }
+    });
+
+    // 文章分类关联表
+    await dbService.ensureTable('blog_post_categories', {
+      postId: { type: 'string', foreignKey: 'blog_posts.id' },
+      categoryId: { type: 'string', foreignKey: 'blog_categories.id' }
+    });
+
+    // 评论表
+    await dbService.ensureTable('blog_comments', {
+      id: { type: 'string', primaryKey: true },
+      postId: { type: 'string', foreignKey: 'blog_posts.id' },
+      authorId: { type: 'string', foreignKey: 'users.id', nullable: true },
+      authorName: { type: 'string', nullable: true },
+      authorEmail: { type: 'string', nullable: true },
+      content: { type: 'text', maxLength: 1000 },
+      status: { type: 'string', enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+      parentId: { type: 'string', foreignKey: 'blog_comments.id', nullable: true },
+      createdAt: { type: 'datetime', default: 'now()' },
+      ipAddress: { type: 'string', nullable: true }
+    });
+
+    // 标签表
+    await dbService.ensureTable('blog_tags', {
+      id: { type: 'string', primaryKey: true },
+      name: { type: 'string', unique: true, maxLength: 30 },
+      slug: { type: 'string', unique: true },
+      color: { type: 'string', nullable: true }
+    });
+
+    // 文章标签关联表
+    await dbService.ensureTable('blog_post_tags', {
+      postId: { type: 'string', foreignKey: 'blog_posts.id' },
+      tagId: { type: 'string', foreignKey: 'blog_tags.id' }
+    });
+  }
+
+  private async createDefaultCategories(serviceRegistry) {
+    const categoryService = serviceRegistry.get('CategoryService');
+    
+    const defaultCategories = [
+      { name: '技术', slug: 'tech', description: '技术相关文章' },
+      { name: '生活', slug: 'life', description: '生活感悟和分享' },
+      { name: '随笔', slug: 'notes', description: '随笔记录' }
+    ];
+
+    for (const category of defaultCategories) {
+      const exists = await categoryService.findBySlug(category.slug);
+      if (!exists) {
+        await categoryService.create(category);
+      }
+    }
+  }
+
+  private async initializeSeoData(serviceRegistry) {
+    const seoService = serviceRegistry.get('BlogSeoService');
+    if (seoService) {
+      await seoService.initializeDefaultSettings({
+        siteName: 'My Blog',
+        siteDescription: 'A blog powered by Entity Engine',
+        defaultImage: '/images/blog-default.jpg'
+      });
+    }
+  }
+}
+```
+
+## 模块验证与调试
+
+### 配置验证
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置配置Schema进行验证
+  const schema = {
+    type: 'object',
+    properties: {
+      apiUrl: { type: 'string', format: 'uri' },
+      timeout: { type: 'number', minimum: 1000 },
+      retryCount: { type: 'number', minimum: 0, maximum: 5 }
+    },
+    required: ['apiUrl']
+  };
+
+  configManager.setSchema(this.info.name, schema);
+  
+  try {
+    const config = configManager.get(this.info.name);
+    configManager.validate(this.info.name, config);
+    logger.info('Configuration validated successfully');
+  } catch (error) {
+    logger.error('Configuration validation failed:', error.message);
+    throw error;
+  }
+}
+```
+
+### 依赖检查
+
+```typescript
+async setupComponents({ serviceRegistry, logger }) {
+  // 检查必需依赖
+  const requiredServices = ['DatabaseService', 'UserService'];
+  
+  for (const serviceName of requiredServices) {
+    if (!serviceRegistry.has(serviceName)) {
+      throw new Error(`Required service not available: ${serviceName}`);
+    }
+  }
+
+  // 检查可选依赖
+  const optionalServices = ['CacheService', 'LoggingService'];
+  
+  for (const serviceName of optionalServices) {
+    if (serviceRegistry.has(serviceName)) {
+      logger.info(`Optional service available: ${serviceName}`);
+    } else {
+      logger.warn(`Optional service not available: ${serviceName}`);
+    }
+  }
+}
+```
+
+### 错误处理
+
+```typescript
+async setupData({ serviceRegistry, logger }) {
+  try {
+    await this.initializeData(serviceRegistry);
+    logger.info('Data initialization completed successfully');
+  } catch (error) {
+    logger.error('Data initialization failed:', error);
+    
+    // 提供详细的错误信息
+    if (error.code === 'TABLE_NOT_EXISTS') {
+      logger.error('Please ensure database module is properly configured');
+    } else if (error.code === 'PERMISSION_DENIED') {
+      logger.error('Database permissions insufficient');
+    }
+    
+    // 重新抛出错误以阻止模块加载
+    throw new Error(`${this.info.name} initialization failed: ${error.message}`);
+  }
+}
+```
+
+## 最佳实践
+
+### 1. 模块命名规范
+
+- 使用小写字母和连字符分隔
+- 名称应该清晰地表达模块功能
+- 避免使用通用或容易混淆的名称
+
+```typescript
+// 好的命名
+'user-management'
+'blog-system' 
+'payment-gateway'
+'notification-service'
+
+// 避免的命名
+'utils'
+'common'
+'module1'
+'temp'
+```
+
+### 2. 版本管理
+
+- 遵循语义化版本规范
+- 在配置中使用适当的版本约束
+- 及时更新依赖版本
+
+```typescript
+const moduleInfo: EntityModuleInfo = {
+  name: 'my-module',
+  version: '1.2.3',  // 主版本.次版本.修订版本
+  dependencies: [
+    { name: 'core', version: '^1.0.0' },    // 兼容版本
+    { name: 'utils', version: '~1.2.0' },   // 近似版本
+    { name: 'specific', version: '2.1.0' }   // 精确版本
+  ]
+};
+```
+
+### 3. 依赖管理
+
+- 明确区分必需依赖和可选依赖
+- 避免循环依赖
+- 合理使用依赖注入
+
+```typescript
+dependencies: [
+  // 核心依赖
+  { name: 'database', version: '^1.0.0' },
+  
+  // 可选功能依赖
+  { name: 'cache', version: '^1.0.0', optional: true },
+  
+  // 带说明的依赖
+  { 
+    name: 'email-service', 
+    version: '^1.0.0', 
+    optional: true,
+    reason: '用于发送通知邮件，如不需要邮件功能可以不安装'
+  }
+]
+```
+
+### 4. 配置管理
+
+- 提供合理的默认配置
+- 支持环境特定配置
+- 进行配置验证
+
+### 5. 错误处理
+
+- 提供清晰的错误信息
+- 区分致命错误和警告
+- 支持优雅降级
+
+## 下一步
+
+了解模块定义后，继续学习：
+
+- [模块生命周期](./module-lifecycle) - 深入了解模块的生命周期管理
+- [依赖注入](./dependency-injection) - 学习依赖注入机制和最佳实践
+- [服务注册](./service-registration) - 掌握服务注册和管理
+- [配置管理](./configuration-management) - 学习模块配置的管理方式

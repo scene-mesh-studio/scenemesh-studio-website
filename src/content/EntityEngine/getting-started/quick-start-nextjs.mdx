@@ -1,0 +1,440 @@
+# 快速上手
+
+在 15 分钟内构建一个功能完整的产品管理应用，体验 Entity Engine 如何将数据模型自动转换为可交互的用户界面。
+
+## 你将构建什么
+
+本教程将创建一个产品管理系统，包含：
+
+- 📦 **产品列表** - 显示所有产品的表格视图，支持搜索和筛选
+- ➕ **添加产品** - 智能表单，包含数据验证和类型检查  
+- ✏️ **编辑产品** - 内联编辑功能
+- 🗑️ **删除产品** - 安全的删除确认流程
+
+## 开始之前
+
+确认您已完成以下准备工作：
+
+- ✅ [安装 Entity Engine](./installation) 及所有依赖
+- ✅ 配置 PostgreSQL 数据库和环境变量
+- ✅ 运行验证脚本确认安装成功
+
+> **信息**  
+> 如果您是第一次使用 Entity Engine，建议先完成安装指南中的验证步骤。
+
+## 步骤 1：定义数据模型
+
+数据模型是 Entity Engine 的核心，它定义了数据结构和业务规则。
+
+### 创建产品模型
+
+在项目根目录创建 `lib/models.ts`：
+
+```typescript filename="lib/models.ts"
+import type { IEntityModel } from '@scenemesh/entity-engine';
+
+export const ProductModel: IEntityModel = {
+  name: 'Product',           // 模型名称，用于内部标识
+  title: '产品',             // 显示名称，用于界面展示
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,     // 主键字段
+    },
+    {
+      name: 'name',
+      title: '产品名称',
+      type: 'string',
+      isRequired: true,       // 必填字段
+      searchable: true,       // 支持搜索
+    },
+    {
+      name: 'price',
+      title: '价格',
+      type: 'number',
+      isRequired: true,
+    },
+    {
+      name: 'description',
+      title: '产品描述',
+      type: 'string',
+    }
+  ]
+};
+
+// 导出所有模型供系统使用
+export const models = [ProductModel];
+```
+
+### 模型配置说明
+
+- **name**: 模型的唯一标识符，必须是 PascalCase 格式
+- **title**: 用户界面中显示的名称
+- **fields**: 字段定义数组，每个字段包含类型、验证规则等配置
+- **isPrimaryKey**: 标识主键字段（每个模型必须有一个）
+- **isRequired**: 字段是否必填
+- **searchable**: 字段是否支持全文搜索
+
+## 步骤 2：设计用户界面
+
+视图配置决定了数据如何在界面中呈现和交互。
+
+### 创建视图配置
+
+创建 `lib/views.ts`：
+
+```typescript filename="lib/views.ts"
+import type { IEntityView } from '@scenemesh/entity-engine';
+
+// 列表视图：以表格形式展示产品
+export const ProductGridView: IEntityView = {
+  name: 'product_grid',
+  title: '产品列表',
+  modelName: 'Product',        // 关联到 Product 模型
+  viewType: 'grid',           // 表格视图类型
+  items: [
+    {
+      type: 'field',
+      name: 'name',
+      spanCols: 4,             // 列宽比例（总共12列）
+    },
+    {
+      type: 'field',
+      name: 'price',
+      spanCols: 2,
+    },
+    {
+      type: 'field',
+      name: 'description',
+      spanCols: 6,
+    }
+  ]
+};
+
+// 表单视图：用于创建和编辑产品
+export const ProductFormView: IEntityView = {
+  name: 'product_form',
+  title: '产品表单',
+  modelName: 'Product',
+  viewType: 'form',           // 表单视图类型
+  items: [
+    {
+      type: 'field',
+      name: 'name',            // 自动生成对应的输入组件
+    },
+    {
+      type: 'field',
+      name: 'price',           // 数字类型自动生成数字输入框
+    },
+    {
+      type: 'field',
+      name: 'description',     // 字符串类型自动生成文本框
+    }
+  ]
+};
+
+// 导出所有视图供系统使用
+export const views = [ProductGridView, ProductFormView];
+```
+
+### 视图类型说明
+
+- **grid**: 表格视图，适合展示列表数据，支持排序、筛选、分页
+- **form**: 表单视图，适合数据录入和编辑，自动生成对应的输入组件
+- **spanCols**: 在表格中的列宽占比（基于 12 列栅格系统）
+
+## 步骤 3：配置服务端接口
+
+Entity Engine 需要一个 API 端点来处理数据操作请求。
+
+### 创建 API 路由
+
+在 `app/api/ee/[[...slug]]/route.ts` 创建通用 API 处理器：
+
+```typescript filename="app/api/ee/[[...slug]]/route.ts"
+import { EnginePrimitiveInitializer, fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { models } from '../../../../lib/models';
+import { views } from '../../../../lib/views';
+
+// 初始化 Entity Engine 服务端实例
+const initializer = new EnginePrimitiveInitializer({
+  models,                     // 传入我们定义的模型
+  views,                      // 传入我们定义的视图
+});
+
+// 统一的请求处理器，支持 GET 和 POST
+const handler = (req: Request) => 
+  fetchEntityEntranceHandler({
+    request: req,
+    endpoint: '/api/ee',      // API 端点路径
+    initializer               // 传入初始化器
+  });
+
+// 导出 HTTP 方法处理器
+export { handler as GET, handler as POST };
+```
+
+## 步骤 4：配置客户端提供器
+
+客户端需要一个 Provider 来连接服务端接口。
+
+### 创建 Provider
+
+创建 `lib/entity-provider.tsx`：
+
+```tsx filename="lib/entity-provider.tsx"
+'use client';
+import { createEntityEngineProvider } from '@scenemesh/entity-engine';
+import { models } from './models';
+import { views } from './views';
+
+export const EntityEngineProvider = createEntityEngineProvider({
+  config: { models, views },    // 客户端也需要模型和视图配置
+  settings: {
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || '',
+    endpoint: '/api/ee',        // 连接到我们刚创建的 API 端点
+    authenticationEnabled: false, // 暂时禁用认证
+  },
+  router: {
+    navigate: (path: string) => {
+      if (typeof window !== 'undefined') {
+        window.location.href = path;
+      }
+    }
+  },
+  permissionGuard: {
+    checkPermission: async () => true, // 暂时允许所有操作
+  },
+});
+```
+
+### 配置说明
+
+- **config**: 客户端需要知道有哪些模型和视图可用
+- **endpoint**: 指向我们刚创建的 API 路由
+- **router**: 处理页面导航（可选）
+- **permissionGuard**: 权限控制（可选，生产环境中需要实现）
+
+## 步骤 5：创建用户界面
+
+现在我们将创建一个完整的产品管理页面。
+
+### 创建产品管理页面
+
+创建 `app/products/page.tsx`：
+
+```tsx filename="app/products/page.tsx"
+'use client';
+import { EntityViewContainer } from '@scenemesh/entity-engine';
+import { EntityEngineProvider } from '../../lib/entity-provider';
+import { useState } from 'react';
+
+function ProductsContent() {
+  const [showForm, setShowForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  return (
+    <div className="container mx-auto p-6">
+      {/* 页面标题和操作按钮 */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">产品管理</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          {showForm ? '取消' : '新增产品'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 产品列表：使用我们定义的 grid 视图 */}
+        <div className={showForm ? 'lg:col-span-2' : 'lg:col-span-3'}>
+          <EntityViewContainer
+            key={refreshKey}        // 用于刷新列表
+            modelName="Product"     // 指定模型
+            viewType="grid"         // 指定视图类型
+            viewName="product_grid" // 指定具体视图
+            behavior={{ mode: 'display' }}
+          />
+        </div>
+
+        {/* 新增表单：当用户点击新增时显示 */}
+        {showForm && (
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold mb-4">新增产品</h2>
+              <EntityViewContainer
+                modelName="Product"
+                viewType="form"
+                viewName="product_form"
+                behavior={{ mode: 'edit' }}  // 编辑模式
+                callbacks={{
+                  onSaved: () => {
+                    setShowForm(false);      // 保存后关闭表单
+                    setRefreshKey(prev => prev + 1); // 刷新列表
+                  },
+                  onCancelled: () => {
+                    setShowForm(false);      // 取消时关闭表单
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <EntityEngineProvider>
+      <ProductsContent />
+    </EntityEngineProvider>
+  );
+}
+```
+
+## 步骤 6：配置应用布局
+
+更新应用根布局以支持 Entity Engine 的 UI 组件。
+
+### 更新根布局
+
+修改 `app/layout.tsx` 导入必要的样式和 Provider：
+
+```tsx filename="app/layout.tsx"
+import '@scenemesh/entity-engine/main.css';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/modals/styles.css';
+import 'mantine-datatable/styles.css';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="zh">
+      <body>
+        <MantineProvider>
+          <Notifications />
+          {children}
+        </MantineProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### 配置说明
+
+- **MantineProvider**: Entity Engine 使用 Mantine 组件库，需要在应用根部包装
+- **Notifications**: 提供操作成功/失败的提示功能
+- **样式导入**: 按正确顺序导入所有必需的 CSS 文件
+
+## 运行和测试
+
+### 启动应用
+
+现在启动开发服务器查看您的产品管理应用：
+
+```bash
+npm run dev
+```
+
+在浏览器中访问：http://localhost:3000/products
+
+### 应用功能
+
+您的应用现在具备完整的 CRUD 功能：
+
+- ✅ **产品列表** - 以表格形式展示所有产品
+- ✅ **添加产品** - 点击"新增产品"打开表单，填写信息并保存
+- ✅ **数据验证** - 自动验证必填字段（产品名称和价格）
+- ✅ **实时更新** - 添加产品后列表自动刷新显示新数据
+
+### 尝试操作
+
+1. **添加产品**: 点击"新增产品"按钮，填写产品信息并保存
+2. **查看列表**: 新添加的产品会立即显示在列表中
+3. **验证功能**: 尝试提交空表单，查看验证提示
+
+## 核心概念回顾
+
+通过这个快速教程，您已经学会了：
+
+### 数据建模
+- 使用 `IEntityModel` 定义数据结构
+- 配置字段类型、验证规则和显示属性
+
+### 界面设计
+- 使用 `IEntityView` 定义用户界面布局
+- 区分 `grid`（列表）和 `form`（表单）视图类型
+
+### 系统集成
+- 配置服务端 API 处理器
+- 设置客户端 Provider 连接
+- 使用 `EntityViewContainer` 渲染界面
+
+## 进阶扩展
+
+### 添加更多字段类型
+
+```typescript filename="lib/models.ts" highlight="4-17"
+// 在 ProductModel.fields 中添加
+{
+  name: 'category',
+  title: '产品分类',
+  type: 'enum',               // 枚举类型（下拉选择）
+  typeOptions: {
+    options: [
+      { value: 'electronics', label: '电子产品' },
+      { value: 'clothing', label: '服装' },
+      { value: 'books', label: '图书' }
+    ]
+  }
+},
+{
+  name: 'inStock',
+  title: '有库存',
+  type: 'boolean',            // 布尔类型（开关）
+  defaultValue: true
+}
+```
+
+### 启用搜索和筛选
+
+```typescript filename="lib/views.ts" highlight="6-8"
+export const ProductGridView: IEntityView = {
+  name: 'product_grid',
+  title: '产品列表',
+  modelName: 'Product',
+  viewType: 'grid',
+  searchFields: ['name', 'description'],    // 启用全文搜索
+  filters: ['category', 'inStock'],         // 添加筛选器
+  sorting: { field: 'name', direction: 'asc' }, // 设置默认排序
+  items: [
+    // ... 字段配置
+  ]
+};
+```
+
+## 下一步学习
+
+🎉 **恭喜！** 您已经掌握了 Entity Engine 的基础用法。接下来可以：
+
+1. **[深入学习项目结构](./project-structure)** - 了解如何组织大型应用
+2. **[构建完整业务功能](./first-model-and-view)** - 学习关联关系、高级验证等
+3. **[探索高级特性](./config-runtime-load)** - 动态配置、多租户等企业特性
+
+### 遇到问题？
+
+- 📖 [常见问题解答](./faq-beginner) - 解决常见的配置和使用问题
+- 💬 [社区讨论](https://github.com/scenemesh/entity-engine/discussions) - 与其他开发者交流
+- 🐛 [反馈问题](https://github.com/scenemesh/entity-engine/issues) - 报告 Bug 或建议新功能

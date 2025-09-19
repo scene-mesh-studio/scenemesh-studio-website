@@ -1,0 +1,303 @@
+# 配置持久化
+
+让您的模型和视图配置永久保存，支持版本管理和环境同步。注册模型或视图时，Entity Engine 会自动将配置存储到数据库的 `__config__` 表中。
+
+## 自动保存配置
+
+注册模型时配置会自动保存到数据库。无需手动操作，引擎会处理所有持久化细节：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+// 注册模型 - 配置自动保存
+await engine.metaRegistry.updateOrRegister({
+  name: 'User',
+  title: '用户管理',
+  fields: [
+    { name: 'id', title: 'ID', type: 'string', isRequired: true },
+    { name: 'name', title: '姓名', type: 'string', isRequired: true },
+    { name: 'email', title: '邮箱', type: 'string', isRequired: true }
+  ]
+});
+
+// 配置已保存到数据库 __config__ 表
+// 键名: "model:User"
+// 包含完整的模型定义和版本信息
+```
+
+注册视图时同样自动保存：
+
+```typescript
+// 注册视图 - 配置自动保存
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserFormView',
+  title: '用户表单',
+  type: 'FormView',
+  config: {
+    fields: ['name', 'email'],
+    submitAction: 'create'
+  }
+});
+
+// 配置已保存到数据库
+// 键名: "view:User:UserFormView"
+```
+
+## 配置键命名规则
+
+引擎使用标准化的键名来组织不同类型的配置：
+
+```typescript
+// 配置键的命名约定
+model:User          // 用户模型配置
+view:User:FormView  // 用户表单视图配置
+fieldtype:RichText  // 富文本字段类型配置
+module:BlogModule   // 博客模块配置
+```
+
+这种约定让您可以快速定位特定的配置项。
+
+## 查看已保存的配置
+
+配置保存后，您可以通过数据源直接查询：
+
+```typescript
+// 查看所有模型配置
+const modelConfigs = await engine.datasourceFactory
+  .create('__config__')
+  .listObjects({
+    modelName: '__config__',
+    filter: {
+      name: { startsWith: 'model:' }
+    }
+  });
+
+console.log('已注册的模型：', modelConfigs.items.length);
+
+// 查看特定模型的配置
+const userConfig = await engine.datasourceFactory
+  .create('__config__')
+  .getObject({
+    modelName: '__config__',
+    filter: {
+      name: 'model:User'
+    }
+  });
+
+if (userConfig) {
+  const modelDef = JSON.parse(userConfig.content);
+  console.log('用户模型字段：', modelDef.fields.length);
+}
+```
+
+## 版本管理
+
+每次更新模型或视图时，引擎会自动创建新版本：
+
+```typescript
+// 首次注册 - 自动创建版本 1
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品',
+  fields: [
+    { name: 'name', title: '产品名', type: 'string' }
+  ]
+});
+
+// 更新模型 - 自动创建版本 2
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品管理',  // 修改标题
+  fields: [
+    { name: 'name', title: '产品名', type: 'string' },
+    { name: 'price', title: '价格', type: 'number' } // 新增字段
+  ]
+});
+
+// 版本信息自动保存在 __config__ 表的 version 字段
+```
+
+查看版本历史：
+
+```typescript
+// 查询特定配置的所有版本
+const versions = await engine.datasourceFactory
+  .create('__config__')
+  .listObjects({
+    modelName: '__config__',
+    filter: {
+      name: 'model:Product'
+    },
+    orderBy: [{ field: 'version', direction: 'desc' }]
+  });
+
+console.log('Product 模型有', versions.items.length, '个版本');
+
+// 获取最新版本
+const latestVersion = versions.items[0];
+console.log('最新版本:', latestVersion.version);
+```
+
+## 配置同步
+
+在不同环境间同步配置（如开发、测试、生产）：
+
+```typescript
+// 导出生产环境的配置
+const prodConfigs = await engine.datasourceFactory
+  .create('__config__')
+  .listObjects({
+    modelName: '__config__',
+    filter: {
+      name: { startsWith: 'model:' }
+    }
+  });
+
+// 保存到 JSON 文件
+const configData = prodConfigs.items.map(item => ({
+  name: item.name,
+  version: item.version,
+  content: JSON.parse(item.content)
+}));
+
+// 在测试环境导入配置
+for (const config of configData) {
+  const modelDef = config.content;
+  await engine.metaRegistry.updateOrRegister(modelDef);
+}
+```
+
+## 实际应用场景
+
+### 多环境部署
+
+在 CI/CD 流程中自动同步配置：
+
+```typescript
+// deploy-config.js - 部署脚本
+import { getEntityEngine } from './lib/entity-engine';
+import configData from './config/production-models.json';
+
+const engine = await getEntityEngine();
+
+// 部署时注册所有模型
+for (const modelConfig of configData.models) {
+  await engine.metaRegistry.updateOrRegister(modelConfig);
+  console.log(`✅ 已部署模型: ${modelConfig.name}`);
+}
+
+// 注册视图
+for (const viewConfig of configData.views) {
+  await engine.metaRegistry.updateOrRegisterView(viewConfig);
+  console.log(`✅ 已部署视图: ${viewConfig.name}`);
+}
+```
+
+### 配置备份
+
+定期备份配置到外部存储：
+
+```typescript
+// backup-configs.js - 定期备份任务
+const engine = await getEntityEngine();
+
+// 获取所有配置
+const allConfigs = await engine.datasourceFactory
+  .create('__config__')
+  .listObjects({
+    modelName: '__config__'
+  });
+
+// 备份到云存储或文件系统
+const backup = {
+  timestamp: new Date().toISOString(),
+  configs: allConfigs.items,
+  totalCount: allConfigs.items.length
+};
+
+// 保存备份
+await saveToCloudStorage(`backup-${Date.now()}.json`, backup);
+```
+
+## 最佳实践
+
+### 模型定义标准化
+
+建立统一的模型定义规范：
+
+```typescript
+// 推荐的模型定义结构
+const standardModel = {
+  name: 'Product',           // 使用 PascalCase
+  title: '产品管理',          // 清晰的中文标题
+  description: '产品信息管理系统', // 详细描述
+  fields: [
+    {
+      name: 'id',           // 总是包含 id 字段
+      title: 'ID',
+      type: 'string',
+      isRequired: true
+    },
+    {
+      name: 'createdAt',    // 标准审计字段
+      title: '创建时间',
+      type: 'datetime',
+      isRequired: true
+    },
+    {
+      name: 'updatedAt',    // 标准审计字段
+      title: '更新时间', 
+      type: 'datetime'
+    }
+  ]
+};
+```
+
+### 配置验证
+
+注册前验证模型定义的完整性：
+
+```typescript
+// 验证模型定义
+const validateModel = (model) => {
+  if (!model.name || !model.title) {
+    throw new Error('模型必须有 name 和 title');
+  }
+  
+  // 确保有 id 字段
+  const hasId = model.fields.some(f => f.name === 'id');
+  if (!hasId) {
+    throw new Error('模型必须包含id 字段');
+  }
+};
+
+// 安全注册
+try {
+  validateModel(newModel);
+  await engine.metaRegistry.updateOrRegister(newModel);
+} catch (error) {
+  console.error('模型注册失败:', error.message);
+}
+```
+
+### 开发环境配置
+
+在开发过程中监控配置变化：
+
+```typescript
+// 开发环境下显示配置变化
+if (process.env.NODE_ENV === 'development') {
+  engine.eventRegistry.on('model:registered', (event) => {
+    console.log(`📝 模型已注册: ${event.data.name}`);
+    console.log(`   字段数量: ${event.data.fields.length}`);
+  });
+  
+  engine.eventRegistry.on('view:registered', (event) => {
+    console.log(`🎨 视图已注册: ${event.data.name}`);
+    console.log(`   类型: ${event.data.type}`);
+  });
+}
+```

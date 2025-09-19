@@ -1,0 +1,345 @@
+# 模块系统概览
+
+Entity Engine 的模块系统让您可以构建可扩展、可维护的应用程序。通过模块化开发，您可以将功能分解为独立的模块，实现代码复用、依赖管理和插件式扩展。模块系统支持分阶段初始化、依赖注入和动态加载，为大型应用提供坚实的架构基础。
+
+## 核心概念
+
+### 模块定义
+
+每个模块都需要实现 `IEntityModule` 接口，包含模块基本信息和三个生命周期方法：
+
+- **模块信息** (`info`): 包含模块名称、版本、描述等元数据
+- **配置设置** (`setupConfig`): 初始化模块配置和依赖
+- **组件注册** (`setupComponents`): 注册服务、组件和处理器
+- **数据初始化** (`setupData`): 执行数据迁移和初始化操作
+
+### 三阶段生命周期
+
+Entity Engine 采用分阶段的模块初始化流程：
+
+1. **配置阶段**: 所有模块先完成配置设置
+2. **组件阶段**: 注册服务和组件到系统中
+3. **数据阶段**: 执行数据初始化和迁移
+
+这种设计确保了依赖关系的正确处理和系统的稳定启动。
+
+### 模块注册
+
+通过 `EntityModuleRegistry` 统一管理所有模块的注册、加载和生命周期控制。
+
+## 创建第一个模块
+
+### 1. 定义模块结构
+
+```typescript
+import type { IEntityModule, EntityModuleInfo } from '@scenemesh/entity-engine';
+
+const moduleInfo: EntityModuleInfo = {
+  name: 'my-custom-module',
+  version: '1.0.0',
+  description: '我的自定义模块',
+  author: 'Your Name',
+  dependencies: []
+};
+
+export class MyCustomModule implements IEntityModule {
+  readonly info = moduleInfo;
+
+  async setupConfig(args) {
+    // 配置阶段：设置模块配置
+  }
+
+  async setupComponents(args) {
+    // 组件阶段：注册服务和组件
+  }
+
+  async setupData(args) {
+    // 数据阶段：初始化数据
+  }
+}
+```
+
+### 2. 注册模块
+
+```typescript
+import { engine } from '@scenemesh/entity-engine';
+
+// 注册模块
+engine.moduleRegistry.register(new MyCustomModule());
+
+// 或者批量注册
+engine.moduleRegistry.registerAll([
+  new MyCustomModule(),
+  new AnotherModule()
+]);
+```
+
+### 3. 启动系统
+
+```typescript
+// 启动 Entity Engine，自动初始化所有注册的模块
+await engine.start();
+```
+
+## 模块依赖管理
+
+### 声明依赖
+
+在模块信息中声明对其他模块的依赖：
+
+```typescript
+const moduleInfo: EntityModuleInfo = {
+  name: 'user-management',
+  version: '1.0.0',
+  dependencies: [
+    { name: 'database-module', version: '^1.0.0' },
+    { name: 'auth-module', version: '>=2.0.0', optional: true }
+  ]
+};
+```
+
+### 使用依赖模块
+
+在生命周期方法中访问依赖模块提供的服务：
+
+```typescript
+async setupComponents({ serviceRegistry, moduleRegistry }) {
+  // 获取依赖模块的服务
+  const dbService = serviceRegistry.get('DatabaseService');
+  const authService = serviceRegistry.get('AuthService');
+
+  // 注册自己的服务
+  serviceRegistry.register('UserService', new UserService(dbService, authService));
+}
+```
+
+## 服务注册与获取
+
+### 注册服务
+
+在 `setupComponents` 阶段注册服务到全局服务注册表：
+
+```typescript
+async setupComponents({ serviceRegistry, componentRegistry }) {
+  // 注册单例服务
+  serviceRegistry.register('MyService', new MyService());
+  
+  // 注册组件
+  componentRegistry.registerView(new CustomView());
+  componentRegistry.registerAdapter(new CustomAdapter());
+}
+```
+
+### 使用服务
+
+在应用程序中通过服务注册表获取服务：
+
+```typescript
+// 在其他模块或组件中使用
+const myService = engine.serviceRegistry.get('MyService');
+await myService.performAction();
+```
+
+## 配置管理
+
+### 模块配置
+
+在 `setupConfig` 阶段处理模块配置：
+
+```typescript
+async setupConfig({ configManager }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    apiUrl: 'https://api.example.com',
+    timeout: 5000,
+    retryCount: 3
+  });
+
+  // 验证配置
+  const config = configManager.get(this.info.name);
+  if (!config.apiUrl) {
+    throw new Error('API URL is required');
+  }
+}
+```
+
+### 访问配置
+
+```typescript
+async setupComponents({ configManager, serviceRegistry }) {
+  const config = configManager.get(this.info.name);
+  
+  serviceRegistry.register('ApiService', new ApiService({
+    url: config.apiUrl,
+    timeout: config.timeout
+  }));
+}
+```
+
+## 数据初始化
+
+### 数据迁移
+
+在 `setupData` 阶段执行数据相关的初始化：
+
+```typescript
+async setupData({ serviceRegistry, logger }) {
+  const dbService = serviceRegistry.get('DatabaseService');
+  
+  // 检查并创建表结构
+  await dbService.ensureTable('users', {
+    id: 'string',
+    name: 'string',
+    email: 'string',
+    createdAt: 'datetime'
+  });
+
+  // 执行数据迁移
+  await this.runMigrations(dbService);
+  
+  logger.info(`${this.info.name} data initialization completed`);
+}
+```
+
+## 内置模块系统
+
+Entity Engine 提供了多个内置模块来支持常见功能：
+
+### 组件注册模块
+
+自动注册系统组件，包括：
+- 内置视图（Form、Grid、Kanban等）
+- 组件适配器
+- 渲染器和控制器
+
+### 数据源模块
+
+提供数据源管理功能：
+- 多种数据源支持
+- 连接池管理
+- 查询构建器
+
+## 动态模块加载
+
+### 运行时加载
+
+```typescript
+// 动态加载模块
+const moduleClass = await import('./custom-module');
+const module = new moduleClass.default();
+
+// 注册并启动
+engine.moduleRegistry.register(module);
+await engine.moduleRegistry.initializeModule(module.info.name);
+```
+
+### 条件加载
+
+```typescript
+// 根据环境或配置条件加载模块
+if (process.env.NODE_ENV === 'development') {
+  engine.moduleRegistry.register(new DebugModule());
+}
+
+if (config.features.analytics) {
+  engine.moduleRegistry.register(new AnalyticsModule());
+}
+```
+
+## 模块开发最佳实践
+
+### 1. 模块职责单一
+
+每个模块应该专注于一个特定的功能领域，避免功能过于复杂。
+
+### 2. 合理声明依赖
+
+- 明确声明必需的依赖关系
+- 使用语义化版本约束
+- 适当使用可选依赖
+
+### 3. 错误处理
+
+```typescript
+async setupComponents({ serviceRegistry, logger }) {
+  try {
+    const service = new MyService();
+    await service.initialize();
+    serviceRegistry.register('MyService', service);
+    logger.info('MyService registered successfully');
+  } catch (error) {
+    logger.error('Failed to register MyService:', error);
+    throw error;
+  }
+}
+```
+
+### 4. 配置验证
+
+```typescript
+async setupConfig({ configManager }) {
+  const config = configManager.get(this.info.name);
+  
+  // 验证必需配置
+  const requiredFields = ['apiUrl', 'apiKey'];
+  for (const field of requiredFields) {
+    if (!config[field]) {
+      throw new Error(`Missing required configuration: ${field}`);
+    }
+  }
+}
+```
+
+### 5. 日志记录
+
+充分使用日志记录来跟踪模块的初始化过程和运行状态：
+
+```typescript
+async setupData({ logger, serviceRegistry }) {
+  logger.info(`Starting data initialization for ${this.info.name}`);
+  
+  try {
+    await this.initializeDatabase();
+    logger.info('Database initialization completed');
+  } catch (error) {
+    logger.error('Database initialization failed:', error);
+    throw error;
+  }
+}
+```
+
+## 模块调试
+
+### 开发模式调试
+
+```typescript
+// 启用详细日志
+engine.configure({
+  logging: {
+    level: 'debug',
+    modules: true
+  }
+});
+
+// 获取模块信息
+const modules = engine.moduleRegistry.getAllModules();
+console.log('Registered modules:', modules.map(m => m.info.name));
+```
+
+### 依赖关系检查
+
+```typescript
+// 检查模块依赖关系
+const dependencies = engine.moduleRegistry.getDependencyGraph();
+console.log('Module dependencies:', dependencies);
+```
+
+## 下一步
+
+了解模块系统概览后，继续学习：
+
+- [模块定义](./module-definition) - 深入了解模块的定义和结构
+- [模块生命周期](./module-lifecycle) - 掌握模块的生命周期管理
+- [依赖注入](./dependency-injection) - 学习依赖注入机制和最佳实践
+- [服务注册](./service-registration) - 掌握服务注册和管理
+- [配置管理](./configuration-management) - 学习模块配置的管理方式

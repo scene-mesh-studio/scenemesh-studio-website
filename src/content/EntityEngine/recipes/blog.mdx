@@ -1,0 +1,1719 @@
+# 博客系统
+
+本文介绍如何使用 Entity Engine 构建一个功能完整的博客系统，涵盖文章发布、评论管理、用户互动、SEO优化和内容推荐等核心功能。
+
+## 系统架构
+
+### 核心实体模型
+
+```typescript
+// 博客模型
+export const BlogModel: IEntityModel = {
+  name: 'Blog',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', unique: true, required: true },
+    description: { type: 'text' },
+    tagline: { type: 'string' },
+    logo: { type: 'string' },
+    favicon: { type: 'string' },
+    // 配置信息
+    settings: { type: 'json', defaultValue: {} },
+    theme: { type: 'string', defaultValue: 'default' },
+    language: { type: 'string', defaultValue: 'en' },
+    timezone: { type: 'string', defaultValue: 'UTC' },
+    // SEO设置
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    // 社交媒体
+    socialLinks: { type: 'json', defaultValue: {} },
+    // 关系
+    posts: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Post', foreignKey: 'blogId' }
+    },
+    categories: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Category', foreignKey: 'blogId' }
+    },
+    authors: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'User', through: 'BlogAuthor' }
+    },
+    // 统计信息
+    postCount: { type: 'number', defaultValue: 0 },
+    subscriberCount: { type: 'number', defaultValue: 0 },
+    totalViews: { type: 'number', defaultValue: 0 },
+    // 状态
+    isActive: { type: 'boolean', defaultValue: true },
+    isPublic: { type: 'boolean', defaultValue: true },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['slug'], unique: true },
+    { fields: ['isActive'] },
+    { fields: ['isPublic'] }
+  ]
+};
+
+// 文章模型
+export const PostModel: IEntityModel = {
+  name: 'Post',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    blogId: { type: 'uuid', required: true },
+    blog: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Blog', targetKey: 'id' }
+    },
+    // 基本信息
+    title: { type: 'string', required: true },
+    slug: { type: 'string', required: true },
+    excerpt: { type: 'text' },
+    content: { type: 'text', required: true },
+    plainTextContent: { type: 'text' }, // 用于搜索和摘要生成
+    // 媒体资源
+    featuredImage: { type: 'string' },
+    featuredImageAlt: { type: 'string' },
+    gallery: { type: 'json', defaultValue: [] },
+    // 分类和标签
+    categoryId: { type: 'uuid' },
+    category: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Category', targetKey: 'id' }
+    },
+    tags: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Tag', through: 'PostTag' }
+    },
+    // 作者信息
+    authorId: { type: 'uuid', required: true },
+    author: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    coAuthors: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'User', through: 'PostCoAuthor' }
+    },
+    // 状态管理
+    status: {
+      type: 'enum',
+      enumValues: ['DRAFT', 'PENDING', 'PUBLISHED', 'ARCHIVED'],
+      defaultValue: 'DRAFT'
+    },
+    visibility: {
+      type: 'enum',
+      enumValues: ['PUBLIC', 'PRIVATE', 'PASSWORD', 'UNLISTED'],
+      defaultValue: 'PUBLIC'
+    },
+    password: { type: 'string' },
+    // 发布设置
+    publishedAt: { type: 'datetime' },
+    scheduledFor: { type: 'datetime' },
+    // SEO设置
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    canonicalUrl: { type: 'string' },
+    // 社交媒体
+    socialTitle: { type: 'string' },
+    socialDescription: { type: 'string' },
+    socialImage: { type: 'string' },
+    // 内容设置
+    allowComments: { type: 'boolean', defaultValue: true },
+    isPinned: { type: 'boolean', defaultValue: false },
+    isFeatured: { type: 'boolean', defaultValue: false },
+    format: {
+      type: 'enum',
+      enumValues: ['STANDARD', 'GALLERY', 'VIDEO', 'AUDIO', 'QUOTE', 'LINK'],
+      defaultValue: 'STANDARD'
+    },
+    // 阅读设置
+    readingTime: { type: 'number' }, // 预估阅读时间（分钟）
+    wordCount: { type: 'number' },
+    // 统计数据
+    viewCount: { type: 'number', defaultValue: 0 },
+    likeCount: { type: 'number', defaultValue: 0 },
+    shareCount: { type: 'number', defaultValue: 0 },
+    commentCount: { type: 'number', defaultValue: 0 },
+    // 关系
+    comments: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Comment', foreignKey: 'postId' }
+    },
+    series: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Series', through: 'SeriesPost' }
+    },
+    // 版本控制
+    revisions: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'PostRevision', foreignKey: 'postId' }
+    },
+    // 自定义字段
+    customFields: { type: 'json', defaultValue: {} },
+    metadata: { type: 'json', defaultValue: {} },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['blogId', 'slug'], unique: true },
+    { fields: ['status'] },
+    { fields: ['publishedAt'] },
+    { fields: ['authorId'] },
+    { fields: ['categoryId'] },
+    { fields: ['isPinned'] },
+    { fields: ['isFeatured'] },
+    { fields: ['viewCount'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 分类模型
+export const CategoryModel: IEntityModel = {
+  name: 'Category',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    blogId: { type: 'uuid', required: true },
+    blog: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Blog', targetKey: 'id' }
+    },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', required: true },
+    description: { type: 'text' },
+    color: { type: 'string' },
+    icon: { type: 'string' },
+    image: { type: 'string' },
+    // 层级结构
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Category', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Category', foreignKey: 'parentId' }
+    },
+    // 排序和显示
+    sortOrder: { type: 'number', defaultValue: 0 },
+    isVisible: { type: 'boolean', defaultValue: true },
+    showInNavigation: { type: 'boolean', defaultValue: true },
+    // 关系
+    posts: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Post', foreignKey: 'categoryId' }
+    },
+    // SEO设置
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    // 统计
+    postCount: { type: 'number', defaultValue: 0 },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['blogId', 'slug'], unique: true },
+    { fields: ['parentId'] },
+    { fields: ['isVisible', 'sortOrder'] }
+  ]
+};
+
+// 标签模型
+export const TagModel: IEntityModel = {
+  name: 'Tag',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', required: true },
+    description: { type: 'string' },
+    color: { type: 'string' },
+    // 关系
+    posts: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Post', through: 'PostTag' }
+    },
+    // SEO设置
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    // 统计
+    postCount: { type: 'number', defaultValue: 0 },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['name'], unique: true },
+    { fields: ['slug'], unique: true },
+    { fields: ['postCount'] }
+  ]
+};
+
+// 评论模型
+export const CommentModel: IEntityModel = {
+  name: 'Comment',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    postId: { type: 'uuid', required: true },
+    post: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Post', targetKey: 'id' }
+    },
+    // 评论内容
+    content: { type: 'text', required: true },
+    contentHtml: { type: 'text' }, // 渲染后的HTML
+    // 作者信息
+    authorName: { type: 'string', required: true },
+    authorEmail: { type: 'string', required: true },
+    authorUrl: { type: 'string' },
+    authorAvatar: { type: 'string' },
+    // 用户关联
+    userId: { type: 'uuid' },
+    user: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    // 层级结构（回复）
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Comment', targetKey: 'id' }
+    },
+    replies: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Comment', foreignKey: 'parentId' }
+    },
+    // 状态管理
+    status: {
+      type: 'enum',
+      enumValues: ['PENDING', 'APPROVED', 'REJECTED', 'SPAM'],
+      defaultValue: 'PENDING'
+    },
+    moderationReason: { type: 'string' },
+    // 技术信息
+    ipAddress: { type: 'string' },
+    userAgent: { type: 'string' },
+    // 互动数据
+    likeCount: { type: 'number', defaultValue: 0 },
+    dislikeCount: { type: 'number', defaultValue: 0 },
+    replyCount: { type: 'number', defaultValue: 0 },
+    // 标记
+    isAuthorReply: { type: 'boolean', defaultValue: false },
+    isPinned: { type: 'boolean', defaultValue: false },
+    isEdited: { type: 'boolean', defaultValue: false },
+    editedAt: { type: 'datetime' },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['postId'] },
+    { fields: ['parentId'] },
+    { fields: ['status'] },
+    { fields: ['userId'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 系列模型
+export const SeriesModel: IEntityModel = {
+  name: 'Series',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    blogId: { type: 'uuid', required: true },
+    blog: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Blog', targetKey: 'id' }
+    },
+    title: { type: 'string', required: true },
+    slug: { type: 'string', required: true },
+    description: { type: 'text' },
+    image: { type: 'string' },
+    // 作者
+    authorId: { type: 'uuid', required: true },
+    author: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    // 状态
+    status: {
+      type: 'enum',
+      enumValues: ['DRAFT', 'PUBLISHED', 'COMPLETED'],
+      defaultValue: 'DRAFT'
+    },
+    // 关系
+    posts: {
+      type: 'relation',
+      relation: { type: 'many_to_many', model: 'Post', through: 'SeriesPost' }
+    },
+    // SEO设置
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    // 统计
+    postCount: { type: 'number', defaultValue: 0 },
+    totalViews: { type: 'number', defaultValue: 0 },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['blogId', 'slug'], unique: true },
+    { fields: ['authorId'] },
+    { fields: ['status'] }
+  ]
+};
+
+// 订阅者模型
+export const SubscriberModel: IEntityModel = {
+  name: 'Subscriber',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    blogId: { type: 'uuid', required: true },
+    blog: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Blog', targetKey: 'id' }
+    },
+    email: { type: 'string', required: true },
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    // 订阅设置
+    subscriptionType: {
+      type: 'enum',
+      enumValues: ['ALL_POSTS', 'WEEKLY_DIGEST', 'MONTHLY_DIGEST'],
+      defaultValue: 'ALL_POSTS'
+    },
+    categories: { type: 'json', defaultValue: [] }, // 订阅的分类ID数组
+    tags: { type: 'json', defaultValue: [] }, // 订阅的标签数组
+    // 状态
+    status: {
+      type: 'enum',
+      enumValues: ['ACTIVE', 'UNSUBSCRIBED', 'BOUNCED'],
+      defaultValue: 'ACTIVE'
+    },
+    isConfirmed: { type: 'boolean', defaultValue: false },
+    confirmationToken: { type: 'string' },
+    confirmedAt: { type: 'datetime' },
+    // 统计
+    emailsSent: { type: 'number', defaultValue: 0 },
+    emailsOpened: { type: 'number', defaultValue: 0 },
+    linksClicked: { type: 'number', defaultValue: 0 },
+    lastEmailSentAt: { type: 'datetime' },
+    lastActivityAt: { type: 'datetime' },
+    // 取消订阅
+    unsubscribedAt: { type: 'datetime' },
+    unsubscribeReason: { type: 'string' },
+    // 时间戳
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['blogId', 'email'], unique: true },
+    { fields: ['status'] },
+    { fields: ['isConfirmed'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 内容分析模型
+export const AnalyticsModel: IEntityModel = {
+  name: 'Analytics',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    // 关联对象
+    blogId: { type: 'uuid', required: true },
+    postId: { type: 'uuid' },
+    // 事件类型
+    eventType: {
+      type: 'enum',
+      enumValues: ['PAGE_VIEW', 'POST_VIEW', 'COMMENT', 'LIKE', 'SHARE', 'SEARCH', 'SUBSCRIPTION'],
+      required: true
+    },
+    // 用户信息
+    userId: { type: 'uuid' },
+    sessionId: { type: 'string' },
+    // 技术信息
+    ipAddress: { type: 'string' },
+    userAgent: { type: 'string' },
+    referer: { type: 'string' },
+    // 地理信息
+    country: { type: 'string' },
+    region: { type: 'string' },
+    city: { type: 'string' },
+    // 设备信息
+    deviceType: {
+      type: 'enum',
+      enumValues: ['DESKTOP', 'TABLET', 'MOBILE'],
+      required: true
+    },
+    browser: { type: 'string' },
+    os: { type: 'string' },
+    // 事件数据
+    eventData: { type: 'json', defaultValue: {} },
+    // 时间信息
+    duration: { type: 'number' }, // 页面停留时间（秒）
+    timestamp: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['blogId', 'eventType'] },
+    { fields: ['postId', 'eventType'] },
+    { fields: ['timestamp'] },
+    { fields: ['userId'] }
+  ]
+};
+```
+
+## 业务逻辑实现
+
+### 博客内容管理动作处理器
+
+```typescript
+// 博客内容管理动作处理器
+class BlogContentActionHandler implements IActionHandler {
+  name = 'blog-content';
+  displayName = '博客内容管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['create_post', 'update_post', 'publish_post', 'schedule_post', 'delete_post'],
+        required: true 
+      },
+      postId: { type: 'string' },
+      blogId: { type: 'string' },
+      data: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'create_post':
+          return await this.createPost(input, entityManager, user);
+        case 'update_post':
+          return await this.updatePost(input, entityManager, user);
+        case 'publish_post':
+          return await this.publishPost(input, entityManager, user);
+        case 'schedule_post':
+          return await this.schedulePost(input, entityManager, user);
+        case 'delete_post':
+          return await this.deletePost(input, entityManager, user);
+        default:
+          throw new Error(`Unknown blog action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'BLOG_CONTENT_ERROR' }
+      };
+    }
+  }
+  
+  private async createPost(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    // 验证博客存在
+    const blog = await entityManager.get('Blog', input.blogId);
+    if (!blog) {
+      throw new Error('Blog not found');
+    }
+    
+    // 生成唯一slug
+    const slug = await this.generateUniqueSlug(input.data.title, input.blogId, entityManager);
+    
+    // 计算文章统计信息
+    const plainTextContent = this.stripHtml(input.data.content);
+    const wordCount = this.countWords(plainTextContent);
+    const readingTime = Math.ceil(wordCount / 200); // 假设每分钟200词
+    
+    // 创建文章
+    const post = await entityManager.create('Post', {
+      blogId: input.blogId,
+      title: input.data.title,
+      slug,
+      excerpt: input.data.excerpt,
+      content: input.data.content,
+      plainTextContent,
+      wordCount,
+      readingTime,
+      featuredImage: input.data.featuredImage,
+      featuredImageAlt: input.data.featuredImageAlt,
+      categoryId: input.data.categoryId,
+      authorId: user.id,
+      status: input.data.status || 'DRAFT',
+      visibility: input.data.visibility || 'PUBLIC',
+      format: input.data.format || 'STANDARD',
+      allowComments: input.data.allowComments !== false,
+      seoTitle: input.data.seoTitle,
+      seoDescription: input.data.seoDescription,
+      seoKeywords: input.data.seoKeywords,
+      socialTitle: input.data.socialTitle,
+      socialDescription: input.data.socialDescription,
+      socialImage: input.data.socialImage,
+      customFields: input.data.customFields || {}
+    });
+    
+    // 处理标签
+    if (input.data.tags && input.data.tags.length > 0) {
+      await this.assignTags(post.id, input.data.tags, entityManager);
+    }
+    
+    // 处理协作作者
+    if (input.data.coAuthorIds && input.data.coAuthorIds.length > 0) {
+      await this.assignCoAuthors(post.id, input.data.coAuthorIds, entityManager);
+    }
+    
+    // 创建初始版本
+    await this.createRevision(post, user.id, 'Initial version', entityManager);
+    
+    return {
+      success: true,
+      data: { post },
+      events: [{
+        type: 'post.created',
+        data: {
+          postId: post.id,
+          blogId: post.blogId,
+          title: post.title,
+          authorId: user.id
+        }
+      }]
+    };
+  }
+  
+  private async publishPost(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const post = await entityManager.get('Post', input.postId, {
+      include: ['blog', 'category', 'tags']
+    });
+    
+    if (!post) {
+      throw new Error('Post not found');
+    }
+    
+    // 验证发布权限
+    if (!this.hasPublishPermission(user, post)) {
+      throw new Error('Permission denied');
+    }
+    
+    // 验证发布条件
+    const validationResult = await this.validateForPublishing(post);
+    if (!validationResult.valid) {
+      throw new Error(`Publishing validation failed: ${validationResult.errors.join(', ')}`);
+    }
+    
+    const publishedAt = new Date();
+    
+    // 更新文章状态
+    const updatedPost = await entityManager.update('Post', input.postId, {
+      status: 'PUBLISHED',
+      publishedAt
+    });
+    
+    // 更新博客统计
+    await this.updateBlogStats(post.blogId, entityManager);
+    
+    // 更新分类统计
+    if (post.categoryId) {
+      await this.updateCategoryStats(post.categoryId, entityManager);
+    }
+    
+    // 更新标签统计
+    if (post.tags && post.tags.length > 0) {
+      await this.updateTagStats(post.tags.map(t => t.id), entityManager);
+    }
+    
+    // 发送通知给订阅者
+    await this.notifySubscribers(post, entityManager);
+    
+    // 生成sitemap
+    await this.updateSitemap(post.blogId);
+    
+    // 触发SEO索引
+    await this.triggerSEOIndexing(post);
+    
+    return {
+      success: true,
+      data: { post: updatedPost },
+      events: [{
+        type: 'post.published',
+        data: {
+          postId: post.id,
+          blogId: post.blogId,
+          title: post.title,
+          publishedAt,
+          publishedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async schedulePost(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const post = await entityManager.get('Post', input.postId);
+    
+    if (!post) {
+      throw new Error('Post not found');
+    }
+    
+    if (!input.data.scheduledFor) {
+      throw new Error('Scheduled date is required');
+    }
+    
+    const scheduledFor = new Date(input.data.scheduledFor);
+    
+    if (scheduledFor <= new Date()) {
+      throw new Error('Scheduled date must be in the future');
+    }
+    
+    // 更新调度信息
+    const updatedPost = await entityManager.update('Post', input.postId, {
+      status: 'DRAFT',
+      scheduledFor
+    });
+    
+    // 创建调度任务
+    await this.createScheduleTask(post.id, scheduledFor);
+    
+    return {
+      success: true,
+      data: { post: updatedPost },
+      events: [{
+        type: 'post.scheduled',
+        data: {
+          postId: post.id,
+          scheduledFor,
+          scheduledBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async generateUniqueSlug(title: string, blogId: string, entityManager: IEntityManager, excludeId?: string): Promise<string> {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    
+    let slug = baseSlug;
+    let counter = 1;
+    
+    while (await this.slugExists(slug, blogId, entityManager, excludeId)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
+    return slug;
+  }
+  
+  private async slugExists(slug: string, blogId: string, entityManager: IEntityManager, excludeId?: string): Promise<boolean> {
+    const filter: any = { blogId, slug };
+    if (excludeId) {
+      filter.id = { $ne: excludeId };
+    }
+    
+    const existing = await entityManager.query({
+      entityType: 'Post',
+      filter,
+      limit: 1
+    });
+    
+    return existing.data.length > 0;
+  }
+  
+  private stripHtml(html: string): string {
+    return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  }
+  
+  private countWords(text: string): number {
+    return text.split(/\s+/).filter(word => word.length > 0).length;
+  }
+  
+  private async assignTags(postId: string, tags: string[], entityManager: IEntityManager): Promise<void> {
+    for (const tagName of tags) {
+      const tag = await this.findOrCreateTag(tagName, entityManager);
+      
+      await entityManager.create('PostTag', {
+        postId,
+        tagId: tag.id
+      });
+    }
+  }
+  
+  private async findOrCreateTag(name: string, entityManager: IEntityManager): Promise<any> {
+    const slug = name.toLowerCase().replace(/\s+/g, '-');
+    
+    // 查找现有标签
+    const existing = await entityManager.query({
+      entityType: 'Tag',
+      filter: { name },
+      limit: 1
+    });
+    
+    if (existing.data.length > 0) {
+      return existing.data[0];
+    }
+    
+    // 创建新标签
+    return await entityManager.create('Tag', {
+      name,
+      slug,
+      postCount: 0
+    });
+  }
+  
+  private async assignCoAuthors(postId: string, coAuthorIds: string[], entityManager: IEntityManager): Promise<void> {
+    for (const authorId of coAuthorIds) {
+      await entityManager.create('PostCoAuthor', {
+        postId,
+        userId: authorId
+      });
+    }
+  }
+  
+  private async createRevision(post: any, userId: string, comment: string, entityManager: IEntityManager): Promise<any> {
+    // 获取下一个版本号
+    const latestRevision = await entityManager.query({
+      entityType: 'PostRevision',
+      filter: { postId: post.id },
+      sort: [{ field: 'version', direction: 'desc' }],
+      limit: 1
+    });
+    
+    const version = latestRevision.data.length > 0 ? 
+      latestRevision.data[0].version + 1 : 1;
+    
+    return await entityManager.create('PostRevision', {
+      postId: post.id,
+      version,
+      title: post.title,
+      content: post.content,
+      excerpt: post.excerpt,
+      createdById: userId,
+      comment
+    });
+  }
+  
+  private hasPublishPermission(user: any, post: any): boolean {
+    return user.id === post.authorId || 
+           user.permissions.includes('publish_posts') ||
+           user.permissions.includes('manage_blog');
+  }
+  
+  private async validateForPublishing(post: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!post.title || post.title.trim() === '') {
+      errors.push('Title is required');
+    }
+    
+    if (!post.content || post.content.trim() === '') {
+      errors.push('Content is required');
+    }
+    
+    if (!post.excerpt || post.excerpt.trim() === '') {
+      errors.push('Excerpt is required');
+    }
+    
+    if (!post.seoTitle) {
+      errors.push('SEO title is required');
+    }
+    
+    if (!post.seoDescription) {
+      errors.push('SEO description is required');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private async updateBlogStats(blogId: string, entityManager: IEntityManager): Promise<void> {
+    const postCount = await entityManager.query({
+      entityType: 'Post',
+      filter: { blogId, status: 'PUBLISHED' },
+      operation: 'count'
+    });
+    
+    await entityManager.update('Blog', blogId, {
+      postCount: postCount.total
+    });
+  }
+  
+  private async updateCategoryStats(categoryId: string, entityManager: IEntityManager): Promise<void> {
+    const postCount = await entityManager.query({
+      entityType: 'Post',
+      filter: { categoryId, status: 'PUBLISHED' },
+      operation: 'count'
+    });
+    
+    await entityManager.update('Category', categoryId, {
+      postCount: postCount.total
+    });
+  }
+  
+  private async updateTagStats(tagIds: string[], entityManager: IEntityManager): Promise<void> {
+    for (const tagId of tagIds) {
+      const postCount = await entityManager.query({
+        entityType: 'PostTag',
+        filter: { tagId },
+        operation: 'count'
+      });
+      
+      await entityManager.update('Tag', tagId, {
+        postCount: postCount.total
+      });
+    }
+  }
+  
+  private async notifySubscribers(post: any, entityManager: IEntityManager): Promise<void> {
+    // 获取活跃订阅者
+    const subscribers = await entityManager.query({
+      entityType: 'Subscriber',
+      filter: { 
+        blogId: post.blogId, 
+        status: 'ACTIVE',
+        isConfirmed: true
+      }
+    });
+    
+    // 发送邮件通知（异步处理）
+    for (const subscriber of subscribers.data) {
+      await this.sendPostNotification(subscriber, post);
+    }
+  }
+  
+  private async sendPostNotification(subscriber: any, post: any): Promise<void> {
+    // 实现邮件发送逻辑
+  }
+  
+  private async updateSitemap(blogId: string): Promise<void> {
+    // 更新sitemap.xml
+  }
+  
+  private async triggerSEOIndexing(post: any): Promise<void> {
+    // 触发搜索引擎索引
+  }
+  
+  private async createScheduleTask(postId: string, scheduledFor: Date): Promise<void> {
+    // 创建定时任务
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (input.action === 'create_post' && !input.blogId) {
+      errors.push('blogId is required for create_post action');
+    }
+    
+    if (['update_post', 'publish_post', 'schedule_post', 'delete_post'].includes(input.action) && !input.postId) {
+      errors.push('postId is required for this action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['blog_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+### 评论管理动作处理器
+
+```typescript
+// 评论管理动作处理器
+class CommentManagerActionHandler implements IActionHandler {
+  name = 'comment-manager';
+  displayName = '评论管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['create', 'approve', 'reject', 'reply', 'moderate', 'delete'],
+        required: true 
+      },
+      commentId: { type: 'string' },
+      postId: { type: 'string' },
+      data: { type: 'object' },
+      options: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, user } = context;
+    
+    try {
+      switch (input.action) {
+        case 'create':
+          return await this.createComment(input, entityManager, user);
+        case 'approve':
+          return await this.approveComment(input, entityManager, user);
+        case 'reject':
+          return await this.rejectComment(input, entityManager, user);
+        case 'reply':
+          return await this.replyToComment(input, entityManager, user);
+        case 'moderate':
+          return await this.moderateComment(input, entityManager, user);
+        case 'delete':
+          return await this.deleteComment(input, entityManager, user);
+        default:
+          throw new Error(`Unknown comment action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'COMMENT_ACTION_ERROR' }
+      };
+    }
+  }
+  
+  private async createComment(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    // 验证文章存在且允许评论
+    const post = await entityManager.get('Post', input.postId);
+    if (!post) {
+      throw new Error('Post not found');
+    }
+    
+    if (!post.allowComments) {
+      throw new Error('Comments are disabled for this post');
+    }
+    
+    // 反垃圾检查
+    const spamCheckResult = await this.checkSpam(input.data, context);
+    let status = 'PENDING';
+    
+    if (spamCheckResult.isSpam) {
+      status = 'SPAM';
+    } else if (this.isAutoApproveEnabled(post) && this.canAutoApprove(user, input.data)) {
+      status = 'APPROVED';
+    }
+    
+    // 渲染HTML内容
+    const contentHtml = await this.renderCommentContent(input.data.content);
+    
+    // 创建评论
+    const comment = await entityManager.create('Comment', {
+      postId: input.postId,
+      parentId: input.data.parentId,
+      content: input.data.content,
+      contentHtml,
+      authorName: input.data.authorName,
+      authorEmail: input.data.authorEmail,
+      authorUrl: input.data.authorUrl,
+      userId: user?.id,
+      status,
+      ipAddress: input.data.ipAddress,
+      userAgent: input.data.userAgent
+    });
+    
+    // 如果是回复，更新父评论统计
+    if (input.data.parentId) {
+      await this.updateParentCommentStats(input.data.parentId, entityManager);
+    }
+    
+    // 更新文章评论统计
+    await this.updatePostCommentStats(input.postId, entityManager);
+    
+    // 发送通知
+    if (status === 'APPROVED') {
+      await this.sendCommentNotifications(comment, post, entityManager);
+    }
+    
+    return {
+      success: true,
+      data: { comment },
+      events: [{
+        type: 'comment.created',
+        data: {
+          commentId: comment.id,
+          postId: comment.postId,
+          status: comment.status,
+          isReply: !!comment.parentId
+        }
+      }]
+    };
+  }
+  
+  private async approveComment(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const comment = await entityManager.get('Comment', input.commentId, {
+      include: ['post']
+    });
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    if (comment.status === 'APPROVED') {
+      throw new Error('Comment is already approved');
+    }
+    
+    // 更新评论状态
+    const updatedComment = await entityManager.update('Comment', input.commentId, {
+      status: 'APPROVED'
+    });
+    
+    // 更新统计
+    await this.updatePostCommentStats(comment.postId, entityManager);
+    
+    // 发送通知
+    await this.sendCommentNotifications(updatedComment, comment.post, entityManager);
+    
+    return {
+      success: true,
+      data: { comment: updatedComment },
+      events: [{
+        type: 'comment.approved',
+        data: {
+          commentId: comment.id,
+          postId: comment.postId,
+          approvedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async moderateComment(input: any, entityManager: IEntityManager, user: any): Promise<ActionResult> {
+    const comment = await entityManager.get('Comment', input.commentId);
+    
+    if (!comment) {
+      throw new Error('Comment not found');
+    }
+    
+    const action = input.data.action; // 'approve', 'reject', 'spam'
+    const reason = input.data.reason;
+    
+    let newStatus: string;
+    switch (action) {
+      case 'approve':
+        newStatus = 'APPROVED';
+        break;
+      case 'reject':
+        newStatus = 'REJECTED';
+        break;
+      case 'spam':
+        newStatus = 'SPAM';
+        break;
+      default:
+        throw new Error(`Invalid moderation action: ${action}`);
+    }
+    
+    // 更新评论状态
+    const updatedComment = await entityManager.update('Comment', input.commentId, {
+      status: newStatus,
+      moderationReason: reason
+    });
+    
+    // 如果标记为垃圾，更新垃圾检测系统
+    if (newStatus === 'SPAM') {
+      await this.updateSpamDetection(comment, true);
+    }
+    
+    // 更新统计
+    await this.updatePostCommentStats(comment.postId, entityManager);
+    
+    return {
+      success: true,
+      data: { comment: updatedComment },
+      events: [{
+        type: 'comment.moderated',
+        data: {
+          commentId: comment.id,
+          action,
+          reason,
+          moderatedBy: user.id
+        }
+      }]
+    };
+  }
+  
+  private async checkSpam(commentData: any, context: any): Promise<{ isSpam: boolean; confidence: number; reasons: string[] }> {
+    const reasons: string[] = [];
+    let spamScore = 0;
+    
+    // 检查黑名单关键词
+    const spamKeywords = ['viagra', 'casino', 'lottery', 'buy now', 'click here'];
+    const content = commentData.content.toLowerCase();
+    
+    for (const keyword of spamKeywords) {
+      if (content.includes(keyword)) {
+        spamScore += 30;
+        reasons.push(`Contains spam keyword: ${keyword}`);
+      }
+    }
+    
+    // 检查链接数量
+    const linkCount = (commentData.content.match(/https?:\/\//g) || []).length;
+    if (linkCount > 3) {
+      spamScore += 25;
+      reasons.push(`Too many links: ${linkCount}`);
+    }
+    
+    // 检查重复评论
+    const duplicateCheck = await this.checkDuplicateComment(commentData);
+    if (duplicateCheck.isDuplicate) {
+      spamScore += 40;
+      reasons.push('Duplicate comment detected');
+    }
+    
+    // 检查IP声誉
+    const ipReputation = await this.checkIPReputation(commentData.ipAddress);
+    if (ipReputation.isBlacklisted) {
+      spamScore += 50;
+      reasons.push('IP address is blacklisted');
+    }
+    
+    return {
+      isSpam: spamScore >= 50,
+      confidence: Math.min(spamScore, 100),
+      reasons
+    };
+  }
+  
+  private async renderCommentContent(content: string): Promise<string> {
+    // 简单的Markdown渲染和XSS过滤
+    return content
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  }
+  
+  private isAutoApproveEnabled(post: any): boolean {
+    // 检查文章或博客的自动批准设置
+    return post.blog?.settings?.autoApproveComments || false;
+  }
+  
+  private canAutoApprove(user: any, commentData: any): boolean {
+    // 检查用户是否可以自动批准
+    if (user) {
+      // 已登录用户
+      return user.trustLevel >= 1;
+    }
+    
+    // 匿名用户的启发式规则
+    if (commentData.authorUrl && !this.isValidUrl(commentData.authorUrl)) {
+      return false;
+    }
+    
+    // 内容长度和质量检查
+    if (commentData.content.length < 10) {
+      return false;
+    }
+    
+    return true;
+  }
+  
+  private async updateParentCommentStats(parentId: string, entityManager: IEntityManager): Promise<void> {
+    const replyCount = await entityManager.query({
+      entityType: 'Comment',
+      filter: { parentId, status: 'APPROVED' },
+      operation: 'count'
+    });
+    
+    await entityManager.update('Comment', parentId, {
+      replyCount: replyCount.total
+    });
+  }
+  
+  private async updatePostCommentStats(postId: string, entityManager: IEntityManager): Promise<void> {
+    const commentCount = await entityManager.query({
+      entityType: 'Comment',
+      filter: { postId, status: 'APPROVED' },
+      operation: 'count'
+    });
+    
+    await entityManager.update('Post', postId, {
+      commentCount: commentCount.total
+    });
+  }
+  
+  private async sendCommentNotifications(comment: any, post: any, entityManager: IEntityManager): Promise<void> {
+    // 通知文章作者
+    if (comment.userId !== post.authorId) {
+      await this.sendNotificationToAuthor(comment, post);
+    }
+    
+    // 如果是回复，通知父评论作者
+    if (comment.parentId) {
+      const parentComment = await entityManager.get('Comment', comment.parentId);
+      if (parentComment && parentComment.userId && parentComment.userId !== comment.userId) {
+        await this.sendNotificationToCommenter(comment, parentComment);
+      }
+    }
+  }
+  
+  private async sendNotificationToAuthor(comment: any, post: any): Promise<void> {
+    // 实现作者通知逻辑
+  }
+  
+  private async sendNotificationToCommenter(comment: any, parentComment: any): Promise<void> {
+    // 实现回复通知逻辑
+  }
+  
+  private async checkDuplicateComment(commentData: any): Promise<{ isDuplicate: boolean }> {
+    // 检查重复评论逻辑
+    return { isDuplicate: false };
+  }
+  
+  private async checkIPReputation(ipAddress: string): Promise<{ isBlacklisted: boolean }> {
+    // 检查IP声誉逻辑
+    return { isBlacklisted: false };
+  }
+  
+  private async updateSpamDetection(comment: any, isSpam: boolean): Promise<void> {
+    // 更新垃圾检测系统
+  }
+  
+  private isValidUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) {
+      errors.push('action is required');
+    }
+    
+    if (input.action === 'create' && !input.postId) {
+      errors.push('postId is required for create action');
+    }
+    
+    if (['approve', 'reject', 'moderate', 'delete'].includes(input.action) && !input.commentId) {
+      errors.push('commentId is required for this action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['comment_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 15000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+## 视图定义
+
+### 博客仪表盘视图
+
+```typescript
+// 博客仪表盘视图
+export const BlogDashboardView: IViewDefinition = {
+  id: 'blog-dashboard',
+  name: 'BlogDashboard',
+  displayName: '博客仪表盘',
+  type: 'dashboard',
+  config: {
+    layout: {
+      type: 'grid',
+      columns: 12,
+      rows: 'auto'
+    },
+    widgets: [
+      {
+        id: 'content-stats',
+        type: 'stats-overview',
+        title: '内容统计',
+        position: { x: 0, y: 0, w: 12, h: 2 },
+        config: {
+          metrics: [
+            {
+              name: 'total_posts',
+              displayName: '总文章数',
+              query: {
+                entityType: 'Post',
+                filter: { status: 'PUBLISHED' },
+                aggregation: { operation: 'count' }
+              },
+              icon: 'document',
+              color: 'blue'
+            },
+            {
+              name: 'total_views',
+              displayName: '总浏览量',
+              query: {
+                entityType: 'Post',
+                aggregation: { field: 'viewCount', operation: 'sum' }
+              },
+              icon: 'eye',
+              color: 'green'
+            },
+            {
+              name: 'total_comments',
+              displayName: '总评论数',
+              query: {
+                entityType: 'Comment',
+                filter: { status: 'APPROVED' },
+                aggregation: { operation: 'count' }
+              },
+              icon: 'chat',
+              color: 'purple'
+            },
+            {
+              name: 'subscribers',
+              displayName: '订阅者',
+              query: {
+                entityType: 'Subscriber',
+                filter: { status: 'ACTIVE' },
+                aggregation: { operation: 'count' }
+              },
+              icon: 'users',
+              color: 'orange'
+            }
+          ]
+        }
+      },
+      {
+        id: 'recent-posts',
+        type: 'post-list',
+        title: '最新文章',
+        position: { x: 0, y: 2, w: 8, h: 4 },
+        config: {
+          query: {
+            entityType: 'Post',
+            sort: [{ field: 'createdAt', direction: 'desc' }],
+            limit: 5,
+            include: ['author', 'category']
+          },
+          showThumbnail: true,
+          showStats: true,
+          showStatus: true
+        }
+      },
+      {
+        id: 'popular-posts',
+        type: 'post-list',
+        title: '热门文章',
+        position: { x: 8, y: 2, w: 4, h: 4 },
+        config: {
+          query: {
+            entityType: 'Post',
+            filter: { status: 'PUBLISHED' },
+            sort: [{ field: 'viewCount', direction: 'desc' }],
+            limit: 5
+          },
+          showViews: true,
+          compact: true
+        }
+      },
+      {
+        id: 'comment-moderation',
+        type: 'comment-queue',
+        title: '待审核评论',
+        position: { x: 0, y: 6, w: 6, h: 3 },
+        config: {
+          query: {
+            entityType: 'Comment',
+            filter: { status: 'PENDING' },
+            sort: [{ field: 'createdAt', direction: 'desc' }],
+            include: ['post']
+          },
+          showModerationActions: true
+        }
+      },
+      {
+        id: 'analytics-chart',
+        type: 'analytics-chart',
+        title: '浏览量趋势',
+        position: { x: 6, y: 6, w: 6, h: 3 },
+        config: {
+          metric: 'page_views',
+          period: '7d',
+          chartType: 'line',
+          showComparison: true
+        }
+      }
+    ],
+    refreshInterval: 300000
+  }
+};
+
+// 文章列表视图
+export const PostListView: IViewDefinition = {
+  id: 'post-list',
+  name: 'PostList',
+  displayName: '文章列表',
+  type: 'table',
+  entityType: 'Post',
+  config: {
+    columns: [
+      {
+        name: 'featuredImage',
+        displayName: '图片',
+        type: 'image',
+        width: 80,
+        renderer: 'post-thumbnail'
+      },
+      {
+        name: 'title',
+        displayName: '标题',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 300,
+        renderer: 'post-title-link'
+      },
+      {
+        name: 'author.name',
+        displayName: '作者',
+        type: 'string',
+        sortable: true,
+        width: 120
+      },
+      {
+        name: 'category.name',
+        displayName: '分类',
+        type: 'string',
+        sortable: true,
+        filterable: true,
+        width: 120
+      },
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'post-status-badge'
+      },
+      {
+        name: 'viewCount',
+        displayName: '浏览量',
+        type: 'number',
+        sortable: true,
+        width: 80
+      },
+      {
+        name: 'commentCount',
+        displayName: '评论数',
+        type: 'number',
+        sortable: true,
+        width: 80
+      },
+      {
+        name: 'publishedAt',
+        displayName: '发布时间',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short', timeStyle: 'short' }
+      }
+    ],
+    defaultSort: [{ field: 'createdAt', direction: 'desc' }],
+    pageSize: 25,
+    enableSearch: true,
+    enableFilters: true,
+    filters: [
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'select',
+        options: [
+          { label: '草稿', value: 'DRAFT' },
+          { label: '待审核', value: 'PENDING' },
+          { label: '已发布', value: 'PUBLISHED' },
+          { label: '已归档', value: 'ARCHIVED' }
+        ]
+      },
+      {
+        name: 'category',
+        displayName: '分类',
+        type: 'select',
+        dataSource: 'Category',
+        labelField: 'name',
+        valueField: 'id'
+      },
+      {
+        name: 'author',
+        displayName: '作者',
+        type: 'select',
+        dataSource: 'User',
+        labelField: 'name',
+        valueField: 'id'
+      }
+    ],
+    actions: [
+      {
+        name: 'create',
+        displayName: '新建文章',
+        type: 'primary',
+        icon: 'plus',
+        handler: 'navigate-to-create'
+      },
+      {
+        name: 'bulk-publish',
+        displayName: '批量发布',
+        type: 'secondary',
+        icon: 'publish',
+        handler: 'bulk-publish',
+        requiresSelection: true
+      }
+    ],
+    rowActions: [
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'navigate-to-edit'
+      },
+      {
+        name: 'preview',
+        displayName: '预览',
+        icon: 'eye',
+        handler: 'preview-post'
+      },
+      {
+        name: 'publish',
+        displayName: '发布',
+        icon: 'publish',
+        handler: 'publish-post',
+        condition: { status: ['DRAFT', 'PENDING'] }
+      },
+      {
+        name: 'duplicate',
+        displayName: '复制',
+        icon: 'copy',
+        handler: 'duplicate-post'
+      }
+    ]
+  }
+};
+
+// 文章编辑器视图
+export const PostEditorView: IViewDefinition = {
+  id: 'post-editor',
+  name: 'PostEditor',
+  displayName: '文章编辑器',
+  type: 'custom',
+  entityType: 'Post',
+  config: {
+    component: 'PostEditor',
+    layout: {
+      type: 'split',
+      panels: [
+        {
+          id: 'main-editor',
+          size: '70%',
+          sections: [
+            {
+              id: 'title-section',
+              type: 'title-input',
+              config: {
+                placeholder: '请输入文章标题...',
+                autoGenerateSlug: true
+              }
+            },
+            {
+              id: 'content-editor',
+              type: 'rich-text-editor',
+              config: {
+                toolbar: 'full',
+                plugins: ['image', 'video', 'code', 'table', 'link'],
+                autoSave: true,
+                autoSaveInterval: 30000
+              }
+            }
+          ]
+        },
+        {
+          id: 'sidebar',
+          size: '30%',
+          sections: [
+            {
+              id: 'publish-box',
+              type: 'publish-controls',
+              title: '发布',
+              collapsible: false
+            },
+            {
+              id: 'featured-image',
+              type: 'media-selector',
+              title: '特色图片',
+              collapsible: true
+            },
+            {
+              id: 'excerpt',
+              type: 'textarea',
+              title: '摘要',
+              collapsible: true,
+              config: {
+                rows: 4,
+                placeholder: '请输入文章摘要...'
+              }
+            },
+            {
+              id: 'categorization',
+              type: 'taxonomy',
+              title: '分类和标签',
+              collapsible: true
+            },
+            {
+              id: 'seo-settings',
+              type: 'seo-panel',
+              title: 'SEO设置',
+              collapsible: true
+            }
+          ]
+        }
+      ]
+    },
+    autosave: {
+      enabled: true,
+      interval: 30000
+    },
+    keyboard: {
+      'Ctrl+S': 'save-draft',
+      'Ctrl+Shift+P': 'publish',
+      'Ctrl+P': 'preview'
+    }
+  }
+};
+```
+
+## 下一步
+
+完成博客系统的基础架构后，可以继续学习：
+
+- [社交应用](./social) - 社交网络应用开发
+- [常用模式](./common-patterns) - 深入了解通用设计模式
+- [电商应用](./ecommerce) - 完整的电商系统设计

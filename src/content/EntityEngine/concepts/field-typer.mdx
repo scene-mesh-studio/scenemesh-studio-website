@@ -1,0 +1,323 @@
+# 字段类型
+
+扩展 Entity Engine 的字段功能，为特定数据类型提供专门的验证、显示和查询支持。当内置字段类型无法满足您的业务需求时，可以创建自定义字段类型来提供更好的用户体验。
+
+例如，为邮箱地址创建专门的字段类型，可以提供自动邮箱格式验证、专用的输入组件，以及针对邮箱的查询操作符。
+
+## 创建基础字段类型
+
+为特定的数据类型创建字段类型，提供自定义的验证和显示行为：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+import { z } from 'zod';
+
+const engine = await getEntityEngine();
+
+// 创建邮箱字段类型
+class EmailFieldTyper {
+  get type() {
+    return 'email';
+  }
+  
+  get title() {
+    return '邮箱地址';
+  }
+  
+  // 提供邮箱格式验证
+  getDefaultSchema(field) {
+    let schema = z.string().email('请输入有效的邮箱地址');
+    return field.isRequired ? schema : schema.optional();
+  }
+  
+  // 设置默认值
+  getDefaultValue() {
+    return '';
+  }
+}
+```
+
+创建字段类型后，您就可以在模型中使用这个类型，Entity Engine 会自动应用邮箱验证规则。
+
+## 注册和使用字段类型
+
+将自定义字段类型注册到引擎中，然后在模型定义中使用：
+
+```typescript
+// 注册邮箱字段类型
+engine.fieldTyperRegistry.registerFieldTyper(new EmailFieldTyper());
+
+// 在模型中使用邮箱字段
+await engine.metaRegistry.updateOrRegister({
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'email',
+      title: '邮箱地址',
+      type: 'email',           // 使用自定义的邮箱类型
+      isRequired: true
+    },
+    {
+      name: 'workEmail',
+      title: '工作邮箱',
+      type: 'email',           // 可以重复使用同一字段类型
+      isRequired: false
+    }
+  ]
+});
+```
+
+注册后，所有使用 `email` 类型的字段都会自动获得邮箱验证功能。创建或更新用户时，Entity Engine 会验证邮箱格式是否正确。
+
+## 添加查询支持
+
+为字段类型定义支持的查询操作符，让用户可以通过不同方式搜索和筛选数据：
+
+```typescript
+class EmailFieldTyper {
+  get type() {
+    return 'email';
+  }
+  
+  get title() {
+    return '邮箱地址';
+  }
+  
+  getDefaultSchema(field) {
+    let schema = z.string().email('请输入有效的邮箱地址');
+    return field.isRequired ? schema : schema.optional();
+  }
+  
+  getDefaultValue() {
+    return '';
+  }
+  
+  // 定义支持的查询操作
+  getQueryItemMeta(field) {
+    return {
+      field: field,
+      operators: [
+        'EQ',           // 精确匹配
+        'CONTAINS',     // 包含查询
+        'IS_NULL',      // 为空
+        'IS_NOT_NULL'   // 不为空
+      ]
+    };
+  }
+}
+```
+
+设置查询支持后，用户可以在列表视图中使用这些操作来筛选邮箱字段。例如，可以搜索包含特定域名的邮箱地址。
+
+## 指定UI组件
+
+为字段类型指定专门的UI组件，提供更好的用户交互体验：
+
+```typescript
+class PhoneFieldTyper {
+  get type() {
+    return 'phone';
+  }
+  
+  get title() {
+    return '电话号码';
+  }
+  
+  getDefaultSchema(field) {
+    let schema = z.string().regex(/^1[3-9]\d{9}$/, '请输入有效的手机号码');
+    return field.isRequired ? schema : schema.optional();
+  }
+  
+  getDefaultValue() {
+    return '';
+  }
+  
+  // 指定使用专门的电话号码输入组件
+  getDefaultWidgetType() {
+    return 'phone-input';
+  }
+}
+
+// 注册电话号码字段类型
+engine.fieldTyperRegistry.registerFieldTyper(new PhoneFieldTyper());
+```
+
+指定UI组件后，表单会使用专门的电话号码输入组件，可能包括格式化显示、区号选择等功能。
+
+## 复杂字段类型示例
+
+创建更复杂的字段类型来处理特殊的业务需求：
+
+```typescript
+// 货币字段类型
+class CurrencyFieldTyper {
+  get type() {
+    return 'currency';
+  }
+  
+  get title() {
+    return '货币金额';
+  }
+  
+  getDefaultSchema(field) {
+    let schema = z.number()
+      .min(0, '金额不能为负数')
+      .max(999999999, '金额超过限制');
+    return field.isRequired ? schema : schema.optional();
+  }
+  
+  getDefaultValue() {
+    return 0;
+  }
+  
+  getQueryItemMeta(field) {
+    return {
+      field: field,
+      operators: [
+        'EQ',         // 等于
+        'GT',         // 大于
+        'LT',         // 小于
+        'GTE',        // 大于等于
+        'LTE',        // 小于等于
+        'BETWEEN'     // 区间查询
+      ]
+    };
+  }
+  
+  getDefaultWidgetType() {
+    return 'currency-input';
+  }
+}
+
+// 注册并使用货币字段类型
+engine.fieldTyperRegistry.registerFieldTyper(new CurrencyFieldTyper());
+
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品',
+  fields: [
+    {
+      name: 'price',
+      title: '价格',
+      type: 'currency',
+      isRequired: true
+    },
+    {
+      name: 'cost',
+      title: '成本',
+      type: 'currency',
+      isRequired: false
+    }
+  ]
+});
+```
+
+货币字段类型提供了专门的数值验证、货币格式显示，以及适合金额的查询操作符。
+
+## 字段类型组合使用
+
+在同一个模型中使用多个自定义字段类型：
+
+```typescript
+// 注册多个字段类型
+engine.fieldTyperRegistry.registerFieldTyper(new EmailFieldTyper());
+engine.fieldTyperRegistry.registerFieldTyper(new PhoneFieldTyper());
+engine.fieldTyperRegistry.registerFieldTyper(new CurrencyFieldTyper());
+
+// 在客户模型中使用不同的字段类型
+await engine.metaRegistry.updateOrRegister({
+  name: 'Customer',
+  title: '客户',
+  fields: [
+    {
+      name: 'name',
+      title: '客户名称',
+      type: 'string',           // 使用内置类型
+      isRequired: true
+    },
+    {
+      name: 'email',
+      title: '邮箱地址',
+      type: 'email',            // 使用自定义邮箱类型
+      isRequired: true
+    },
+    {
+      name: 'phone',
+      title: '联系电话',
+      type: 'phone',            // 使用自定义电话类型
+      isRequired: false
+    },
+    {
+      name: 'creditLimit',
+      title: '信用额度',
+      type: 'currency',         // 使用自定义货币类型
+      isRequired: false
+    }
+  ]
+});
+```
+
+这样设置后，每个字段都会使用对应类型的验证规则和UI组件，提供最佳的用户体验。
+
+## 验证字段类型效果
+
+测试自定义字段类型是否正常工作：
+
+```typescript
+// 创建客户数据，测试字段验证
+try {
+  const customer = await engine.datasource.createObject({
+    modelName: 'Customer',
+    values: {
+      name: '张三',
+      email: 'zhangsan@example.com',  // 邮箱格式验证
+      phone: '13812345678',           // 电话格式验证
+      creditLimit: 50000              // 货币金额验证
+    }
+  });
+  
+  console.log('客户创建成功:', customer);
+} catch (error) {
+  console.error('验证失败:', error.message);
+}
+```
+
+如果字段类型配置正确，Entity Engine 会自动应用相应的验证规则。输入无效数据时会抛出相应的验证错误。
+
+## 最佳实践
+
+### 何时创建自定义字段类型
+
+**格式验证需求**：当需要特定的数据格式验证时，如身份证号、银行卡号等。
+
+**专门UI组件**：当需要特殊的输入界面时，如颜色选择器、地址输入等。
+
+**查询操作定制**：当需要特定的搜索和筛选方式时。
+
+### 保持简单性
+
+字段类型应该专注于单一职责，避免在字段类型中实现复杂的业务逻辑。复杂的计算和业务规则应该在业务层处理。
+
+```typescript
+// ✅ 推荐：简单专注的字段类型
+class EmailFieldTyper {
+  get type() { return 'email'; }
+  getDefaultSchema(field) {
+    return z.string().email('请输入有效的邮箱地址');
+  }
+}
+
+// ❌ 避免：包含复杂业务逻辑的字段类型
+class ComplexFieldTyper {
+  getDefaultSchema(field) {
+    // 避免在字段类型中进行复杂的业务计算
+    return z.string().refine(async (value) => {
+      const result = await someComplexBusinessLogic(value);
+      return result.isValid;
+    });
+  }
+}
+```
+
+现在您已经掌握了如何创建和使用自定义字段类型。接下来可以学习如何在视图中展示这些字段。

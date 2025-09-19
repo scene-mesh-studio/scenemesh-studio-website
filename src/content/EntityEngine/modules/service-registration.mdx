@@ -1,0 +1,965 @@
+# 服务注册
+
+Entity Engine 通过 `serviceRegistry` 提供了简洁而强大的服务注册系统。您可以在模块的 `setupComponents` 阶段注册服务，在应用的任何地方获取和使用这些服务。服务注册是 Entity Engine 依赖注入系统的核心，让模块之间能够有效解耦和协作。
+
+## 基本服务注册
+
+### 注册简单服务
+
+最基本的服务注册方式是直接注册服务实例：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 注册简单的服务实例
+  serviceRegistry.register('EmailService', new EmailService(config.email));
+
+  // 注册配置服务
+  serviceRegistry.register('ConfigService', new ConfigService(config));
+
+  // 注册工具类
+  serviceRegistry.register('ValidationUtils', new ValidationUtils());
+
+  logger.info('Basic services registered successfully');
+}
+```
+
+### 注册依赖其他服务的服务
+
+当服务需要依赖其他服务时，先获取依赖，再创建和注册服务：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 获取依赖的服务
+  const dbService = serviceRegistry.get('DatabaseService');
+  const cacheService = serviceRegistry.get('CacheService');
+
+  // 注册需要依赖的服务
+  serviceRegistry.register('UserRepository', 
+    new UserRepository(dbService)
+  );
+
+  serviceRegistry.register('UserService', 
+    new UserService(dbService, cacheService)
+  );
+
+  serviceRegistry.register('AuthService', 
+    new AuthService(
+      serviceRegistry.get('UserService'),
+      config.auth
+    )
+  );
+
+  logger.info('Dependent services registered successfully');
+}
+```
+
+## 高级注册模式
+
+### 工厂函数注册
+
+使用工厂函数可以延迟服务的创建，适用于复杂的初始化逻辑：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 使用工厂函数注册服务
+  serviceRegistry.register('ReportService', () => {
+    // 在工厂函数中获取依赖
+    const userService = serviceRegistry.get('UserService');
+    const orderService = serviceRegistry.get('OrderService');
+    const paymentService = serviceRegistry.get('PaymentService');
+
+    // 创建复杂的服务实例
+    return new ReportService({
+      userService,
+      orderService,
+      paymentService,
+      templates: config.reportTemplates,
+      exportFormats: config.exportFormats
+    });
+  });
+
+  // 条件性创建的工厂函数
+  serviceRegistry.register('NotificationService', () => {
+    const emailService = serviceRegistry.get('EmailService');
+    const smsService = serviceRegistry.has('SmsService') 
+      ? serviceRegistry.get('SmsService') 
+      : null;
+
+    return new NotificationService(emailService, smsService);
+  });
+
+  logger.info('Factory-based services registered');
+}
+```
+
+### 条件注册
+
+根据配置或环境条件注册不同的服务实现：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+  const env = process.env.NODE_ENV || 'development';
+
+  // 根据配置选择存储实现
+  if (config.storage.type === 'redis') {
+    serviceRegistry.register('CacheService', 
+      new RedisCacheService(config.storage.redis)
+    );
+  } else if (config.storage.type === 'memory') {
+    serviceRegistry.register('CacheService', 
+      new MemoryCacheService(config.storage.memory)
+    );
+  } else {
+    serviceRegistry.register('CacheService', 
+      new NoCacheService()
+    );
+  }
+
+  // 根据环境注册不同的日志服务
+  if (env === 'production') {
+    serviceRegistry.register('LoggingService', 
+      new CloudLoggingService(config.logging.cloud)
+    );
+  } else if (env === 'test') {
+    serviceRegistry.register('LoggingService', 
+      new MockLoggingService()
+    );
+  } else {
+    serviceRegistry.register('LoggingService', 
+      new ConsoleLoggingService()
+    );
+  }
+
+  // 功能开关控制的服务注册
+  if (config.features.enableAnalytics) {
+    serviceRegistry.register('AnalyticsService', 
+      new AnalyticsService(config.analytics)
+    );
+  }
+
+  if (config.features.enableSearch) {
+    serviceRegistry.register('SearchService', 
+      new SearchService(config.search)
+    );
+  }
+
+  logger.info(`Services registered for ${env} environment`);
+}
+```
+
+## 服务命名约定
+
+### 标准命名模式
+
+采用一致的命名约定有助于服务管理和调试：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  // 按功能领域分组命名
+  
+  // 数据访问层
+  serviceRegistry.register('UserRepository', new UserRepository());
+  serviceRegistry.register('OrderRepository', new OrderRepository());
+  serviceRegistry.register('ProductRepository', new ProductRepository());
+
+  // 业务服务层
+  serviceRegistry.register('UserService', new UserService());
+  serviceRegistry.register('OrderService', new OrderService());
+  serviceRegistry.register('PaymentService', new PaymentService());
+
+  // 基础设施服务
+  serviceRegistry.register('DatabaseService', new DatabaseService());
+  serviceRegistry.register('CacheService', new CacheService());
+  serviceRegistry.register('EmailService', new EmailService());
+  serviceRegistry.register('LoggingService', new LoggingService());
+
+  // 工具和辅助服务
+  serviceRegistry.register('ValidationUtils', new ValidationUtils());
+  serviceRegistry.register('DateUtils', new DateUtils());
+  serviceRegistry.register('EncryptionUtils', new EncryptionUtils());
+
+  logger.info('Services registered with standard naming');
+}
+```
+
+### 版本化服务注册
+
+当需要支持多个版本的服务时：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 注册不同版本的 API 服务
+  serviceRegistry.register('PaymentService.v1', 
+    new PaymentServiceV1(config.payment.v1)
+  );
+  
+  serviceRegistry.register('PaymentService.v2', 
+    new PaymentServiceV2(config.payment.v2)
+  );
+
+  // 根据配置选择默认版本
+  const defaultPaymentVersion = config.payment.defaultVersion || 'v2';
+  const defaultPaymentService = serviceRegistry.get(`PaymentService.${defaultPaymentVersion}`);
+  
+  serviceRegistry.register('PaymentService', defaultPaymentService);
+
+  // 兼容性适配器
+  serviceRegistry.register('LegacyPaymentAdapter', 
+    new LegacyPaymentAdapter(
+      serviceRegistry.get('PaymentService.v2')
+    )
+  );
+
+  logger.info(`Payment services registered, default version: ${defaultPaymentVersion}`);
+}
+```
+
+## 服务覆盖和替换
+
+### 服务替换
+
+在特定条件下替换已注册的服务：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 首先注册基础实现
+  serviceRegistry.register('EmailService', new BaseEmailService());
+
+  // 根据配置决定是否使用高级实现
+  if (config.email.provider === 'sendgrid') {
+    // 替换为 SendGrid 实现
+    serviceRegistry.register('EmailService', 
+      new SendGridEmailService(config.email.sendgrid)
+    );
+    logger.info('Using SendGrid email service');
+  } else if (config.email.provider === 'mailgun') {
+    // 替换为 Mailgun 实现
+    serviceRegistry.register('EmailService', 
+      new MailgunEmailService(config.email.mailgun)
+    );
+    logger.info('Using Mailgun email service');
+  }
+
+  // 开发环境可能需要模拟服务
+  if (process.env.NODE_ENV === 'development' && config.email.mock) {
+    serviceRegistry.register('EmailService', new MockEmailService());
+    logger.info('Using mock email service for development');
+  }
+}
+```
+
+### 服务装饰器
+
+为现有服务添加额外功能：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 注册基础服务
+  serviceRegistry.register('UserService', new UserService());
+
+  // 根据配置添加缓存装饰器
+  if (config.cache.enabled) {
+    const baseUserService = serviceRegistry.get('UserService');
+    const cacheService = serviceRegistry.get('CacheService');
+    
+    serviceRegistry.register('UserService', 
+      new CachedUserService(baseUserService, cacheService)
+    );
+    logger.info('User service enhanced with caching');
+  }
+
+  // 添加日志装饰器
+  if (config.logging.enabled) {
+    const userService = serviceRegistry.get('UserService');
+    const loggingService = serviceRegistry.get('LoggingService');
+    
+    serviceRegistry.register('UserService', 
+      new LoggedUserService(userService, loggingService)
+    );
+    logger.info('User service enhanced with logging');
+  }
+
+  // 添加性能监控装饰器
+  if (config.monitoring.enabled) {
+    const userService = serviceRegistry.get('UserService');
+    const metricsService = serviceRegistry.get('MetricsService');
+    
+    serviceRegistry.register('UserService', 
+      new MonitoredUserService(userService, metricsService)
+    );
+    logger.info('User service enhanced with monitoring');
+  }
+}
+```
+
+## 批量服务注册
+
+### 配置驱动的批量注册
+
+使用配置文件驱动批量服务注册：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 定义服务注册配置
+  const serviceRegistrations = [
+    {
+      name: 'DatabaseService',
+      enabled: config.database.enabled,
+      factory: () => new DatabaseService(config.database),
+      dependencies: []
+    },
+    {
+      name: 'CacheService',
+      enabled: config.cache.enabled,
+      factory: () => new CacheService(config.cache),
+      dependencies: []
+    },
+    {
+      name: 'UserRepository',
+      enabled: true,
+      factory: () => new UserRepository(serviceRegistry.get('DatabaseService')),
+      dependencies: ['DatabaseService']
+    },
+    {
+      name: 'UserService',
+      enabled: true,
+      factory: () => new UserService(
+        serviceRegistry.get('UserRepository'),
+        serviceRegistry.get('CacheService')
+      ),
+      dependencies: ['UserRepository', 'CacheService']
+    }
+  ];
+
+  // 按依赖顺序注册服务
+  const registeredServices = [];
+  
+  for (const registration of serviceRegistrations) {
+    if (!registration.enabled) {
+      continue;
+    }
+
+    // 检查依赖是否满足
+    const missingDeps = registration.dependencies.filter(
+      dep => !registeredServices.includes(dep)
+    );
+    
+    if (missingDeps.length > 0) {
+      logger.warn(`Skipping ${registration.name}: missing dependencies ${missingDeps.join(', ')}`);
+      continue;
+    }
+
+    try {
+      const service = registration.factory();
+      serviceRegistry.register(registration.name, service);
+      registeredServices.push(registration.name);
+      logger.info(`Registered service: ${registration.name}`);
+    } catch (error) {
+      logger.error(`Failed to register ${registration.name}:`, error);
+      
+      // 某些服务是关键的，注册失败应该抛出错误
+      if (registration.name === 'DatabaseService') {
+        throw error;
+      }
+    }
+  }
+
+  logger.info(`Batch registration completed: ${registeredServices.length} services`);
+}
+```
+
+### 模块化服务注册
+
+将服务注册逻辑分解为多个功能模块：
+
+```typescript
+class CoreServicesRegistrar {
+  static async register(serviceRegistry, config, logger) {
+    serviceRegistry.register('DatabaseService', 
+      new DatabaseService(config.database)
+    );
+    
+    serviceRegistry.register('CacheService', 
+      new CacheService(config.cache)
+    );
+    
+    serviceRegistry.register('LoggingService', 
+      new LoggingService(config.logging)
+    );
+
+    logger.info('Core services registered');
+  }
+}
+
+class BusinessServicesRegistrar {
+  static async register(serviceRegistry, config, logger) {
+    const dbService = serviceRegistry.get('DatabaseService');
+    const cacheService = serviceRegistry.get('CacheService');
+
+    serviceRegistry.register('UserRepository', 
+      new UserRepository(dbService)
+    );
+    
+    serviceRegistry.register('UserService', 
+      new UserService(serviceRegistry.get('UserRepository'), cacheService)
+    );
+    
+    serviceRegistry.register('OrderService', 
+      new OrderService(dbService, serviceRegistry.get('UserService'))
+    );
+
+    logger.info('Business services registered');
+  }
+}
+
+class ExternalServicesRegistrar {
+  static async register(serviceRegistry, config, logger) {
+    if (config.features.enableEmail) {
+      serviceRegistry.register('EmailService', 
+        new EmailService(config.email)
+      );
+    }
+
+    if (config.features.enableSMS) {
+      serviceRegistry.register('SMSService', 
+        new SMSService(config.sms)
+      );
+    }
+
+    if (config.features.enablePush) {
+      serviceRegistry.register('PushService', 
+        new PushService(config.push)
+      );
+    }
+
+    logger.info('External services registered');
+  }
+}
+
+// 在模块中使用
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 按顺序注册不同类型的服务
+  await CoreServicesRegistrar.register(serviceRegistry, config, logger);
+  await BusinessServicesRegistrar.register(serviceRegistry, config, logger);
+  await ExternalServicesRegistrar.register(serviceRegistry, config, logger);
+
+  logger.info('All service registrations completed');
+}
+```
+
+## 服务健康检查
+
+### 基础健康检查
+
+为关键服务实现健康检查：
+
+```typescript
+class DatabaseService {
+  constructor(private config: any) {}
+
+  async isHealthy() {
+    try {
+      await this.query('SELECT 1');
+      return { healthy: true, message: 'Database connection is active' };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        message: `Database connection failed: ${error.message}` 
+      };
+    }
+  }
+
+  async query(sql: string) {
+    // 数据库查询实现
+  }
+}
+
+class CacheService {
+  constructor(private config: any) {}
+
+  async isHealthy() {
+    try {
+      const testKey = '__health_check__';
+      const testValue = Date.now().toString();
+      
+      await this.set(testKey, testValue, 1);
+      const retrieved = await this.get(testKey);
+      
+      return {
+        healthy: retrieved === testValue,
+        message: retrieved === testValue 
+          ? 'Cache read/write operations working' 
+          : 'Cache read/write operations failed'
+      };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        message: `Cache health check failed: ${error.message}` 
+      };
+    }
+  }
+
+  async set(key: string, value: any, ttl?: number) {
+    // 缓存设置实现
+  }
+
+  async get(key: string) {
+    // 缓存获取实现
+  }
+}
+
+// 注册服务时添加健康检查
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  const dbService = new DatabaseService(config.database);
+  const cacheService = new CacheService(config.cache);
+
+  serviceRegistry.register('DatabaseService', dbService);
+  serviceRegistry.register('CacheService', cacheService);
+
+  // 定期执行健康检查
+  setInterval(async () => {
+    const dbHealth = await dbService.isHealthy();
+    const cacheHealth = await cacheService.isHealthy();
+
+    if (!dbHealth.healthy) {
+      logger.error('Database health check failed:', dbHealth.message);
+    }
+
+    if (!cacheHealth.healthy) {
+      logger.warn('Cache health check failed:', cacheHealth.message);
+    }
+  }, 30000); // 每30秒检查一次
+
+  logger.info('Services registered with health checks');
+}
+```
+
+### 服务可用性监控
+
+监控服务的可用性和性能：
+
+```typescript
+class ServiceMonitor {
+  constructor(private serviceRegistry: any, private logger: any) {}
+
+  async checkAllServices() {
+    const services = [
+      'DatabaseService',
+      'CacheService',
+      'EmailService',
+      'UserService'
+    ];
+
+    const results = {};
+
+    for (const serviceName of services) {
+      if (this.serviceRegistry.has(serviceName)) {
+        const service = this.serviceRegistry.get(serviceName);
+        results[serviceName] = await this.checkService(service, serviceName);
+      } else {
+        results[serviceName] = { 
+          available: false, 
+          message: 'Service not registered' 
+        };
+      }
+    }
+
+    return results;
+  }
+
+  private async checkService(service: any, serviceName: string) {
+    try {
+      // 检查服务是否有健康检查方法
+      if (typeof service.isHealthy === 'function') {
+        const healthResult = await service.isHealthy();
+        return {
+          available: healthResult.healthy,
+          message: healthResult.message,
+          type: 'health_check'
+        };
+      }
+
+      // 基础可用性检查
+      return {
+        available: service !== null && service !== undefined,
+        message: 'Service instance exists',
+        type: 'basic_check'
+      };
+    } catch (error) {
+      return {
+        available: false,
+        message: `Health check error: ${error.message}`,
+        type: 'error'
+      };
+    }
+  }
+}
+
+// 在模块中使用服务监控
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  // ... 注册服务 ...
+
+  // 创建服务监控器
+  const serviceMonitor = new ServiceMonitor(serviceRegistry, logger);
+
+  // 定期监控服务健康状态
+  setInterval(async () => {
+    const healthResults = await serviceMonitor.checkAllServices();
+    
+    const unhealthyServices = Object.entries(healthResults)
+      .filter(([_, result]: [string, any]) => !result.available)
+      .map(([name, _]) => name);
+
+    if (unhealthyServices.length > 0) {
+      logger.warn(`Unhealthy services detected: ${unhealthyServices.join(', ')}`);
+    }
+
+    // 记录详细的健康状态
+    logger.debug('Service health check results:', healthResults);
+  }, 60000); // 每分钟检查一次
+
+  serviceRegistry.register('ServiceMonitor', serviceMonitor);
+  logger.info('Service monitoring initialized');
+}
+```
+
+## 测试中的服务注册
+
+### 测试用服务替换
+
+在测试环境中替换真实服务为模拟服务：
+
+```typescript
+// 模拟服务实现
+class MockEmailService {
+  private sentEmails: any[] = [];
+
+  async send(to: string, subject: string, content: string) {
+    this.sentEmails.push({
+      to, subject, content,
+      sentAt: new Date()
+    });
+    return { messageId: `mock-${Date.now()}` };
+  }
+
+  getSentEmails() {
+    return [...this.sentEmails];
+  }
+
+  clearSentEmails() {
+    this.sentEmails = [];
+  }
+
+  async isHealthy() {
+    return { healthy: true, message: 'Mock email service is always healthy' };
+  }
+}
+
+class MockDatabaseService {
+  private tables = new Map<string, any[]>();
+
+  async query(sql: string) {
+    // 简单的模拟查询实现
+    if (sql === 'SELECT 1') {
+      return [{ result: 1 }];
+    }
+    return [];
+  }
+
+  async findOne(table: string, conditions: any) {
+    const records = this.tables.get(table) || [];
+    return records.find(record => 
+      Object.entries(conditions).every(([key, value]) => record[key] === value)
+    );
+  }
+
+  async insert(table: string, data: any) {
+    if (!this.tables.has(table)) {
+      this.tables.set(table, []);
+    }
+    
+    const record = { ...data, id: `mock-${Date.now()}` };
+    this.tables.get(table)!.push(record);
+    return record;
+  }
+
+  clearAllTables() {
+    this.tables.clear();
+  }
+
+  async isHealthy() {
+    return { healthy: true, message: 'Mock database is always healthy' };
+  }
+}
+
+// 测试配置
+describe('UserService Integration Tests', () => {
+  let serviceRegistry: any;
+  let mockDb: MockDatabaseService;
+  let mockEmail: MockEmailService;
+
+  beforeEach(() => {
+    // 创建测试用的服务注册表
+    serviceRegistry = new Map();
+    serviceRegistry.register = (name: string, service: any) => {
+      serviceRegistry.set(name, service);
+    };
+    serviceRegistry.get = (name: string) => {
+      return serviceRegistry.get(name);
+    };
+    serviceRegistry.has = (name: string) => {
+      return serviceRegistry.has(name);
+    };
+
+    // 注册模拟服务
+    mockDb = new MockDatabaseService();
+    mockEmail = new MockEmailService();
+    
+    serviceRegistry.register('DatabaseService', mockDb);
+    serviceRegistry.register('EmailService', mockEmail);
+
+    // 注册被测试的服务
+    serviceRegistry.register('UserService', 
+      new UserService(mockDb, mockEmail)
+    );
+  });
+
+  afterEach(() => {
+    mockDb.clearAllTables();
+    mockEmail.clearSentEmails();
+  });
+
+  it('should register user and send welcome email', async () => {
+    const userService = serviceRegistry.get('UserService');
+    
+    const userData = {
+      username: 'testuser',
+      email: 'test@example.com',
+      password: 'password123'
+    };
+
+    const user = await userService.register(userData);
+    
+    expect(user.username).toBe('testuser');
+    expect(mockEmail.getSentEmails()).toHaveLength(1);
+    expect(mockEmail.getSentEmails()[0].to).toBe('test@example.com');
+  });
+});
+```
+
+## 服务注册最佳实践
+
+### 1. 遵循单一职责原则
+
+每个服务应该专注于单一职责：
+
+```typescript
+// 好的做法 - 职责明确的服务
+class UserAuthService {
+  // 只处理用户认证相关逻辑
+  async authenticate(username: string, password: string) {}
+  async generateToken(user: any) {}
+  async validateToken(token: string) {}
+}
+
+class UserProfileService {
+  // 只处理用户资料相关逻辑
+  async getProfile(userId: string) {}
+  async updateProfile(userId: string, data: any) {}
+  async uploadAvatar(userId: string, file: any) {}
+}
+
+// 避免的做法 - 职责过于宽泛
+class UserService {
+  // 包含了太多不同的职责
+  async authenticate() {} // 认证
+  async getProfile() {} // 资料管理
+  async sendEmail() {} // 邮件发送
+  async generateReport() {} // 报表生成
+  // ... 更多职责
+}
+```
+
+### 2. 使用接口进行抽象
+
+通过接口定义服务契约，便于测试和替换：
+
+```typescript
+// 定义服务接口
+interface IEmailService {
+  send(to: string, subject: string, content: string): Promise<any>;
+  isHealthy(): Promise<{ healthy: boolean; message: string }>;
+}
+
+// 实现具体的服务
+class SMTPEmailService implements IEmailService {
+  constructor(private config: any) {}
+  
+  async send(to: string, subject: string, content: string) {
+    // SMTP 实现
+  }
+  
+  async isHealthy() {
+    // SMTP 健康检查
+  }
+}
+
+class SendGridEmailService implements IEmailService {
+  constructor(private apiKey: string) {}
+  
+  async send(to: string, subject: string, content: string) {
+    // SendGrid 实现
+  }
+  
+  async isHealthy() {
+    // SendGrid 健康检查
+  }
+}
+
+// 注册时使用接口类型
+async setupComponents({ serviceRegistry, configManager }) {
+  const config = configManager.get(this.info.name);
+  
+  let emailService: IEmailService;
+  
+  if (config.email.provider === 'smtp') {
+    emailService = new SMTPEmailService(config.email.smtp);
+  } else {
+    emailService = new SendGridEmailService(config.email.apiKey);
+  }
+  
+  serviceRegistry.register('EmailService', emailService);
+}
+```
+
+### 3. 合理的服务粒度
+
+避免服务过于细化或过于粗糙：
+
+```typescript
+// 适中的服务粒度
+async setupComponents({ serviceRegistry, configManager }) {
+  // 数据访问层 - 按实体分组
+  serviceRegistry.register('UserRepository', new UserRepository());
+  serviceRegistry.register('OrderRepository', new OrderRepository());
+  serviceRegistry.register('ProductRepository', new ProductRepository());
+
+  // 业务服务层 - 按业务领域分组
+  serviceRegistry.register('UserManagementService', new UserManagementService());
+  serviceRegistry.register('OrderProcessingService', new OrderProcessingService());
+  serviceRegistry.register('InventoryService', new InventoryService());
+
+  // 基础设施服务 - 按技术功能分组
+  serviceRegistry.register('NotificationService', new NotificationService());
+  serviceRegistry.register('PaymentGateway', new PaymentGateway());
+  serviceRegistry.register('FileStorageService', new FileStorageService());
+}
+```
+
+### 4. 错误处理和回退机制
+
+为服务注册提供错误处理和回退机制：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 关键服务注册失败应该抛出错误
+  try {
+    serviceRegistry.register('DatabaseService', 
+      new DatabaseService(config.database)
+    );
+  } catch (error) {
+    logger.error('Failed to register critical DatabaseService:', error);
+    throw error; // 阻止模块启动
+  }
+
+  // 可选服务注册失败应提供回退方案
+  try {
+    serviceRegistry.register('CacheService', 
+      new RedisCacheService(config.redis)
+    );
+    logger.info('Redis cache service registered');
+  } catch (error) {
+    logger.warn('Failed to register Redis cache, using memory cache:', error);
+    serviceRegistry.register('CacheService', 
+      new MemoryCacheService()
+    );
+  }
+
+  // 外部服务注册失败时使用模拟实现
+  try {
+    serviceRegistry.register('EmailService', 
+      new EmailService(config.email)
+    );
+  } catch (error) {
+    logger.warn('Failed to register email service, using mock:', error);
+    serviceRegistry.register('EmailService', new MockEmailService());
+  }
+}
+```
+
+### 5. 服务配置验证
+
+在注册服务前验证配置：
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 验证数据库配置
+  if (!config.database.host || !config.database.port) {
+    throw new Error('Database host and port are required');
+  }
+
+  // 验证邮件服务配置
+  if (config.email.enabled) {
+    if (!config.email.smtp.host) {
+      throw new Error('SMTP host is required when email is enabled');
+    }
+    
+    serviceRegistry.register('EmailService', 
+      new EmailService(config.email.smtp)
+    );
+  }
+
+  // 验证缓存配置
+  if (config.cache.type === 'redis') {
+    if (!config.cache.redis.url) {
+      logger.warn('Redis URL not configured, falling back to memory cache');
+      serviceRegistry.register('CacheService', new MemoryCacheService());
+    } else {
+      serviceRegistry.register('CacheService', 
+        new RedisCacheService(config.cache.redis)
+      );
+    }
+  }
+
+  logger.info('All service configurations validated and registered');
+}
+```
+
+## 下一步
+
+了解服务注册后，继续学习：
+
+- [配置管理](./configuration-management) - 学习如何管理模块配置，为服务提供灵活的配置支持

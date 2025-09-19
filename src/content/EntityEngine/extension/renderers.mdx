@@ -1,0 +1,1144 @@
+# 自定义渲染器
+
+Entity Engine 提供了灵活的渲染器系统，允许开发者自定义实体数据的显示方式。渲染器负责将内部数据结构转换为用户界面可显示的格式，支持多种输出格式和样式。
+
+## 渲染器架构
+
+### 核心接口
+
+```typescript
+/**
+ * 渲染器接口
+ */
+interface IRenderer {
+  // 基础信息
+  name: string;
+  displayName: string;
+  description?: string;
+  version: string;
+  
+  // 支持的类型
+  supportedTypes: string[];
+  supportedFormats: RenderFormat[];
+  
+  // 渲染方法
+  render(context: RenderContext): Promise<RenderedContent>;
+  canRender(context: RenderContext): boolean;
+  getPriority(context: RenderContext): number;
+  
+  // 配置
+  getDefaultOptions(): RendererOptions;
+  validateOptions(options: RendererOptions): ValidationResult;
+}
+
+/**
+ * 渲染上下文
+ */
+interface RenderContext {
+  // 数据
+  value: any;
+  fieldType: string;
+  entityType: string;
+  fieldName: string;
+  
+  // 渲染配置
+  format: RenderFormat;
+  options: RendererOptions;
+  theme?: RenderTheme;
+  locale?: string;
+  
+  // 上下文信息
+  viewContext: ViewContext;
+  userContext: UserContext;
+  entityContext: EntityContext;
+  
+  // 辅助方法
+  helpers: RenderHelpers;
+}
+
+/**
+ * 渲染内容
+ */
+interface RenderedContent {
+  type: ContentType;
+  content: string | ReactElement | VNode;
+  metadata?: ContentMetadata;
+  assets?: ContentAsset[];
+  dependencies?: string[];
+}
+
+/**
+ * 渲染格式
+ */
+enum RenderFormat {
+  HTML = 'html',
+  TEXT = 'text',
+  MARKDOWN = 'markdown',
+  JSON = 'json',
+  XML = 'xml',
+  PDF = 'pdf',
+  REACT = 'react',
+  VUE = 'vue'
+}
+
+/**
+ * 内容类型
+ */
+enum ContentType {
+  TEXT = 'text',
+  HTML = 'html',
+  COMPONENT = 'component',
+  TEMPLATE = 'template',
+  BINARY = 'binary'
+}
+```
+
+### 渲染器注册表
+
+```typescript
+/**
+ * 渲染器注册表
+ */
+class RendererRegistry {
+  private renderers = new Map<string, IRenderer>();
+  private typeRenderers = new Map<string, IRenderer[]>();
+  private formatRenderers = new Map<RenderFormat, IRenderer[]>();
+  
+  register(renderer: IRenderer): void {
+    // 验证渲染器
+    this.validateRenderer(renderer);
+    
+    // 检查名称冲突
+    if (this.renderers.has(renderer.name)) {
+      throw new RendererError(`Renderer '${renderer.name}' already registered`);
+    }
+    
+    // 注册渲染器
+    this.renderers.set(renderer.name, renderer);
+    
+    // 按类型索引
+    for (const type of renderer.supportedTypes) {
+      if (!this.typeRenderers.has(type)) {
+        this.typeRenderers.set(type, []);
+      }
+      this.typeRenderers.get(type)!.push(renderer);
+    }
+    
+    // 按格式索引
+    for (const format of renderer.supportedFormats) {
+      if (!this.formatRenderers.has(format)) {
+        this.formatRenderers.set(format, []);
+      }
+      this.formatRenderers.get(format)!.push(renderer);
+    }
+    
+    // 触发事件
+    this.emitEvent('rendererRegistered', { renderer });
+  }
+  
+  unregister(name: string): boolean {
+    const renderer = this.renderers.get(name);
+    if (!renderer) return false;
+    
+    // 从所有索引中移除
+    this.renderers.delete(name);
+    
+    for (const type of renderer.supportedTypes) {
+      const typeList = this.typeRenderers.get(type);
+      if (typeList) {
+        const index = typeList.indexOf(renderer);
+        if (index > -1) typeList.splice(index, 1);
+      }
+    }
+    
+    for (const format of renderer.supportedFormats) {
+      const formatList = this.formatRenderers.get(format);
+      if (formatList) {
+        const index = formatList.indexOf(renderer);
+        if (index > -1) formatList.splice(index, 1);
+      }
+    }
+    
+    this.emitEvent('rendererUnregistered', { renderer });
+    return true;
+  }
+  
+  findRenderer(context: RenderContext): IRenderer | null {
+    // 获取候选渲染器
+    const candidates = this.getCandidates(context);
+    if (candidates.length === 0) return null;
+    
+    // 过滤可用的渲染器
+    const available = candidates.filter(renderer => renderer.canRender(context));
+    if (available.length === 0) return null;
+    
+    // 按优先级排序
+    available.sort((a, b) => b.getPriority(context) - a.getPriority(context));
+    
+    return available[0];
+  }
+  
+  async render(context: RenderContext): Promise<RenderedContent> {
+    const renderer = this.findRenderer(context);
+    if (!renderer) {
+      throw new RendererError(`No renderer found for type '${context.fieldType}' and format '${context.format}'`);
+    }
+    
+    try {
+      return await renderer.render(context);
+    } catch (error) {
+      throw new RendererError(`Rendering failed: ${error.message}`, error);
+    }
+  }
+  
+  list(): IRenderer[] {
+    return Array.from(this.renderers.values());
+  }
+  
+  get(name: string): IRenderer | undefined {
+    return this.renderers.get(name);
+  }
+  
+  getByType(type: string): IRenderer[] {
+    return this.typeRenderers.get(type) || [];
+  }
+  
+  getByFormat(format: RenderFormat): IRenderer[] {
+    return this.formatRenderers.get(format) || [];
+  }
+  
+  private getCandidates(context: RenderContext): IRenderer[] {
+    const byType = this.typeRenderers.get(context.fieldType) || [];
+    const byFormat = this.formatRenderers.get(context.format) || [];
+    
+    // 返回同时支持类型和格式的渲染器
+    return byType.filter(renderer => byFormat.includes(renderer));
+  }
+  
+  private validateRenderer(renderer: IRenderer): void {
+    const errors: string[] = [];
+    
+    if (!renderer.name) {
+      errors.push('Renderer must have a name');
+    }
+    
+    if (!renderer.supportedTypes || renderer.supportedTypes.length === 0) {
+      errors.push('Renderer must support at least one type');
+    }
+    
+    if (!renderer.supportedFormats || renderer.supportedFormats.length === 0) {
+      errors.push('Renderer must support at least one format');
+    }
+    
+    if (typeof renderer.render !== 'function') {
+      errors.push('Renderer must implement render method');
+    }
+    
+    if (typeof renderer.canRender !== 'function') {
+      errors.push('Renderer must implement canRender method');
+    }
+    
+    if (errors.length > 0) {
+      throw new RendererError(`Invalid renderer: ${errors.join(', ')}`);
+    }
+  }
+  
+  private emitEvent(eventName: string, data: any): void {
+    // 事件发射逻辑
+  }
+}
+```
+
+## 自定义渲染器示例
+
+### 富文本渲染器
+
+```typescript
+/**
+ * 富文本渲染器
+ */
+class RichTextRenderer implements IRenderer {
+  name = 'rich-text';
+  displayName = '富文本渲染器';
+  description = '渲染富文本内容为HTML或React组件';
+  version = '1.0.0';
+  
+  supportedTypes = ['rich_text', 'html', 'markdown'];
+  supportedFormats = [RenderFormat.HTML, RenderFormat.REACT, RenderFormat.TEXT];
+  
+  async render(context: RenderContext): Promise<RenderedContent> {
+    const { value, format, options } = context;
+    
+    if (!value) {
+      return this.renderEmpty(context);
+    }
+    
+    switch (format) {
+      case RenderFormat.HTML:
+        return await this.renderHTML(value, options, context);
+      case RenderFormat.REACT:
+        return await this.renderReact(value, options, context);
+      case RenderFormat.TEXT:
+        return await this.renderText(value, options, context);
+      default:
+        throw new Error(`Unsupported format: ${format}`);
+    }
+  }
+  
+  canRender(context: RenderContext): boolean {
+    return this.supportedTypes.includes(context.fieldType) &&
+           this.supportedFormats.includes(context.format) &&
+           this.isValidContent(context.value);
+  }
+  
+  getPriority(context: RenderContext): number {
+    // 富文本字段优先级最高
+    if (context.fieldType === 'rich_text') return 100;
+    if (context.fieldType === 'html') return 90;
+    if (context.fieldType === 'markdown') return 80;
+    return 0;
+  }
+  
+  getDefaultOptions(): RendererOptions {
+    return {
+      sanitize: true,
+      allowedTags: [
+        'p', 'div', 'span', 'br', 'strong', 'em', 'u', 's',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li',
+        'a', 'img',
+        'blockquote', 'pre', 'code',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td'
+      ],
+      allowedAttributes: {
+        'a': ['href', 'title', 'target'],
+        'img': ['src', 'alt', 'width', 'height'],
+        'table': ['class'],
+        'td': ['colspan', 'rowspan'],
+        'th': ['colspan', 'rowspan']
+      },
+      maxLength: 50000,
+      enableLazyLoading: true,
+      linkTarget: '_blank',
+      imageSize: 'medium'
+    };
+  }
+  
+  validateOptions(options: RendererOptions): ValidationResult {
+    const errors: string[] = [];
+    
+    if (options.maxLength && (typeof options.maxLength !== 'number' || options.maxLength < 0)) {
+      errors.push('maxLength must be a non-negative number');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private async renderHTML(value: any, options: RendererOptions, context: RenderContext): Promise<RenderedContent> {
+    let html = this.processContent(value, context.fieldType);
+    
+    // 内容清理和安全检查
+    if (options.sanitize) {
+      html = this.sanitizeHTML(html, options);
+    }
+    
+    // 图片懒加载
+    if (options.enableLazyLoading) {
+      html = this.enableLazyLoading(html);
+    }
+    
+    // 链接处理
+    if (options.linkTarget) {
+      html = this.processLinks(html, options.linkTarget);
+    }
+    
+    return {
+      type: ContentType.HTML,
+      content: html,
+      metadata: {
+        characterCount: this.getTextLength(html),
+        wordCount: this.getWordCount(html),
+        readingTime: this.calculateReadingTime(html)
+      },
+      assets: this.extractAssets(html)
+    };
+  }
+  
+  private async renderReact(value: any, options: RendererOptions, context: RenderContext): Promise<RenderedContent> {
+    const html = await this.renderHTML(value, options, context);
+    
+    // 转换为React组件
+    const ReactComponent = () => {
+      return React.createElement('div', {
+        className: 'rich-text-content',
+        dangerouslySetInnerHTML: { __html: html.content as string }
+      });
+    };
+    
+    return {
+      type: ContentType.COMPONENT,
+      content: ReactComponent,
+      metadata: html.metadata,
+      assets: html.assets,
+      dependencies: ['react']
+    };
+  }
+  
+  private async renderText(value: any, options: RendererOptions, context: RenderContext): Promise<RenderedContent> {
+    let html = this.processContent(value, context.fieldType);
+    
+    // 提取纯文本
+    const text = this.stripHTML(html);
+    
+    // 长度限制
+    let truncated = text;
+    if (options.maxLength && text.length > options.maxLength) {
+      truncated = text.substring(0, options.maxLength) + '...';
+    }
+    
+    return {
+      type: ContentType.TEXT,
+      content: truncated,
+      metadata: {
+        originalLength: text.length,
+        truncated: text.length > (options.maxLength || Infinity)
+      }
+    };
+  }
+  
+  private renderEmpty(context: RenderContext): RenderedContent {
+    const emptyContent = context.options.emptyText || '';
+    
+    return {
+      type: ContentType.TEXT,
+      content: emptyContent,
+      metadata: { empty: true }
+    };
+  }
+  
+  private processContent(value: any, fieldType: string): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    if (typeof value === 'object' && value.html) {
+      return value.html;
+    }
+    
+    if (fieldType === 'markdown' && typeof value === 'string') {
+      return this.markdownToHTML(value);
+    }
+    
+    return String(value || '');
+  }
+  
+  private sanitizeHTML(html: string, options: RendererOptions): string {
+    // 使用DOMPurify或类似库进行HTML清理
+    // 这里是简化实现
+    const allowedTags = options.allowedTags || this.getDefaultOptions().allowedTags!;
+    const allowedAttributes = options.allowedAttributes || this.getDefaultOptions().allowedAttributes!;
+    
+    // 实际项目中应使用专业的HTML清理库
+    return html; // 简化实现
+  }
+  
+  private enableLazyLoading(html: string): string {
+    return html.replace(/<img([^>]*?)src=/g, '<img$1loading="lazy" src=');
+  }
+  
+  private processLinks(html: string, target: string): string {
+    return html.replace(/<a([^>]*?)>/g, `<a$1 target="${target}" rel="noopener noreferrer">`);
+  }
+  
+  private getTextLength(html: string): number {
+    return this.stripHTML(html).length;
+  }
+  
+  private getWordCount(html: string): number {
+    const text = this.stripHTML(html);
+    return text.split(/\s+/).filter(word => word.length > 0).length;
+  }
+  
+  private calculateReadingTime(html: string): number {
+    const wordCount = this.getWordCount(html);
+    return Math.ceil(wordCount / 200); // 假设每分钟200词
+  }
+  
+  private stripHTML(html: string): string {
+    return html.replace(/<[^>]*>/g, '');
+  }
+  
+  private extractAssets(html: string): ContentAsset[] {
+    const assets: ContentAsset[] = [];
+    
+    // 提取图片
+    const imgMatches = html.matchAll(/<img[^>]+src="([^"]+)"/g);
+    for (const match of imgMatches) {
+      assets.push({
+        type: 'image',
+        url: match[1],
+        source: 'content'
+      });
+    }
+    
+    return assets;
+  }
+  
+  private markdownToHTML(markdown: string): string {
+    // 使用markdown解析库，这里是简化实现
+    return markdown
+      .replace(/^# (.+$)/gim, '<h1>$1</h1>')
+      .replace(/^## (.+$)/gim, '<h2>$1</h2>')
+      .replace(/^### (.+$)/gim, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>')
+      .replace(/\n/g, '<br>');
+  }
+  
+  private isValidContent(value: any): boolean {
+    if (value == null) return true;
+    if (typeof value === 'string') return true;
+    if (typeof value === 'object' && value.html) return true;
+    return false;
+  }
+}
+```
+
+### 数据表格渲染器
+
+```typescript
+/**
+ * 数据表格渲染器
+ */
+class DataTableRenderer implements IRenderer {
+  name = 'data-table';
+  displayName = '数据表格渲染器';
+  description = '将数组数据渲染为表格格式';
+  version = '1.0.0';
+  
+  supportedTypes = ['array', 'json'];
+  supportedFormats = [RenderFormat.HTML, RenderFormat.REACT, RenderFormat.MARKDOWN];
+  
+  async render(context: RenderContext): Promise<RenderedContent> {
+    const { value, format, options } = context;
+    
+    if (!Array.isArray(value) || value.length === 0) {
+      return this.renderEmpty(context);
+    }
+    
+    const tableData = this.prepareTableData(value, options);
+    
+    switch (format) {
+      case RenderFormat.HTML:
+        return this.renderHTMLTable(tableData, options, context);
+      case RenderFormat.REACT:
+        return this.renderReactTable(tableData, options, context);
+      case RenderFormat.MARKDOWN:
+        return this.renderMarkdownTable(tableData, options, context);
+      default:
+        throw new Error(`Unsupported format: ${format}`);
+    }
+  }
+  
+  canRender(context: RenderContext): boolean {
+    const { value, fieldType } = context;
+    
+    if (!this.supportedTypes.includes(fieldType)) return false;
+    if (!this.supportedFormats.includes(context.format)) return false;
+    
+    // 检查是否为表格数据
+    return Array.isArray(value) && this.isTableData(value);
+  }
+  
+  getPriority(context: RenderContext): number {
+    if (this.isTableData(context.value)) return 90;
+    return 0;
+  }
+  
+  getDefaultOptions(): RendererOptions {
+    return {
+      maxRows: 100,
+      maxColumns: 20,
+      enableSorting: true,
+      enableFiltering: true,
+      enablePagination: true,
+      pageSize: 25,
+      showHeaders: true,
+      striped: true,
+      bordered: true,
+      compact: false,
+      responsive: true,
+      exportable: false
+    };
+  }
+  
+  validateOptions(options: RendererOptions): ValidationResult {
+    const errors: string[] = [];
+    
+    if (options.maxRows && (typeof options.maxRows !== 'number' || options.maxRows < 1)) {
+      errors.push('maxRows must be a positive number');
+    }
+    
+    if (options.pageSize && (typeof options.pageSize !== 'number' || options.pageSize < 1)) {
+      errors.push('pageSize must be a positive number');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  private prepareTableData(data: any[], options: RendererOptions): TableData {
+    // 获取列定义
+    const columns = this.extractColumns(data, options);
+    
+    // 处理行数据
+    let rows = data.map(item => this.processRow(item, columns));
+    
+    // 应用行数限制
+    if (options.maxRows && rows.length > options.maxRows) {
+      rows = rows.slice(0, options.maxRows);
+    }
+    
+    return {
+      columns,
+      rows,
+      totalRows: data.length,
+      metadata: {
+        truncated: options.maxRows && data.length > options.maxRows
+      }
+    };
+  }
+  
+  private extractColumns(data: any[], options: RendererOptions): TableColumn[] {
+    if (data.length === 0) return [];
+    
+    const columnSet = new Set<string>();
+    
+    // 收集所有可能的列
+    data.forEach(item => {
+      if (typeof item === 'object' && item !== null) {
+        Object.keys(item).forEach(key => columnSet.add(key));
+      }
+    });
+    
+    let columns = Array.from(columnSet);
+    
+    // 应用列数限制
+    if (options.maxColumns && columns.length > options.maxColumns) {
+      columns = columns.slice(0, options.maxColumns);
+    }
+    
+    return columns.map(name => ({
+      name,
+      displayName: this.formatColumnName(name),
+      type: this.inferColumnType(data, name),
+      sortable: options.enableSorting !== false,
+      filterable: options.enableFiltering !== false
+    }));
+  }
+  
+  private processRow(item: any, columns: TableColumn[]): TableRow {
+    const cells = columns.map(column => ({
+      column: column.name,
+      value: item[column.name],
+      displayValue: this.formatCellValue(item[column.name], column.type)
+    }));
+    
+    return {
+      id: item.id || this.generateRowId(item),
+      cells,
+      metadata: {}
+    };
+  }
+  
+  private renderHTMLTable(tableData: TableData, options: RendererOptions, context: RenderContext): RenderedContent {
+    const cssClasses = this.buildCSSClasses(options);
+    
+    let html = `<table class="${cssClasses}">`;
+    
+    // 表头
+    if (options.showHeaders) {
+      html += '<thead><tr>';
+      tableData.columns.forEach(column => {
+        html += `<th data-column="${column.name}">${this.escapeHTML(column.displayName)}</th>`;
+      });
+      html += '</tr></thead>';
+    }
+    
+    // 表体
+    html += '<tbody>';
+    tableData.rows.forEach((row, index) => {
+      const rowClass = options.striped && index % 2 === 1 ? ' class="striped"' : '';
+      html += `<tr${rowClass}>`;
+      
+      row.cells.forEach(cell => {
+        html += `<td data-column="${cell.column}">${this.escapeHTML(cell.displayValue)}</td>`;
+      });
+      
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    
+    // 分页信息
+    if (tableData.metadata.truncated) {
+      html += `<div class="table-info">显示前 ${tableData.rows.length} 行，共 ${tableData.totalRows} 行</div>`;
+    }
+    
+    return {
+      type: ContentType.HTML,
+      content: html,
+      metadata: {
+        rows: tableData.rows.length,
+        columns: tableData.columns.length,
+        truncated: tableData.metadata.truncated
+      },
+      assets: this.getTableCSS()
+    };
+  }
+  
+  private renderReactTable(tableData: TableData, options: RendererOptions, context: RenderContext): RenderedContent {
+    const TableComponent = () => {
+      const [sortColumn, setSortColumn] = React.useState<string | null>(null);
+      const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
+      const [currentPage, setCurrentPage] = React.useState(0);
+      
+      const sortedData = React.useMemo(() => {
+        if (!sortColumn) return tableData.rows;
+        
+        return [...tableData.rows].sort((a, b) => {
+          const aValue = a.cells.find(cell => cell.column === sortColumn)?.value;
+          const bValue = b.cells.find(cell => cell.column === sortColumn)?.value;
+          
+          const comparison = this.compareValues(aValue, bValue);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }, [tableData.rows, sortColumn, sortDirection]);
+      
+      const paginatedData = React.useMemo(() => {
+        if (!options.enablePagination) return sortedData;
+        
+        const start = currentPage * (options.pageSize || 25);
+        const end = start + (options.pageSize || 25);
+        return sortedData.slice(start, end);
+      }, [sortedData, currentPage, options.pageSize]);
+      
+      const handleSort = (columnName: string) => {
+        if (sortColumn === columnName) {
+          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+          setSortColumn(columnName);
+          setSortDirection('asc');
+        }
+      };
+      
+      return React.createElement('div', { className: 'data-table-container' }, [
+        React.createElement('table', { 
+          key: 'table',
+          className: this.buildCSSClasses(options) 
+        }, [
+          options.showHeaders && React.createElement('thead', { key: 'thead' },
+            React.createElement('tr', {},
+              tableData.columns.map(column =>
+                React.createElement('th', {
+                  key: column.name,
+                  onClick: column.sortable ? () => handleSort(column.name) : undefined,
+                  className: column.sortable ? 'sortable' : ''
+                }, column.displayName)
+              )
+            )
+          ),
+          React.createElement('tbody', { key: 'tbody' },
+            paginatedData.map((row, rowIndex) =>
+              React.createElement('tr', { key: row.id || rowIndex },
+                row.cells.map(cell =>
+                  React.createElement('td', {
+                    key: cell.column,
+                    'data-column': cell.column
+                  }, cell.displayValue)
+                )
+              )
+            )
+          )
+        ]),
+        
+        // 分页控件
+        options.enablePagination && React.createElement('div', {
+          key: 'pagination',
+          className: 'table-pagination'
+        }, [
+          React.createElement('button', {
+            key: 'prev',
+            disabled: currentPage === 0,
+            onClick: () => setCurrentPage(currentPage - 1)
+          }, '上一页'),
+          React.createElement('span', { key: 'info' },
+            `第 ${currentPage + 1} 页，共 ${Math.ceil(sortedData.length / (options.pageSize || 25))} 页`
+          ),
+          React.createElement('button', {
+            key: 'next',
+            disabled: (currentPage + 1) * (options.pageSize || 25) >= sortedData.length,
+            onClick: () => setCurrentPage(currentPage + 1)
+          }, '下一页')
+        ])
+      ]);
+    };
+    
+    return {
+      type: ContentType.COMPONENT,
+      content: TableComponent,
+      metadata: {
+        rows: tableData.rows.length,
+        columns: tableData.columns.length,
+        interactive: true
+      },
+      dependencies: ['react'],
+      assets: this.getTableCSS()
+    };
+  }
+  
+  private renderMarkdownTable(tableData: TableData, options: RendererOptions, context: RenderContext): RenderedContent {
+    if (tableData.columns.length === 0) {
+      return { type: ContentType.TEXT, content: '(空表格)' };
+    }
+    
+    let markdown = '';
+    
+    // 表头
+    if (options.showHeaders) {
+      const headers = tableData.columns.map(col => col.displayName).join(' | ');
+      const separator = tableData.columns.map(() => '---').join(' | ');
+      
+      markdown += `| ${headers} |\n`;
+      markdown += `| ${separator} |\n`;
+    }
+    
+    // 数据行
+    tableData.rows.forEach(row => {
+      const cells = row.cells.map(cell => 
+        String(cell.displayValue || '').replace(/\|/g, '\\|')
+      );
+      markdown += `| ${cells.join(' | ')} |\n`;
+    });
+    
+    return {
+      type: ContentType.TEXT,
+      content: markdown,
+      metadata: {
+        rows: tableData.rows.length,
+        columns: tableData.columns.length
+      }
+    };
+  }
+  
+  private renderEmpty(context: RenderContext): RenderedContent {
+    return {
+      type: ContentType.TEXT,
+      content: '(无数据)',
+      metadata: { empty: true }
+    };
+  }
+  
+  private isTableData(value: any): boolean {
+    if (!Array.isArray(value)) return false;
+    if (value.length === 0) return true;
+    
+    // 检查是否为对象数组（表格数据的特征）
+    return value.every(item => 
+      typeof item === 'object' && 
+      item !== null && 
+      !Array.isArray(item)
+    );
+  }
+  
+  private formatColumnName(name: string): string {
+    return name.replace(/([A-Z])/g, ' $1')
+              .replace(/^./, str => str.toUpperCase())
+              .replace(/_/g, ' ');
+  }
+  
+  private inferColumnType(data: any[], columnName: string): string {
+    const samples = data.slice(0, 10).map(item => item[columnName]);
+    const types = samples.map(value => typeof value);
+    
+    const numberCount = types.filter(type => type === 'number').length;
+    const booleanCount = types.filter(type => type === 'boolean').length;
+    const dateCount = samples.filter(value => 
+      value instanceof Date || (typeof value === 'string' && !isNaN(Date.parse(value)))
+    ).length;
+    
+    if (numberCount > samples.length * 0.8) return 'number';
+    if (booleanCount > samples.length * 0.8) return 'boolean';
+    if (dateCount > samples.length * 0.8) return 'date';
+    
+    return 'string';
+  }
+  
+  private formatCellValue(value: any, type: string): string {
+    if (value == null) return '';
+    
+    switch (type) {
+      case 'number':
+        return typeof value === 'number' ? value.toLocaleString() : String(value);
+      case 'boolean':
+        return value ? '是' : '否';
+      case 'date':
+        if (value instanceof Date) {
+          return value.toLocaleString();
+        }
+        if (typeof value === 'string') {
+          const date = new Date(value);
+          return isNaN(date.getTime()) ? value : date.toLocaleString();
+        }
+        return String(value);
+      default:
+        return String(value);
+    }
+  }
+  
+  private generateRowId(item: any): string {
+    return 'row_' + Math.random().toString(36).substr(2, 9);
+  }
+  
+  private buildCSSClasses(options: RendererOptions): string {
+    const classes = ['data-table'];
+    
+    if (options.striped) classes.push('striped');
+    if (options.bordered) classes.push('bordered');
+    if (options.compact) classes.push('compact');
+    if (options.responsive) classes.push('responsive');
+    
+    return classes.join(' ');
+  }
+  
+  private compareValues(a: any, b: any): number {
+    if (a == null && b == null) return 0;
+    if (a == null) return -1;
+    if (b == null) return 1;
+    
+    if (typeof a === 'number' && typeof b === 'number') {
+      return a - b;
+    }
+    
+    return String(a).localeCompare(String(b));
+  }
+  
+  private escapeHTML(text: string): string {
+    return text.replace(/[&<>"']/g, match => {
+      const escapeMap: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return escapeMap[match];
+    });
+  }
+  
+  private getTableCSS(): ContentAsset[] {
+    return [{
+      type: 'css',
+      content: `
+        .data-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .data-table.bordered {
+          border: 1px solid #ddd;
+        }
+        .data-table th,
+        .data-table td {
+          padding: 8px;
+          text-align: left;
+        }
+        .data-table.bordered th,
+        .data-table.bordered td {
+          border: 1px solid #ddd;
+        }
+        .data-table.striped tr:nth-child(even) {
+          background-color: #f9f9f9;
+        }
+        .data-table th.sortable {
+          cursor: pointer;
+        }
+        .data-table th.sortable:hover {
+          background-color: #f5f5f5;
+        }
+        .table-pagination {
+          margin-top: 10px;
+          text-align: center;
+        }
+        .table-pagination button {
+          margin: 0 5px;
+          padding: 5px 10px;
+        }
+      `,
+      source: 'renderer'
+    }];
+  }
+}
+```
+
+## 渲染器系统集成
+
+### 注册和使用渲染器
+
+```typescript
+// 在应用启动时注册渲染器
+const rendererRegistry = EntityEngine.getRendererRegistry();
+
+// 注册自定义渲染器
+rendererRegistry.register(new RichTextRenderer());
+rendererRegistry.register(new DataTableRenderer());
+rendererRegistry.register(new ImageGalleryRenderer());
+rendererRegistry.register(new ChartRenderer());
+
+// 在视图中使用渲染器
+const userView: IView = {
+  name: 'UserDetailView',
+  type: 'detail',
+  entityType: 'User',
+  layout: {
+    sections: [
+      {
+        title: '基本信息',
+        fields: [
+          {
+            name: 'avatar',
+            renderer: 'image',
+            options: {
+              size: 'large',
+              shape: 'circle'
+            }
+          },
+          {
+            name: 'bio',
+            renderer: 'rich-text',
+            options: {
+              maxLength: 500,
+              sanitize: true
+            }
+          }
+        ]
+      },
+      {
+        title: '活动数据',
+        fields: [
+          {
+            name: 'activities',
+            renderer: 'data-table',
+            options: {
+              pageSize: 10,
+              enableSorting: true
+            }
+          }
+        ]
+      }
+    ]
+  }
+};
+```
+
+### 渲染上下文构建器
+
+```typescript
+/**
+ * 渲染上下文构建器
+ */
+class RenderContextBuilder {
+  private context: Partial<RenderContext> = {};
+  
+  setValue(value: any): this {
+    this.context.value = value;
+    return this;
+  }
+  
+  setFieldType(fieldType: string): this {
+    this.context.fieldType = fieldType;
+    return this;
+  }
+  
+  setFormat(format: RenderFormat): this {
+    this.context.format = format;
+    return this;
+  }
+  
+  setOptions(options: RendererOptions): this {
+    this.context.options = { ...this.context.options, ...options };
+    return this;
+  }
+  
+  setTheme(theme: RenderTheme): this {
+    this.context.theme = theme;
+    return this;
+  }
+  
+  setLocale(locale: string): this {
+    this.context.locale = locale;
+    return this;
+  }
+  
+  setViewContext(viewContext: ViewContext): this {
+    this.context.viewContext = viewContext;
+    return this;
+  }
+  
+  setUserContext(userContext: UserContext): this {
+    this.context.userContext = userContext;
+    return this;
+  }
+  
+  setEntityContext(entityContext: EntityContext): this {
+    this.context.entityContext = entityContext;
+    return this;
+  }
+  
+  build(): RenderContext {
+    if (!this.context.value) {
+      throw new Error('Value is required');
+    }
+    
+    if (!this.context.fieldType) {
+      throw new Error('Field type is required');
+    }
+    
+    if (!this.context.format) {
+      throw new Error('Format is required');
+    }
+    
+    return {
+      value: this.context.value,
+      fieldType: this.context.fieldType!,
+      entityType: this.context.entityType || 'unknown',
+      fieldName: this.context.fieldName || 'unknown',
+      format: this.context.format!,
+      options: this.context.options || {},
+      theme: this.context.theme,
+      locale: this.context.locale || 'en',
+      viewContext: this.context.viewContext || {} as ViewContext,
+      userContext: this.context.userContext || {} as UserContext,
+      entityContext: this.context.entityContext || {} as EntityContext,
+      helpers: new RenderHelpers()
+    };
+  }
+}
+
+// 使用示例
+const context = new RenderContextBuilder()
+  .setValue(richTextContent)
+  .setFieldType('rich_text')
+  .setFormat(RenderFormat.HTML)
+  .setOptions({ sanitize: true, maxLength: 1000 })
+  .setLocale('zh-CN')
+  .build();
+
+const rendered = await rendererRegistry.render(context);
+```
+
+## 下一步
+
+了解自定义渲染器后，继续学习：
+
+- [自定义视图类型](./view-types) - 创建新的视图类型
+- [动作处理器](./action-handlers) - 自定义业务逻辑处理
+- [事件钩子](./event-hooks) - 实现事件驱动的扩展功能

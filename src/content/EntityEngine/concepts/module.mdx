@@ -1,0 +1,410 @@
+# 模块系统
+
+将相关功能打包成可重用的模块，轻松在不同项目间分享和部署。Entity Engine 的模块可以包含模型定义、视图配置、自定义组件和初始数据。
+
+## 创建基础模块
+
+最简单的模块只需要实现三个方法：配置设置、组件设置和数据设置。
+
+```typescript
+import { IEntityModule } from '@scenemesh/entity-engine';
+
+export const UserModule: IEntityModule = {
+  info: {
+    name: 'UserModule',
+    description: '用户管理模块',
+    provider: 'MyCompany',
+    version: '1.0.0'
+  },
+
+  async setupConfig(args) {
+    // 注册用户相关的模型
+    args.models.push({
+      name: 'User',
+      title: '用户',
+      fields: [
+        { name: 'id', title: 'ID', type: 'string', isRequired: true },
+        { name: 'name', title: '姓名', type: 'string', isRequired: true },
+        { name: 'email', title: '邮箱', type: 'string', isRequired: true }
+      ]
+    });
+
+    // 注册用户视图
+    args.views.push({
+      modelName: 'User',
+      name: 'UserListView',
+      title: '用户列表',
+      type: 'GridView'
+    });
+  },
+
+  async setupComponents(args) {
+    // 注册自定义组件（可选）
+    // args.views.push(customViews);
+    // args.renderers.push(customRenderers);
+  },
+
+  async setupData(args) {
+    // 提供初始数据（可选）
+    args.entities.push({
+      id: 'admin-user',
+      modelName: 'User',
+      values: {
+        name: '管理员',
+        email: 'admin@example.com'
+      }
+    });
+  }
+};
+```
+
+## 注册模块
+
+创建模块后需要向引擎注册：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+import { UserModule } from './modules/user-module';
+
+const engine = await getEntityEngine();
+
+// 直接注册模块对象
+const modules = await engine.moduleRegistry.registerModule(UserModule);
+console.log('已注册模块:', modules?.[0]?.info.name);
+
+// 注册后模块的配置会自动生效
+const userModel = await engine.metaRegistry.getModel('User');
+console.log('用户模型已可用:', !!userModel);
+```
+
+也支持从 NPM 包动态加载：
+
+```typescript
+// 从 NPM 包加载模块（客户端）
+await engine.moduleRegistry.registerModule('@company/user-module', true);
+
+// 从本地路径加载（服务端）
+await engine.moduleRegistry.registerModule('./modules/blog-module');
+```
+
+## 完整模块示例
+
+一个包含所有功能的完整模块：
+
+```typescript
+export const BlogModule: IEntityModule = {
+  info: {
+    name: 'BlogModule',
+    description: '博客内容管理系统',
+    provider: 'MyCompany', 
+    version: '2.1.0',
+    url: 'https://example.com/blog-module',
+    dependencies: ['@company/rich-text-module']
+  },
+
+  async setupConfig(args) {
+    // 博客文章模型
+    args.models.push({
+      name: 'BlogPost',
+      title: '博客文章',
+      description: '博客文章内容管理',
+      fields: [
+        { name: 'id', title: 'ID', type: 'string', isRequired: true },
+        { name: 'title', title: '标题', type: 'string', isRequired: true },
+        { name: 'content', title: '内容', type: 'richtext', isRequired: true },
+        { name: 'status', title: '状态', type: 'enum', 
+          options: ['draft', 'published'], defaultValue: 'draft' },
+        { name: 'publishedAt', title: '发布时间', type: 'datetime' }
+      ]
+    });
+
+    // 博客分类模型  
+    args.models.push({
+      name: 'BlogCategory',
+      title: '博客分类',
+      fields: [
+        { name: 'id', title: 'ID', type: 'string', isRequired: true },
+        { name: 'name', title: '分类名', type: 'string', isRequired: true },
+        { name: 'slug', title: '标识符', type: 'string', isRequired: true }
+      ]
+    });
+
+    // 文章编辑视图
+    args.views.push({
+      modelName: 'BlogPost',
+      name: 'BlogPostFormView',
+      title: '文章编辑',
+      type: 'FormView',
+      config: {
+        fields: ['title', 'content', 'status'],
+        submitAction: 'save'
+      }
+    });
+
+    // 文章列表视图
+    args.views.push({
+      modelName: 'BlogPost', 
+      name: 'BlogPostGridView',
+      title: '文章列表',
+      type: 'GridView',
+      config: {
+        columns: ['title', 'status', 'publishedAt'],
+        filters: ['status'],
+        sorting: true
+      }
+    });
+
+    // 自定义动作处理器
+    args.actionHandlers.push({
+      name: 'publishPost',
+      async handle(context) {
+        await context.datasource.updateObject({
+          modelName: 'BlogPost',
+          id: context.objectId,
+          values: {
+            status: 'published',
+            publishedAt: new Date()
+          }
+        });
+        return { success: true, message: '文章已发布' };
+      }
+    });
+
+    // API 端点
+    args.servlets.push({
+      path: '/api/blog/stats',
+      methods: ['GET'],
+      async handle(req, res) {
+        const stats = await getBlogStats();
+        res.json(stats);
+      }
+    });
+  },
+
+  async setupComponents(args) {
+    // 动态导入自定义视图组件
+    const BlogEditorView = await import('./components/BlogEditorView');
+    args.views.push(new BlogEditorView.default());
+
+    // 自定义渲染器
+    const RichTextRenderer = await import('./renderers/RichTextRenderer');
+    args.renderers.push(RichTextRenderer.default);
+
+    // 自定义小部件
+    const BlogStatsWidget = await import('./widgets/BlogStatsWidget');
+    args.widgets.push(BlogStatsWidget.default);
+  },
+
+  async setupData(args) {
+    // 默认分类数据
+    args.entities.push({
+      id: 'tech-category',
+      modelName: 'BlogCategory',
+      values: {
+        name: '技术',
+        slug: 'technology'
+      }
+    });
+
+    args.entities.push({
+      id: 'life-category', 
+      modelName: 'BlogCategory',
+      values: {
+        name: '生活',
+        slug: 'life'
+      }
+    });
+
+    // 示例文章
+    args.entities.push({
+      id: 'welcome-post',
+      modelName: 'BlogPost',
+      values: {
+        title: '欢迎使用博客模块',
+        content: '<p>这是一篇示例文章...</p>',
+        status: 'published',
+        publishedAt: new Date()
+      },
+      references: [{
+        fromFieldName: 'category',
+        toObjectId: 'tech-category'
+      }]
+    });
+  }
+};
+```
+
+## 模块管理
+
+### 查看已注册的模块
+
+```typescript
+// 获取特定模块
+const blogModule = engine.moduleRegistry.getModule('BlogModule');
+if (blogModule) {
+  console.log('模块信息:', blogModule.info);
+  console.log('版本:', blogModule.info.version);
+  console.log('提供者:', blogModule.info.provider);
+}
+
+// 获取所有模块
+const allModules = engine.moduleRegistry.getAllModules();
+console.log('已注册模块数量:', allModules.length);
+
+allModules.forEach(module => {
+  console.log(`- ${module.info.name} v${module.info.version}`);
+});
+```
+
+### 检查模块依赖
+
+```typescript
+// 验证模块依赖是否满足
+const checkDependencies = (module: IEntityModule) => {
+  if (!module.info.dependencies) return true;
+  
+  return module.info.dependencies.every(dep => {
+    const isRegistered = engine.moduleRegistry.getModule(dep);
+    if (!isRegistered) {
+      console.warn(`缺少依赖模块: ${dep}`);
+      return false;
+    }
+    return true;
+  });
+};
+
+if (checkDependencies(BlogModule)) {
+  await engine.moduleRegistry.registerModule(BlogModule);
+  console.log('✅ 博客模块注册成功');
+} else {
+  console.error('❌ 模块依赖不满足');
+}
+```
+
+## 模块开发最佳实践
+
+### 模块信息规范
+
+```typescript
+// 推荐的模块信息格式
+const moduleInfo = {
+  name: 'CompanyBlogModule',           // 唯一标识符，建议加前缀
+  description: '企业博客内容管理系统',   // 清晰描述功能
+  provider: 'CompanyName',            // 开发者或公司名称
+  version: '1.2.3',                  // 遵循语义化版本
+  url: 'https://docs.company.com/blog-module', // 文档地址
+  dependencies: [                     // 明确声明依赖
+    '@company/rich-text-module@^2.0.0',
+    '@company/image-gallery@^1.5.0'
+  ]
+};
+```
+
+### 模块文件结构
+
+```typescript
+// 推荐的模块文件组织结构
+my-module/
+├── index.ts              // 模块主文件
+├── models/               // 模型定义
+│   ├── user.model.ts
+│   └── profile.model.ts
+├── views/                // 视图配置
+│   ├── user-form.view.ts
+│   └── user-grid.view.ts
+├── components/           // 自定义组件
+│   ├── UserEditor.tsx
+│   └── UserProfile.tsx
+├── data/                 // 初始数据
+│   └── seed-data.ts
+└── package.json          // NPM 包配置
+```
+
+### 模块测试
+
+```typescript
+// 模块功能测试
+describe('UserModule', () => {
+  let engine: EntityEngine;
+  
+  beforeEach(async () => {
+    engine = await createTestEngine();
+  });
+
+  it('应该成功注册模块', async () => {
+    const modules = await engine.moduleRegistry.registerModule(UserModule);
+    expect(modules).toHaveLength(1);
+    expect(modules?.[0].info.name).toBe('UserModule');
+  });
+
+  it('应该注册所有模型', async () => {
+    await engine.moduleRegistry.registerModule(UserModule);
+    
+    const userModel = await engine.metaRegistry.getModel('User');
+    expect(userModel).toBeDefined();
+    expect(userModel?.fields).toHaveLength(3);
+  });
+
+  it('应该提供初始数据', async () => {
+    await engine.moduleRegistry.registerModule(UserModule);
+    
+    const users = await engine.datasourceFactory
+      .create('User')
+      .listObjects({ modelName: 'User' });
+    
+    expect(users.items).toHaveLength(1);
+    expect(users.items[0].name).toBe('管理员');
+  });
+});
+```
+
+### 环境适配
+
+```typescript
+// 根据环境调整模块行为
+export const createUserModule = (env: 'development' | 'production'): IEntityModule => ({
+  info: {
+    name: 'UserModule',
+    description: '用户管理模块',
+    provider: 'MyCompany',
+    version: '1.0.0'
+  },
+
+  async setupConfig(args) {
+    // 生产环境和开发环境使用不同的模型配置
+    const userModel = {
+      name: 'User',
+      title: '用户',
+      fields: [
+        { name: 'id', title: 'ID', type: 'string', isRequired: true },
+        { name: 'name', title: '姓名', type: 'string', isRequired: true },
+        { name: 'email', title: '邮箱', type: 'string', isRequired: true },
+        // 开发环境添加调试字段
+        ...(env === 'development' ? [
+          { name: 'debugInfo', title: '调试信息', type: 'json' }
+        ] : [])
+      ]
+    };
+    
+    args.models.push(userModel);
+  },
+
+  async setupData(args) {
+    // 只在开发环境添加测试数据
+    if (env === 'development') {
+      args.entities.push({
+        id: 'test-user',
+        modelName: 'User',
+        values: {
+          name: '测试用户',
+          email: 'test@example.com'
+        }
+      });
+    }
+  }
+});
+
+// 使用
+const userModule = createUserModule(process.env.NODE_ENV === 'production' ? 'production' : 'development');
+await engine.moduleRegistry.registerModule(userModule);
+```

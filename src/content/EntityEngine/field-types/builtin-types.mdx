@@ -1,0 +1,389 @@
+# 内置字段类型
+
+Entity Engine 为您提供了完整的字段类型支持，涵盖文本、数字、日期、文件等常见数据类型。每种字段类型都自动配置了合适的输入组件和验证规则，让您可以快速构建表单和数据模型。
+
+在定义模型字段时，只需指定字段类型，引擎会自动选择最佳的输入组件和验证方式。您也可以通过字段配置来自定义显示效果和验证规则。
+
+## 文本字段 (string)
+
+用于处理各种文本内容，从简单的用户名到长篇文章都可以处理。文本字段会根据内容长度自动选择单行或多行输入框。
+
+```typescript
+// 基础文本字段
+{
+  name: 'title',
+  title: '标题',
+  type: 'string',
+  isRequired: true
+}
+
+// 多行文本字段
+{
+  name: 'description', 
+  title: '描述',
+  type: 'string',
+  config: {
+    multiline: true,
+    rows: 4
+  }
+}
+
+// 邮箱字段（自动邮箱格式验证）
+{
+  name: 'email',
+  title: '邮箱地址', 
+  type: 'string',
+  config: {
+    format: 'email'
+  }
+}
+```
+
+文本字段支持多种格式验证，包括邮箱、URL、电话号码等。您可以设置最大长度、最小长度，以及自定义的正则表达式验证。
+
+## 数字字段 (number)
+
+处理各种数值数据，支持整数和小数。数字字段会自动提供数字键盘（移动端）和数值验证。
+
+```typescript
+// 基础数字字段
+{
+  name: 'price',
+  title: '价格',
+  type: 'number', 
+  isRequired: true
+}
+
+// 带范围限制的数字
+{
+  name: 'age',
+  title: '年龄',
+  type: 'number',
+  config: {
+    min: 0,
+    max: 150
+  }
+}
+
+// 货币字段
+{
+  name: 'salary',
+  title: '薪资',
+  type: 'number',
+  config: {
+    currency: 'CNY',
+    precision: 2
+  }
+}
+```
+
+数字字段可以设置最小值、最大值、小数位数等限制。对于货币金额，可以指定货币类型和精度。
+
+## 布尔字段 (boolean)
+
+用于是/否、开/关等二选一的场景。布尔字段通常显示为开关按钮或复选框。
+
+```typescript
+// 基础布尔字段
+{
+  name: 'isActive',
+  title: '激活状态',
+  type: 'boolean',
+  defaultValue: false
+}
+
+// 同意条款字段
+{
+  name: 'agreeToTerms',
+  title: '我同意服务条款',
+  type: 'boolean',
+  isRequired: true
+}
+```
+
+布尔字段非常适合用于状态标记、功能开关、同意确认等场景。
+
+## 日期字段 (date)
+
+处理日期和时间数据，支持多种日期格式和时区设置。日期字段会自动提供日期选择器组件。
+
+```typescript
+// 基础日期字段
+{
+  name: 'birthDate',
+  title: '出生日期',
+  type: 'date'
+}
+
+// 日期时间字段
+{
+  name: 'eventTime',
+  title: '活动时间',
+  type: 'date',
+  config: {
+    includeTime: true
+  }
+}
+
+// 仅时间字段
+{
+  name: 'openTime',
+  title: '营业时间',
+  type: 'date',
+  config: {
+    timeOnly: true
+  }
+}
+```
+
+日期字段可以配置为仅显示日期、仅显示时间，或者同时显示日期和时间。
+
+## 枚举字段 (enum)
+
+用于有限选项的选择，比如状态、分类、优先级等。枚举字段会显示为下拉选择框或单选按钮组。
+
+```typescript
+// 状态枚举
+{
+  name: 'status',
+  title: '状态',
+  type: 'enum',
+  options: [
+    { label: '草稿', value: 'draft' },
+    { label: '已发布', value: 'published' },
+    { label: '已归档', value: 'archived' }
+  ],
+  defaultValue: 'draft'
+}
+
+// 优先级枚举
+{
+  name: 'priority',
+  title: '优先级',
+  type: 'enum',
+  options: [
+    { label: '低', value: 'low' },
+    { label: '中', value: 'medium' },
+    { label: '高', value: 'high' }
+  ]
+}
+```
+
+枚举字段需要定义所有可选的选项，每个选项包含显示标签和实际存储值。
+
+## 数组字段 (array)
+
+存储多个值的列表，比如标签、技能、分类等。数组字段通常显示为标签组或多选框。
+
+```typescript
+// 标签数组
+{
+  name: 'tags',
+  title: '标签',
+  type: 'array',
+  itemType: 'string'
+}
+
+// 技能数组
+{
+  name: 'skills',
+  title: '技能',
+  type: 'array',
+  itemType: 'string',
+  config: {
+    allowCustom: true,
+    suggestions: ['JavaScript', 'Python', 'React', 'Vue']
+  }
+}
+```
+
+数组字段可以设置元素类型、允许自定义输入、提供选项建议等配置。
+
+## JSON 字段 (json)
+
+存储复杂的结构化数据，比如配置信息、元数据等。JSON 字段会提供代码编辑器来输入和编辑 JSON 数据。
+
+```typescript
+// 配置信息字段
+{
+  name: 'config',
+  title: '配置信息',
+  type: 'json'
+}
+
+// 联系人信息
+{
+  name: 'contactInfo',
+  title: '联系方式',
+  type: 'json',
+  config: {
+    schema: {
+      phone: { type: 'string', title: '电话' },
+      address: { type: 'string', title: '地址' }
+    }
+  }
+}
+```
+
+JSON 字段可以定义数据结构模式来提供更好的编辑体验。
+
+## 文件字段 (binary)
+
+处理文件上传和存储，支持图片、文档、视频等各种文件类型。
+
+```typescript
+// 头像图片字段
+{
+  name: 'avatar',
+  title: '头像',
+  type: 'binary',
+  config: {
+    accept: 'image/*',
+    maxSize: '2MB'
+  }
+}
+
+// 文档字段
+{
+  name: 'document',
+  title: '附件',
+  type: 'binary',
+  config: {
+    accept: '.pdf,.doc,.docx',
+    maxSize: '10MB'
+  }
+}
+```
+
+文件字段可以限制文件类型、大小，以及设置上传的各种参数。
+
+## 关系字段
+
+Entity Engine 提供了完整的关系字段支持，让您可以轻松建立模型间的关联关系。
+
+### 多对一关系 (many_to_one)
+
+多个记录指向同一个记录，比如多个文章属于同一个作者：
+
+```typescript
+// 文章的作者字段
+{
+  name: 'author',
+  title: '作者',
+  type: 'many_to_one',
+  referenceTo: 'User'
+}
+```
+
+### 一对多关系 (one_to_many)
+
+一个记录关联多个记录，比如一个用户有多篇文章：
+
+```typescript
+// 用户的文章字段
+{
+  name: 'articles',
+  title: '文章',
+  type: 'one_to_many',
+  referenceTo: 'Article',
+  referenceBy: 'author'
+}
+```
+
+### 一对一关系 (one_to_one)
+
+两个记录之间的唯一关联，比如用户和用户详情：
+
+```typescript
+// 用户详情字段
+{
+  name: 'profile',
+  title: '个人资料',
+  type: 'one_to_one',
+  referenceTo: 'UserProfile'
+}
+```
+
+### 多对多关系 (many_to_many)
+
+多个记录可以关联多个记录，比如文章和标签的关系：
+
+```typescript
+// 文章的标签字段
+{
+  name: 'tags',
+  title: '标签',
+  type: 'many_to_many',
+  referenceTo: 'Tag'
+}
+```
+
+关系字段会自动处理数据的关联查询和显示，让您可以轻松在界面中选择和展示相关记录。
+
+## 使用字段类型的最佳实践
+
+### 选择合适的字段类型
+
+根据数据的性质和用途选择最合适的字段类型：
+
+- 用户输入的文本内容选择 `string` 类型
+- 计算和统计数据选择 `number` 类型  
+- 有限的选项使用 `enum` 类型
+- 时间相关数据使用 `date` 类型
+- 开关状态使用 `boolean` 类型
+
+### 合理配置字段选项
+
+为字段设置适当的验证规则和显示选项：
+
+```typescript
+// 好的实践：为字段提供清晰的配置
+{
+  name: 'email',
+  title: '邮箱地址',
+  type: 'string',
+  isRequired: true,
+  config: {
+    format: 'email',
+    placeholder: '请输入您的邮箱地址'
+  }
+}
+```
+
+### 提供合理的默认值
+
+为字段设置合适的默认值，提升用户体验：
+
+```typescript
+// 为状态字段提供默认值
+{
+  name: 'status',
+  title: '状态',
+  type: 'enum',
+  options: statusOptions,
+  defaultValue: 'draft'
+}
+```
+
+### 使用描述信息
+
+为复杂的字段提供描述信息，帮助用户理解字段用途：
+
+```typescript
+{
+  name: 'config',
+  title: '高级配置',
+  type: 'json',
+  description: '请输入JSON格式的配置信息，用于自定义组件行为'
+}
+```
+
+通过合理使用这些内置字段类型，您可以快速构建出功能完整、用户体验良好的数据模型和表单界面。
+
+## 下一步
+
+了解内置字段类型后，您可能想要：
+
+- 学习[自定义字段类型](/field-types/custom-typer)来创建特殊的数据处理逻辑
+- 查看[查询操作符](/field-types/query-operators)了解如何查询不同类型的数据  
+- 探索[组件映射](/field-types/widget-mapping)来自定义字段的显示组件

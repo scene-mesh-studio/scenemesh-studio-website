@@ -1,0 +1,551 @@
+# 会话与安全
+
+保护您的应用数据，控制用户访问权限。Entity Engine 需要知道当前用户是谁，才能决定他们可以访问哪些数据。一旦设置了身份认证，所有数据操作都会自动进行权限检查。
+
+## 设置身份认证
+
+在使用 Entity Engine 之前，您需要告诉它如何识别当前用户。这是通过设置会话提供者来完成的。会话提供者是一个函数，它返回当前用户的身份信息和权限。
+
+最基本的设置方式是返回一个包含用户 ID、角色和权限的对象：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+engine.sessionManager.setProvider({
+  async session() {
+    return {
+      id: 'session-123',           // 会话的唯一标识
+      userId: 'user-456',          // 用户的唯一标识
+      roles: ['editor'],           // 用户的角色列表
+      permissions: [               // 用户的具体权限
+        'model:User:read', 
+        'model:User:update'
+      ]
+    };
+  }
+});
+```
+
+设置完成后，Entity Engine 会在每次数据操作时自动调用这个函数获取用户信息，并根据权限决定是否允许操作。如果用户没有相应权限，操作会自动失败并抛出错误。
+
+## 集成现有认证系统
+
+### 与 Next-Auth 集成
+
+如果您的应用已经使用 Next-Auth 处理用户登录，可以很容易地将其与 Entity Engine 集成。Next-Auth 提供了 `getServerSession` 函数来获取当前用户的会话信息，您只需要将这些信息转换为 Entity Engine 需要的格式即可。
+
+这种集成的好处是您不需要重新实现用户认证逻辑，可以继续使用 Next-Auth 的所有功能（如社交登录、JWT 令牌等），同时让 Entity Engine 自动处理数据权限控制。
+
+```typescript
+import { getServerSession } from 'next-auth';
+
+engine.sessionManager.setProvider({
+  async session() {
+    // 获取 Next-Auth 的会话信息
+    const session = await getServerSession();
+    
+    // 如果用户未登录，抛出错误
+    if (!session?.user) {
+      throw new Error('用户未登录');
+    }
+    
+    // 将 Next-Auth 的用户信息转换为 Entity Engine 格式
+    return {
+      id: session.user.id,
+      userId: session.user.id,
+      roles: session.user.roles || ['user'],                    // 使用用户的角色，如果没有则默认为普通用户
+      permissions: await getUserPermissions(session.user.id)    // 根据用户 ID 获取具体权限
+    };
+  }
+});
+```
+
+这样设置后，Entity Engine 会自动使用 Next-Auth 的用户信息进行权限控制。当用户未登录时，所有需要权限的操作都会失败。
+
+注意：您需要实现 `getUserPermissions` 函数来根据用户 ID 获取该用户的具体权限。这个函数可以从数据库查询用户的角色和权限，或者根据业务逻辑动态计算权限。
+
+### 与 JWT 认证集成
+
+如果您使用 JWT 令牌进行用户认证，可以在会话提供者中验证 JWT 令牌并提取用户信息。这种方式适合无状态的 API 服务，因为 JWT 令牌包含了所有需要的用户信息。
+
+JWT 集成的优势是无需服务器端会话存储，所有用户信息都编码在令牌中。但需要确保令牌的安全性，包括使用强密钥、设置合适的过期时间等。
+
+```typescript
+import jwt from 'jsonwebtoken';
+
+engine.sessionManager.setProvider({
+  async session() {
+    // 从请求中获取 JWT 令牌（具体实现取决于您的应用架构）
+    const token = getTokenFromRequest();
+    
+    // 验证并解析 JWT 令牌
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // 将 JWT 载荷转换为 Entity Engine 格式
+    return {
+      id: decoded.sub,                          // JWT 的 subject 字段作为用户 ID
+      userId: decoded.sub,
+      roles: decoded.roles || ['user'],         // JWT 中的角色信息
+      permissions: decoded.permissions || []    // JWT 中的权限信息
+    };
+  }
+});
+```
+
+在这种设置下，您需要确保 JWT 令牌包含必要的角色和权限信息。当令牌无效或过期时，JWT 验证会抛出错误，Entity Engine 会拒绝所有操作。
+
+您需要实现 `getTokenFromRequest` 函数来从 HTTP 请求中提取 JWT 令牌。通常令牌在 Authorization 头中，格式为 `Bearer <token>`。
+
+## 权限控制机制
+
+### 权限格式说明
+
+Entity Engine 使用结构化的权限格式来精确控制用户可以执行的操作。权限采用 `资源:操作` 的格式，让您可以为不同的数据和操作设置不同的访问级别。
+
+这种格式的优势是既精确又灵活。您可以为特定的模型和操作设置权限，也可以使用通配符为用户提供更广泛的访问权限。
+
+```typescript
+const permissions = [
+  'model:User:read',      // 可以读取用户数据
+  'model:User:update',    // 可以更新用户数据
+  'model:Post:create',    // 可以创建文章
+  'model:Post:delete',    // 可以删除文章
+  'model:*:read'         // 可以读取所有模型的数据（通配符）
+];
+```
+
+权限格式的组成部分：
+- **资源类型**：`model` 表示数据模型，还可以有其他资源类型
+- **资源名称**：具体的模型名称，如 `User`、`Post`，或使用 `*` 表示所有
+- **操作类型**：`read`、`create`、`update`、`delete` 等
+
+### 自动权限检查
+
+Entity Engine 最大的优势之一是自动权限检查。一旦设置了会话提供者，您就不需要在每个数据操作中手动检查权限了。Engine 会在执行操作前自动验证用户是否有相应权限。
+
+这大大简化了开发工作，减少了安全漏洞的可能性。您只需要关注业务逻辑，权限控制由 Engine 自动处理。
+
+```typescript
+// 查询用户列表 - Engine 会自动检查用户是否有 'model:User:read' 权限
+const users = await engine.datasource.listObjects({
+  modelName: 'User'
+});
+
+// 创建新用户 - Engine 会自动检查用户是否有 'model:User:create' 权限
+const newUser = await engine.datasource.createObject({
+  modelName: 'User',
+  values: { name: 'John', email: 'john@example.com' }
+});
+
+// 更新用户信息 - Engine 会自动检查用户是否有 'model:User:update' 权限
+await engine.datasource.updateObject({
+  id: 'user-123',
+  values: { name: 'John Smith' }
+});
+```
+
+如果用户没有执行某个操作的权限，Engine 会抛出一个权限错误，操作不会被执行。这确保了数据安全性，防止未授权的访问。
+
+权限检查的过程是：
+1. Engine 调用会话提供者获取当前用户信息
+2. 根据操作类型确定需要的权限（如 `model:User:read`）
+3. 检查用户的权限列表是否包含这个权限
+4. 如果有权限则执行操作，否则抛出错误
+
+### 手动权限检查
+
+虽然 Engine 会自动检查数据操作权限，但有时您需要在业务逻辑中手动检查权限。最常见的场景是在前端显示或隐藏某些 UI 元素，避免用户看到他们无法使用的功能。
+
+手动权限检查让您可以在操作执行前就知道用户是否有权限，从而提供更好的用户体验。
+
+```typescript
+// 检查用户是否可以创建文章
+const canCreatePost = await engine.permissionManager.checkModelPermission(
+  'Post',    // 模型名称
+  'create'   // 操作类型
+);
+
+if (canCreatePost) {
+  // 显示"创建文章"按钮
+  showCreateButton();
+} else {
+  // 隐藏按钮或显示权限不足提示
+  hideCreateButton();
+}
+
+// 检查用户是否可以删除特定文章
+const canDeletePost = await engine.permissionManager.checkModelPermission(
+  'Post', 
+  'delete',
+  { object: postData }  // 可以传入具体对象进行上下文权限检查
+);
+```
+
+手动权限检查的方法：
+- `checkModelPermission`：检查对特定模型的操作权限
+- `checkFieldPermission`：检查对特定字段的访问权限
+- `checkPermission`：检查任意权限字符串
+
+## 角色管理
+
+### 定义和使用角色
+
+角色是权限的集合，让您可以批量管理用户权限。不需要为每个用户单独设置权限，只需要给用户分配合适的角色即可。这大大简化了权限管理，特别是在用户数量较多的应用中。
+
+角色的好处包括：
+- **简化管理**：一个角色包含多个权限，易于批量分配
+- **一致性**：相同角色的用户拥有相同权限
+- **可维护性**：修改角色权限会影响所有拥有该角色的用户
+
+```typescript
+// 定义编辑者角色
+engine.permissionManager.defineRole({
+  name: 'editor',
+  description: '内容编辑者',
+  permissions: [
+    'model:Post:read',      // 可以查看文章
+    'model:Post:create',    // 可以创建文章
+    'model:Post:update',    // 可以编辑文章
+    'model:Category:read'   // 可以查看分类
+  ]
+});
+
+// 定义管理员角色
+engine.permissionManager.defineRole({
+  name: 'admin',
+  description: '系统管理员',
+  permissions: ['*']  // 拥有所有权限
+});
+
+// 定义普通用户角色
+engine.permissionManager.defineRole({
+  name: 'user',
+  description: '普通用户',
+  permissions: [
+    'model:User:read',      // 只能查看用户信息
+    'model:Post:read'       // 只能查看文章
+  ]
+});
+```
+
+### 分配角色给用户
+
+定义角色后，您可以将角色分配给用户。一个用户可以拥有多个角色，Engine 会合并所有角色的权限。
+
+```typescript
+// 给用户分配编辑者角色
+await engine.permissionManager.assignRoleToUser('user-123', 'editor');
+
+// 给用户分配多个角色
+await engine.permissionManager.assignRoleToUser('user-456', 'editor');
+await engine.permissionManager.assignRoleToUser('user-456', 'admin');
+
+// 检查用户的角色
+const userRoles = await engine.permissionManager.getUserRoles('user-123');
+console.log(userRoles); // ['editor']
+
+// 撤销用户的角色
+await engine.permissionManager.revokeRoleFromUser('user-123', 'editor');
+```
+
+在会话提供者中，您应该返回用户的角色列表。Engine 会自动将角色转换为具体权限：
+
+```typescript
+engine.sessionManager.setProvider({
+  async session() {
+    const user = await getCurrentUser();
+    const userRoles = await getUserRoles(user.id);
+    
+    return {
+      id: user.id,
+      userId: user.id,
+      roles: userRoles,           // 返回用户的角色列表
+      permissions: []             // 可以为空，Engine 会根据角色自动计算权限
+    };
+  }
+});
+```
+
+## API 路由保护
+
+### 使用权限中间件
+
+在构建 API 时，您需要确保只有拥有适当权限的用户才能访问特定的端点。权限中间件是实现这一目标的最佳方式。它会在处理请求前检查用户权限，只有通过验证的请求才会继续处理。
+
+中间件的优势是可以复用，您可以为不同的权限需求创建不同的中间件，然后在多个路由中使用。
+
+```typescript
+// 创建权限检查中间件
+const requirePermission = (permission: string) => {
+  return async (opts: { ctx: any; next: any }) => {
+    // 获取当前用户会话
+    const session = await opts.ctx.engine.sessionManager.getSession();
+    
+    // 解析权限字符串（格式：资源:操作）
+    const [resource, action] = permission.split(':');
+    
+    // 检查用户是否有指定权限
+    const hasPermission = await opts.ctx.engine.permissionManager.checkPermission(
+      action,    // 操作类型
+      resource,  // 资源类型
+      { user: session }
+    );
+    
+    // 如果没有权限，抛出错误
+    if (!hasPermission) {
+      throw new Error('权限不足');
+    }
+    
+    // 如果有权限，继续执行下一个中间件或处理函数
+    return opts.next();
+  };
+};
+```
+
+### 在 tRPC 路由中使用中间件
+
+这个例子展示了如何在 tRPC 路由中使用权限中间件。每个需要权限的操作都会先经过中间件检查，只有通过验证的请求才会执行实际的业务逻辑。
+
+```typescript
+// 使用中间件保护路由
+export const userRouter = createTRPCRouter({
+  // 创建用户 - 需要创建权限
+  create: publicProcedure
+    .use(requirePermission('model:User:create'))
+    .input(z.object({
+      name: z.string(),
+      email: z.string().email()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // 此时已确保用户有创建权限，可以安全执行操作
+      return ctx.engine.datasource.createObject({
+        modelName: 'User',
+        values: input
+      });
+    }),
+
+  // 查询用户列表 - 需要读取权限
+  list: publicProcedure
+    .use(requirePermission('model:User:read'))
+    .query(async ({ ctx }) => {
+      return ctx.engine.datasource.listObjects({
+        modelName: 'User'
+      });
+    }),
+
+  // 更新用户 - 需要更新权限
+  update: publicProcedure
+    .use(requirePermission('model:User:update'))
+    .input(z.object({
+      id: z.string(),
+      data: z.object({
+        name: z.string().optional(),
+        email: z.string().email().optional()
+      })
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.engine.datasource.updateObject({
+        id: input.id,
+        values: input.data
+      });
+    }),
+
+  // 删除用户 - 需要删除权限
+  delete: publicProcedure
+    .use(requirePermission('model:User:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.engine.datasource.deleteObject({
+        id: input.id
+      });
+    })
+});
+```
+
+这种方式的好处是：
+- **声明式权限**：权限要求在路由定义中明确声明
+- **自动验证**：无需在每个处理函数中手动检查权限
+- **一致性**：所有路由使用相同的权限检查逻辑
+- **易于维护**：权限逻辑集中在中间件中
+
+## 安全最佳实践
+
+### 最小权限原则
+
+安全的第一原则是最小权限：始终给用户分配完成工作所需的最小权限集合。过度的权限会增加安全风险，如果账户被攻破，攻击者能造成的损害也会更大。
+
+在设计权限时，从最严格的权限开始，然后根据实际需要逐步放宽。定期审查用户权限，撤销不再需要的权限。
+
+```typescript
+// ✅ 推荐：具体的权限分配
+const editorPermissions = [
+  'model:Post:read',      // 只能读取文章
+  'model:Post:create',    // 只能创建文章
+  'model:Post:update',    // 只能更新文章
+  'model:Category:read'   // 只能读取分类
+];
+
+const viewerPermissions = [
+  'model:Post:read',      // 只能读取文章
+  'model:Category:read'   // 只能读取分类
+];
+
+// ❌ 避免：过于宽泛的权限
+const badPermissions = ['*'];  // 除非是系统管理员，否则避免使用通配符权限
+
+// ❌ 避免：不必要的权限
+const unnecessaryPermissions = [
+  'model:User:delete',    // 如果编辑者不需要删除用户，就不要给这个权限
+  'model:*:delete'       // 避免给予删除所有数据的权限
+];
+```
+
+### 输入验证和数据清理
+
+永远不要信任用户输入。所有来自客户端的数据都应该经过严格验证和清理。使用类型安全的验证库（如 Zod）来确保数据格式正确，并防止恶意输入。
+
+输入验证应该在多个层面进行：前端验证提供用户体验，后端验证确保安全性。
+
+```typescript
+import { z } from 'zod';
+
+// 定义严格的输入验证schema
+const userCreateSchema = z.object({
+  name: z.string()
+    .min(1, '姓名不能为空')
+    .max(50, '姓名长度不能超过50个字符')
+    .regex(/^[a-zA-Z\s\u4e00-\u9fa5]+$/, '姓名只能包含字母、空格和中文'),
+  email: z.string()
+    .email('邮箱格式无效')
+    .max(100, '邮箱长度不能超过100个字符'),
+  age: z.number()
+    .int('年龄必须是整数')
+    .min(0, '年龄不能为负数')
+    .max(150, '年龄不能超过150岁')
+    .optional()
+});
+
+// 在处理请求前验证输入
+export const createUser = publicProcedure
+  .use(requirePermission('model:User:create'))
+  .input(userCreateSchema)  // 使用验证schema
+  .mutation(async ({ ctx, input }) => {
+    // 此时 input 已经通过验证，类型安全
+    return ctx.engine.datasource.createObject({
+      modelName: 'User',
+      values: input
+    });
+  });
+```
+
+### 安全的错误处理
+
+错误处理不当可能泄露敏感信息，如数据库结构、用户存在性等。应该记录详细错误用于调试，但向用户返回通用的错误消息。
+
+不同类型的错误应该有不同的处理方式：
+- **验证错误**：可以向用户显示具体的验证失败信息
+- **权限错误**：只显示"权限不足"，不透露具体权限要求
+- **系统错误**：显示通用错误消息，详细信息只记录在日志中
+
+```typescript
+// 在 API 处理函数中的错误处理
+export const createUser = publicProcedure
+  .use(requirePermission('model:User:create'))
+  .input(userCreateSchema)
+  .mutation(async ({ ctx, input }) => {
+    try {
+      return await ctx.engine.datasource.createObject({
+        modelName: 'User',
+        values: input
+      });
+    } catch (error) {
+      // 记录详细错误信息用于调试（服务器端日志）
+      console.error('创建用户失败:', {
+        error: error.message,
+        stack: error.stack,
+        input: input,
+        userId: ctx.session?.userId
+      });
+
+      // 根据错误类型返回适当的用户消息
+      if (error.code === 'VALIDATION_FAILED') {
+        throw new Error(`数据验证失败: ${error.message}`);
+      } else if (error.code === 'DUPLICATE_KEY') {
+        throw new Error('该邮箱已被使用');
+      } else if (error.code === 'PERMISSION_DENIED') {
+        throw new Error('权限不足');
+      } else {
+        // 对于未知错误，不泄露内部信息
+        throw new Error('操作失败，请稍后重试');
+      }
+    }
+  });
+```
+
+## 特殊场景处理
+
+### 匿名访问
+
+某些应用允许未登录用户访问部分内容。您可以为匿名用户设置默认权限，通常只允许读取公开数据。
+
+```typescript
+engine.sessionManager.setProvider({
+  async session() {
+    // 尝试获取已登录用户
+    const loggedInUser = await getCurrentUser();
+    
+    if (loggedInUser) {
+      // 返回已登录用户的信息
+      return {
+        id: loggedInUser.id,
+        userId: loggedInUser.id,
+        roles: loggedInUser.roles,
+        permissions: await getUserPermissions(loggedInUser.id)
+      };
+    } else {
+      // 返回匿名用户的默认权限
+      return {
+        id: 'anonymous',
+        userId: 'anonymous',
+        roles: ['guest'],
+        permissions: [
+          'model:Post:read',      // 可以读取公开文章
+          'model:Category:read'   // 可以读取分类
+        ]
+      };
+    }
+  }
+});
+```
+
+### 会话管理
+
+处理用户登录状态变化时，需要适当管理会话缓存。当用户退出登录或权限发生变化时，应该清除相关缓存以确保权限检查的准确性。
+
+```typescript
+// 用户登录后，无需特殊处理，下次调用会自动获取新的会话信息
+
+// 用户退出登录时，清除会话缓存
+export async function handleUserLogout() {
+  // 清除 Entity Engine 的会话缓存
+  engine.sessionManager.invalidateCache();
+  
+  // 清除其他相关缓存（如果有的话）
+  clearUserPermissionCache();
+  
+  // 执行其他登出逻辑
+  await performLogoutCleanup();
+}
+
+// 用户权限发生变化时，也应该清除缓存
+export async function handlePermissionChange(userId: string) {
+  engine.sessionManager.invalidateCache();
+  
+  // 重新计算用户权限
+  await refreshUserPermissions(userId);
+}
+```
+
+现在您已经掌握了 Entity Engine 的完整身份认证和权限控制机制。这些安全措施确保只有授权用户才能访问相应的数据和功能。接下来可以学习如何定义数据模型和处理业务逻辑。

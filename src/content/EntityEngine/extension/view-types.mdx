@@ -1,0 +1,1390 @@
+# 自定义视图类型
+
+Entity Engine 允许开发者创建自定义视图类型，以支持特定的数据展示和交互模式。通过扩展视图系统，可以创建符合特定业务需求的界面组件和布局模式。
+
+## 视图类型架构
+
+### 视图类型接口
+
+```typescript
+/**
+ * 视图类型接口
+ */
+interface IViewType {
+  // 基础信息
+  name: string;
+  displayName: string;
+  description?: string;
+  version: string;
+  category: ViewCategory;
+  
+  // 支持的实体类型
+  supportedEntityTypes?: string[];
+  
+  // 配置schema
+  configSchema: ViewConfigSchema;
+  defaultConfig: ViewTypeConfig;
+  
+  // 生命周期方法
+  initialize(context: ViewTypeContext): Promise<void>;
+  render(context: RenderViewContext): Promise<ViewComponent>;
+  update(context: UpdateViewContext): Promise<void>;
+  dispose(context: ViewTypeContext): Promise<void>;
+  
+  // 验证方法
+  validateConfig(config: ViewTypeConfig): ValidationResult;
+  validateData(data: any[]): ValidationResult;
+  
+  // 功能支持
+  getSupportedActions(): ViewAction[];
+  getSupportedEvents(): ViewEvent[];
+  getRequiredPermissions(): string[];
+  
+  // 元数据
+  getMetadata(): ViewTypeMetadata;
+}
+
+/**
+ * 视图类型上下文
+ */
+interface ViewTypeContext {
+  viewDefinition: IViewDefinition;
+  entityManager: IEntityManager;
+  actionManager: IActionManager;
+  eventManager: IEventManager;
+  userContext: UserContext;
+  permissions: PermissionContext;
+  logger: ILogger;
+}
+
+/**
+ * 视图渲染上下文
+ */
+interface RenderViewContext extends ViewTypeContext {
+  data: any[];
+  filters: QueryFilter[];
+  sorting: SortOption[];
+  pagination: PaginationOptions;
+  selectedItems: string[];
+  viewState: ViewState;
+}
+
+/**
+ * 视图组件
+ */
+interface ViewComponent {
+  type: 'react' | 'vue' | 'html' | 'template';
+  component: any;
+  props?: Record<string, any>;
+  events?: ViewEventHandlers;
+  metadata?: ComponentMetadata;
+}
+
+/**
+ * 视图配置Schema
+ */
+interface ViewConfigSchema {
+  type: 'object';
+  properties: Record<string, SchemaProperty>;
+  required?: string[];
+  additionalProperties?: boolean;
+}
+
+/**
+ * 视图类型配置
+ */
+interface ViewTypeConfig {
+  layout: ViewLayout;
+  styling: ViewStyling;
+  behavior: ViewBehavior;
+  [key: string]: any;
+}
+```
+
+### 视图类型注册表
+
+```typescript
+/**
+ * 视图类型注册表
+ */
+class ViewTypeRegistry {
+  private viewTypes = new Map<string, IViewType>();
+  private categoryTypes = new Map<ViewCategory, IViewType[]>();
+  
+  register(viewType: IViewType): void {
+    // 验证视图类型
+    this.validateViewType(viewType);
+    
+    // 检查名称冲突
+    if (this.viewTypes.has(viewType.name)) {
+      throw new ViewTypeError(`View type '${viewType.name}' already registered`);
+    }
+    
+    // 注册视图类型
+    this.viewTypes.set(viewType.name, viewType);
+    
+    // 按类别分组
+    if (!this.categoryTypes.has(viewType.category)) {
+      this.categoryTypes.set(viewType.category, []);
+    }
+    this.categoryTypes.get(viewType.category)!.push(viewType);
+    
+    // 触发注册事件
+    this.emitEvent('viewTypeRegistered', { viewType });
+  }
+  
+  unregister(name: string): boolean {
+    const viewType = this.viewTypes.get(name);
+    if (!viewType) return false;
+    
+    // 检查是否有视图在使用
+    const usage = this.findUsage(name);
+    if (usage.length > 0) {
+      throw new ViewTypeError(
+        `Cannot unregister view type '${name}': used by views ${usage.join(', ')}`
+      );
+    }
+    
+    // 从注册表移除
+    this.viewTypes.delete(name);
+    
+    // 从类别中移除
+    const categoryList = this.categoryTypes.get(viewType.category);
+    if (categoryList) {
+      const index = categoryList.indexOf(viewType);
+      if (index > -1) categoryList.splice(index, 1);
+    }
+    
+    // 触发注销事件
+    this.emitEvent('viewTypeUnregistered', { viewType });
+    
+    return true;
+  }
+  
+  get(name: string): IViewType | undefined {
+    return this.viewTypes.get(name);
+  }
+  
+  list(): IViewType[] {
+    return Array.from(this.viewTypes.values());
+  }
+  
+  getByCategory(category: ViewCategory): IViewType[] {
+    return this.categoryTypes.get(category) || [];
+  }
+  
+  getSuitableTypes(entityType: string): IViewType[] {
+    return Array.from(this.viewTypes.values()).filter(viewType => 
+      !viewType.supportedEntityTypes || 
+      viewType.supportedEntityTypes.includes(entityType) ||
+      viewType.supportedEntityTypes.includes('*')
+    );
+  }
+  
+  async createView(
+    viewType: string, 
+    config: ViewTypeConfig, 
+    context: ViewTypeContext
+  ): Promise<ViewInstance> {
+    const type = this.viewTypes.get(viewType);
+    if (!type) {
+      throw new ViewTypeError(`View type '${viewType}' not found`);
+    }
+    
+    // 验证配置
+    const configValidation = type.validateConfig(config);
+    if (!configValidation.valid) {
+      throw new ViewTypeError(
+        `Invalid view configuration: ${configValidation.errors.join(', ')}`
+      );
+    }
+    
+    // 初始化视图类型
+    await type.initialize(context);
+    
+    // 创建视图实例
+    const instance = new ViewInstance(type, config, context);
+    
+    return instance;
+  }
+  
+  private validateViewType(viewType: IViewType): void {
+    const errors: string[] = [];
+    
+    if (!viewType.name) {
+      errors.push('View type must have a name');
+    }
+    
+    if (!viewType.displayName) {
+      errors.push('View type must have a display name');
+    }
+    
+    if (!viewType.version) {
+      errors.push('View type must have a version');
+    }
+    
+    if (!viewType.category) {
+      errors.push('View type must have a category');
+    }
+    
+    if (typeof viewType.render !== 'function') {
+      errors.push('View type must implement render method');
+    }
+    
+    if (errors.length > 0) {
+      throw new ViewTypeError(`Invalid view type: ${errors.join(', ')}`);
+    }
+  }
+  
+  private findUsage(viewTypeName: string): string[] {
+    // 查找使用该视图类型的视图
+    // 这里应该连接到视图管理器查询
+    return [];
+  }
+  
+  private emitEvent(eventName: string, data: any): void {
+    // 触发事件
+  }
+}
+```
+
+## 自定义视图类型示例
+
+### 看板视图类型
+
+```typescript
+/**
+ * 看板视图类型
+ */
+class KanbanViewType implements IViewType {
+  name = 'kanban';
+  displayName = '看板视图';
+  description = '以看板形式展示数据，支持拖拽排序和状态管理';
+  version = '1.0.0';
+  category = ViewCategory.BOARD;
+  
+  supportedEntityTypes = ['*']; // 支持所有实体类型
+  
+  configSchema: ViewConfigSchema = {
+    type: 'object',
+    properties: {
+      statusField: {
+        type: 'string',
+        title: '状态字段',
+        description: '用作看板列的字段名称',
+        required: true
+      },
+      statusValues: {
+        type: 'array',
+        items: { type: 'string' },
+        title: '状态值',
+        description: '看板列对应的状态值'
+      },
+      cardTitleField: {
+        type: 'string',
+        title: '卡片标题字段',
+        description: '用作卡片标题的字段名称',
+        default: 'title'
+      },
+      cardContentFields: {
+        type: 'array',
+        items: { type: 'string' },
+        title: '卡片内容字段',
+        description: '显示在卡片中的字段列表'
+      },
+      allowDragDrop: {
+        type: 'boolean',
+        title: '允许拖拽',
+        description: '是否允许拖拽卡片',
+        default: true
+      },
+      columnWidth: {
+        type: 'number',
+        title: '列宽度',
+        description: '看板列的宽度（像素）',
+        minimum: 200,
+        maximum: 500,
+        default: 300
+      },
+      maxCardsPerColumn: {
+        type: 'number',
+        title: '每列最大卡片数',
+        description: '每列显示的最大卡片数量',
+        minimum: 1,
+        default: 50
+      }
+    },
+    required: ['statusField']
+  };
+  
+  defaultConfig: ViewTypeConfig = {
+    layout: {
+      type: 'kanban',
+      orientation: 'horizontal'
+    },
+    styling: {
+      theme: 'default',
+      cardSpacing: 8,
+      columnSpacing: 16
+    },
+    behavior: {
+      enableDragDrop: true,
+      enableFiltering: true,
+      enableSearch: true,
+      autoRefresh: false
+    }
+  };
+  
+  private dragDropManager?: IDragDropManager;
+  private updateQueue: UpdateItem[] = [];
+  
+  async initialize(context: ViewTypeContext): Promise<void> {
+    // 初始化拖拽管理器
+    this.dragDropManager = new KanbanDragDropManager({
+      onDrop: this.handleCardDrop.bind(this),
+      onDragStart: this.handleDragStart.bind(this),
+      onDragEnd: this.handleDragEnd.bind(this)
+    });
+    
+    await this.dragDropManager.initialize();
+    
+    context.logger.info('Kanban view type initialized');
+  }
+  
+  async render(context: RenderViewContext): Promise<ViewComponent> {
+    const config = context.viewDefinition.config;
+    const { data, viewState } = context;
+    
+    // 验证必需的配置
+    if (!config.statusField) {
+      throw new ViewTypeError('Status field is required for kanban view');
+    }
+    
+    // 准备看板数据
+    const kanbanData = this.prepareKanbanData(data, config);
+    
+    // 创建React组件
+    const KanbanComponent = this.createKanbanComponent(kanbanData, config, context);
+    
+    return {
+      type: 'react',
+      component: KanbanComponent,
+      props: {
+        data: kanbanData,
+        config,
+        viewState,
+        onCardMove: this.handleCardMove.bind(this, context),
+        onCardSelect: this.handleCardSelect.bind(this, context),
+        onColumnScroll: this.handleColumnScroll.bind(this, context)
+      },
+      events: {
+        'card.moved': this.onCardMoved.bind(this),
+        'card.selected': this.onCardSelected.bind(this),
+        'column.updated': this.onColumnUpdated.bind(this)
+      },
+      metadata: {
+        totalCards: data.length,
+        columns: kanbanData.columns.length,
+        interactive: true
+      }
+    };
+  }
+  
+  async update(context: UpdateViewContext): Promise<void> {
+    // 处理数据更新
+    if (context.type === 'data') {
+      await this.updateData(context);
+    }
+    
+    // 处理配置更新
+    if (context.type === 'config') {
+      await this.updateConfig(context);
+    }
+    
+    // 处理状态更新
+    if (context.type === 'state') {
+      await this.updateState(context);
+    }
+  }
+  
+  async dispose(context: ViewTypeContext): Promise<void> {
+    // 清理拖拽管理器
+    if (this.dragDropManager) {
+      await this.dragDropManager.dispose();
+      this.dragDropManager = undefined;
+    }
+    
+    // 清理更新队列
+    this.updateQueue = [];
+    
+    context.logger.info('Kanban view type disposed');
+  }
+  
+  validateConfig(config: ViewTypeConfig): ValidationResult {
+    const errors: string[] = [];
+    
+    if (!config.statusField) {
+      errors.push('Status field is required');
+    }
+    
+    if (config.maxCardsPerColumn && config.maxCardsPerColumn < 1) {
+      errors.push('Max cards per column must be at least 1');
+    }
+    
+    if (config.columnWidth && (config.columnWidth < 200 || config.columnWidth > 500)) {
+      errors.push('Column width must be between 200 and 500 pixels');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  validateData(data: any[]): ValidationResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    
+    if (!Array.isArray(data)) {
+      errors.push('Data must be an array');
+      return { valid: false, errors, warnings };
+    }
+    
+    // 检查数据结构
+    const requiredFields = ['id', 'statusField'];
+    const missingFields = new Set<string>();
+    
+    for (const item of data) {
+      if (!item || typeof item !== 'object') {
+        warnings.push('Invalid data item found');
+        continue;
+      }
+      
+      for (const field of requiredFields) {
+        if (!(field in item)) {
+          missingFields.add(field);
+        }
+      }
+    }
+    
+    if (missingFields.size > 0) {
+      warnings.push(`Some items missing fields: ${Array.from(missingFields).join(', ')}`);
+    }
+    
+    return { valid: errors.length === 0, errors, warnings };
+  }
+  
+  getSupportedActions(): ViewAction[] {
+    return [
+      {
+        name: 'move_card',
+        displayName: '移动卡片',
+        description: '将卡片移动到不同状态列',
+        icon: 'move',
+        permissions: ['edit']
+      },
+      {
+        name: 'create_card',
+        displayName: '创建卡片',
+        description: '在指定列创建新卡片',
+        icon: 'plus',
+        permissions: ['create']
+      },
+      {
+        name: 'delete_card',
+        displayName: '删除卡片',
+        description: '删除选中的卡片',
+        icon: 'trash',
+        permissions: ['delete']
+      },
+      {
+        name: 'edit_card',
+        displayName: '编辑卡片',
+        description: '编辑卡片内容',
+        icon: 'edit',
+        permissions: ['edit']
+      }
+    ];
+  }
+  
+  getSupportedEvents(): ViewEvent[] {
+    return [
+      {
+        name: 'card.moved',
+        description: '卡片移动事件',
+        payload: 'CardMoveEvent'
+      },
+      {
+        name: 'card.selected',
+        description: '卡片选择事件',
+        payload: 'CardSelectEvent'
+      },
+      {
+        name: 'column.updated',
+        description: '列更新事件',
+        payload: 'ColumnUpdateEvent'
+      }
+    ];
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['read'];
+  }
+  
+  getMetadata(): ViewTypeMetadata {
+    return {
+      supportsFiltering: true,
+      supportsSorting: false,
+      supportsPagination: false,
+      supportsGrouping: true,
+      supportsExport: true,
+      supportsSelection: true,
+      isInteractive: true,
+      preferredWidth: 'full',
+      preferredHeight: 'auto'
+    };
+  }
+  
+  // 私有方法
+  private prepareKanbanData(data: any[], config: any): KanbanData {
+    const statusField = config.statusField;
+    const statusValues = config.statusValues || this.inferStatusValues(data, statusField);
+    
+    // 创建列
+    const columns: KanbanColumn[] = statusValues.map(status => ({
+      id: status,
+      title: this.formatStatusTitle(status),
+      status,
+      cards: [],
+      maxCards: config.maxCardsPerColumn
+    }));
+    
+    // 分配卡片到列
+    for (const item of data) {
+      const status = item[statusField];
+      const column = columns.find(col => col.status === status);
+      
+      if (column) {
+        const card: KanbanCard = {
+          id: item.id,
+          title: item[config.cardTitleField || 'title'] || 'Untitled',
+          content: this.extractCardContent(item, config.cardContentFields),
+          data: item,
+          metadata: {
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            assignee: item.assignee
+          }
+        };
+        
+        column.cards.push(card);
+      }
+    }
+    
+    return {
+      columns,
+      totalCards: data.length,
+      metadata: {
+        statusField,
+        statusValues,
+        lastUpdate: new Date()
+      }
+    };
+  }
+  
+  private createKanbanComponent(
+    kanbanData: KanbanData, 
+    config: any, 
+    context: RenderViewContext
+  ): React.ComponentType {
+    return function KanbanBoard(props: any) {
+      const [selectedCards, setSelectedCards] = React.useState<string[]>([]);
+      const [draggedCard, setDraggedCard] = React.useState<KanbanCard | null>(null);
+      
+      const handleCardDragStart = (card: KanbanCard) => {
+        setDraggedCard(card);
+      };
+      
+      const handleCardDrop = (card: KanbanCard, targetColumnId: string) => {
+        props.onCardMove(card, targetColumnId);
+        setDraggedCard(null);
+      };
+      
+      const handleCardClick = (card: KanbanCard, event: React.MouseEvent) => {
+        if (event.ctrlKey || event.metaKey) {
+          // 多选
+          const newSelection = selectedCards.includes(card.id)
+            ? selectedCards.filter(id => id !== card.id)
+            : [...selectedCards, card.id];
+          setSelectedCards(newSelection);
+        } else {
+          // 单选
+          setSelectedCards([card.id]);
+        }
+        
+        props.onCardSelect(card, selectedCards);
+      };
+      
+      return React.createElement('div', {
+        className: 'kanban-board',
+        style: { 
+          display: 'flex', 
+          gap: `${config.columnSpacing || 16}px`,
+          overflowX: 'auto',
+          height: '100%'
+        }
+      },
+        kanbanData.columns.map(column => 
+          React.createElement('div', {
+            key: column.id,
+            className: 'kanban-column',
+            style: {
+              width: `${config.columnWidth || 300}px`,
+              backgroundColor: '#f5f5f5',
+              borderRadius: '8px',
+              padding: '16px'
+            }
+          }, [
+            // 列标题
+            React.createElement('div', {
+              key: 'header',
+              className: 'kanban-column-header',
+              style: {
+                fontWeight: 'bold',
+                marginBottom: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }
+            }, [
+              React.createElement('span', { key: 'title' }, column.title),
+              React.createElement('span', { 
+                key: 'count',
+                style: { 
+                  backgroundColor: '#ddd',
+                  borderRadius: '12px',
+                  padding: '2px 8px',
+                  fontSize: '12px'
+                }
+              }, column.cards.length)
+            ]),
+            
+            // 卡片列表
+            React.createElement('div', {
+              key: 'cards',
+              className: 'kanban-cards',
+              style: {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: `${config.cardSpacing || 8}px`,
+                minHeight: '100px'
+              },
+              onDrop: (e: React.DragEvent) => {
+                e.preventDefault();
+                if (draggedCard) {
+                  handleCardDrop(draggedCard, column.id);
+                }
+              },
+              onDragOver: (e: React.DragEvent) => {
+                e.preventDefault();
+              }
+            }, 
+              column.cards.map(card => 
+                React.createElement('div', {
+                  key: card.id,
+                  className: `kanban-card ${selectedCards.includes(card.id) ? 'selected' : ''}`,
+                  draggable: config.allowDragDrop,
+                  style: {
+                    backgroundColor: 'white',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    cursor: 'pointer',
+                    border: selectedCards.includes(card.id) ? '2px solid #007bff' : '1px solid #ddd'
+                  },
+                  onClick: (e: React.MouseEvent) => handleCardClick(card, e),
+                  onDragStart: () => handleCardDragStart(card)
+                }, [
+                  React.createElement('div', {
+                    key: 'title',
+                    className: 'card-title',
+                    style: { 
+                      fontWeight: '500', 
+                      marginBottom: '8px',
+                      color: '#333'
+                    }
+                  }, card.title),
+                  
+                  React.createElement('div', {
+                    key: 'content',
+                    className: 'card-content',
+                    style: { 
+                      fontSize: '14px',
+                      color: '#666',
+                      lineHeight: '1.4'
+                    }
+                  }, this.renderCardContent(card.content))
+                ])
+              )
+            )
+          ])
+        )
+      );
+    }.bind(this);
+  }
+  
+  private inferStatusValues(data: any[], statusField: string): string[] {
+    const statusSet = new Set<string>();
+    
+    for (const item of data) {
+      const status = item[statusField];
+      if (status && typeof status === 'string') {
+        statusSet.add(status);
+      }
+    }
+    
+    return Array.from(statusSet).sort();
+  }
+  
+  private formatStatusTitle(status: string): string {
+    return status.replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase());
+  }
+  
+  private extractCardContent(item: any, contentFields?: string[]): any {
+    if (!contentFields || contentFields.length === 0) {
+      return null;
+    }
+    
+    const content: Record<string, any> = {};
+    
+    for (const field of contentFields) {
+      if (field in item) {
+        content[field] = item[field];
+      }
+    }
+    
+    return content;
+  }
+  
+  private renderCardContent(content: any): React.ReactNode {
+    if (!content) return null;
+    
+    return Object.entries(content).map(([key, value]) => 
+      React.createElement('div', {
+        key,
+        style: { marginBottom: '4px' }
+      }, [
+        React.createElement('span', {
+          key: 'label',
+          style: { fontWeight: '500', marginRight: '4px' }
+        }, `${key}:`),
+        React.createElement('span', { key: 'value' }, String(value))
+      ])
+    );
+  }
+  
+  private async handleCardMove(context: RenderViewContext, card: KanbanCard, targetStatus: string): Promise<void> {
+    const config = context.viewDefinition.config;
+    const statusField = config.statusField;
+    
+    try {
+      // 更新实体数据
+      await context.entityManager.update(card.data.entityType || context.viewDefinition.entityType, card.id, {
+        [statusField]: targetStatus
+      });
+      
+      // 触发事件
+      context.eventManager.emit('view.card.moved', {
+        viewId: context.viewDefinition.id,
+        cardId: card.id,
+        fromStatus: card.data[statusField],
+        toStatus: targetStatus,
+        timestamp: new Date()
+      });
+      
+    } catch (error) {
+      context.logger.error('Failed to move card:', error);
+      throw error;
+    }
+  }
+  
+  private handleCardSelect(context: RenderViewContext, card: KanbanCard, selectedCards: string[]): void {
+    context.eventManager.emit('view.card.selected', {
+      viewId: context.viewDefinition.id,
+      cardId: card.id,
+      selectedCards,
+      timestamp: new Date()
+    });
+  }
+  
+  private handleColumnScroll(context: RenderViewContext, columnId: string, scrollTop: number): void {
+    // 保存滚动位置到视图状态
+    context.viewState.columnScrollPositions = context.viewState.columnScrollPositions || {};
+    context.viewState.columnScrollPositions[columnId] = scrollTop;
+  }
+  
+  private async handleCardDrop(cardId: string, sourceColumnId: string, targetColumnId: string, position: number): Promise<void> {
+    // 处理拖拽放置逻辑
+  }
+  
+  private handleDragStart(cardId: string): void {
+    // 处理拖拽开始
+  }
+  
+  private handleDragEnd(cardId: string, success: boolean): void {
+    // 处理拖拽结束
+  }
+  
+  private async updateData(context: UpdateViewContext): Promise<void> {
+    // 处理数据更新逻辑
+  }
+  
+  private async updateConfig(context: UpdateViewContext): Promise<void> {
+    // 处理配置更新逻辑
+  }
+  
+  private async updateState(context: UpdateViewContext): Promise<void> {
+    // 处理状态更新逻辑
+  }
+  
+  private onCardMoved(event: any): void {
+    // 卡片移动事件处理
+  }
+  
+  private onCardSelected(event: any): void {
+    // 卡片选择事件处理
+  }
+  
+  private onColumnUpdated(event: any): void {
+    // 列更新事件处理
+  }
+}
+```
+
+### 时间线视图类型
+
+```typescript
+/**
+ * 时间线视图类型
+ */
+class TimelineViewType implements IViewType {
+  name = 'timeline';
+  displayName = '时间线视图';
+  description = '以时间轴形式展示数据，支持时间范围筛选和缩放';
+  version = '1.0.0';
+  category = ViewCategory.TEMPORAL;
+  
+  supportedEntityTypes = ['*'];
+  
+  configSchema: ViewConfigSchema = {
+    type: 'object',
+    properties: {
+      dateField: {
+        type: 'string',
+        title: '日期字段',
+        description: '用于时间线排序的日期字段',
+        required: true
+      },
+      titleField: {
+        type: 'string',
+        title: '标题字段',
+        description: '时间线项目标题字段',
+        default: 'title'
+      },
+      descriptionField: {
+        type: 'string',
+        title: '描述字段',
+        description: '时间线项目描述字段'
+      },
+      categoryField: {
+        type: 'string',
+        title: '分类字段',
+        description: '用于分组和着色的分类字段'
+      },
+      orientation: {
+        type: 'string',
+        enum: ['horizontal', 'vertical'],
+        title: '方向',
+        description: '时间线的方向',
+        default: 'vertical'
+      },
+      showGrid: {
+        type: 'boolean',
+        title: '显示网格',
+        description: '是否显示时间网格',
+        default: true
+      },
+      zoomable: {
+        type: 'boolean',
+        title: '可缩放',
+        description: '是否允许时间轴缩放',
+        default: true
+      },
+      timeRange: {
+        type: 'object',
+        properties: {
+          start: { type: 'string', format: 'date' },
+          end: { type: 'string', format: 'date' }
+        },
+        title: '时间范围',
+        description: '显示的时间范围'
+      }
+    },
+    required: ['dateField']
+  };
+  
+  defaultConfig: ViewTypeConfig = {
+    layout: {
+      type: 'timeline',
+      orientation: 'vertical',
+      spacing: 20
+    },
+    styling: {
+      theme: 'default',
+      itemHeight: 80,
+      lineWidth: 2
+    },
+    behavior: {
+      enableZoom: true,
+      enablePan: true,
+      enableSelection: true,
+      autoFit: true
+    }
+  };
+  
+  private timelineEngine?: ITimelineEngine;
+  
+  async initialize(context: ViewTypeContext): Promise<void> {
+    // 初始化时间线引擎
+    this.timelineEngine = new TimelineEngine({
+      onItemClick: this.handleItemClick.bind(this),
+      onTimeRangeChange: this.handleTimeRangeChange.bind(this),
+      onZoom: this.handleZoom.bind(this)
+    });
+    
+    await this.timelineEngine.initialize();
+    
+    context.logger.info('Timeline view type initialized');
+  }
+  
+  async render(context: RenderViewContext): Promise<ViewComponent> {
+    const config = context.viewDefinition.config;
+    const { data } = context;
+    
+    // 验证配置
+    if (!config.dateField) {
+      throw new ViewTypeError('Date field is required for timeline view');
+    }
+    
+    // 准备时间线数据
+    const timelineData = this.prepareTimelineData(data, config);
+    
+    // 创建时间线组件
+    const TimelineComponent = this.createTimelineComponent(timelineData, config, context);
+    
+    return {
+      type: 'react',
+      component: TimelineComponent,
+      props: {
+        data: timelineData,
+        config,
+        onItemSelect: this.handleItemSelect.bind(this, context),
+        onTimeRangeChange: this.handleTimeRangeChange.bind(this, context)
+      },
+      events: {
+        'item.selected': this.onItemSelected.bind(this),
+        'timerange.changed': this.onTimeRangeChanged.bind(this)
+      },
+      metadata: {
+        totalItems: data.length,
+        timeSpan: timelineData.timeSpan,
+        interactive: true
+      }
+    };
+  }
+  
+  async update(context: UpdateViewContext): Promise<void> {
+    // 更新时间线数据和视图
+    if (this.timelineEngine) {
+      await this.timelineEngine.update(context.data);
+    }
+  }
+  
+  async dispose(context: ViewTypeContext): Promise<void> {
+    if (this.timelineEngine) {
+      await this.timelineEngine.dispose();
+      this.timelineEngine = undefined;
+    }
+  }
+  
+  validateConfig(config: ViewTypeConfig): ValidationResult {
+    const errors: string[] = [];
+    
+    if (!config.dateField) {
+      errors.push('Date field is required');
+    }
+    
+    if (config.orientation && !['horizontal', 'vertical'].includes(config.orientation)) {
+      errors.push('Orientation must be "horizontal" or "vertical"');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  validateData(data: any[]): ValidationResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    
+    for (const item of data) {
+      if (!item.id) {
+        warnings.push('Item without ID found');
+      }
+    }
+    
+    return { valid: errors.length === 0, errors, warnings };
+  }
+  
+  getSupportedActions(): ViewAction[] {
+    return [
+      {
+        name: 'zoom_in',
+        displayName: '放大',
+        description: '放大时间轴',
+        icon: 'zoom-in',
+        permissions: []
+      },
+      {
+        name: 'zoom_out', 
+        displayName: '缩小',
+        description: '缩小时间轴',
+        icon: 'zoom-out',
+        permissions: []
+      },
+      {
+        name: 'fit_to_data',
+        displayName: '适应数据',
+        description: '调整时间轴以适应所有数据',
+        icon: 'fit',
+        permissions: []
+      }
+    ];
+  }
+  
+  getSupportedEvents(): ViewEvent[] {
+    return [
+      {
+        name: 'item.selected',
+        description: '时间线项目选择事件',
+        payload: 'TimelineItemSelectEvent'
+      },
+      {
+        name: 'timerange.changed',
+        description: '时间范围变化事件',
+        payload: 'TimeRangeChangeEvent'
+      }
+    ];
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['read'];
+  }
+  
+  getMetadata(): ViewTypeMetadata {
+    return {
+      supportsFiltering: true,
+      supportsSorting: true,
+      supportsPagination: false,
+      supportsGrouping: true,
+      supportsExport: true,
+      supportsSelection: true,
+      isInteractive: true,
+      preferredWidth: 'full',
+      preferredHeight: 'auto'
+    };
+  }
+  
+  private prepareTimelineData(data: any[], config: any): TimelineData {
+    const dateField = config.dateField;
+    const items: TimelineItem[] = [];
+    
+    let minDate = new Date();
+    let maxDate = new Date(0);
+    
+    for (const item of data) {
+      const date = new Date(item[dateField]);
+      if (isNaN(date.getTime())) continue;
+      
+      if (date < minDate) minDate = date;
+      if (date > maxDate) maxDate = date;
+      
+      const timelineItem: TimelineItem = {
+        id: item.id,
+        date,
+        title: item[config.titleField || 'title'] || 'Untitled',
+        description: item[config.descriptionField],
+        category: item[config.categoryField],
+        data: item,
+        metadata: {
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        }
+      };
+      
+      items.push(timelineItem);
+    }
+    
+    // 按日期排序
+    items.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    return {
+      items,
+      timeSpan: {
+        start: minDate,
+        end: maxDate
+      },
+      metadata: {
+        totalItems: items.length,
+        dateField,
+        lastUpdate: new Date()
+      }
+    };
+  }
+  
+  private createTimelineComponent(
+    timelineData: TimelineData,
+    config: any,
+    context: RenderViewContext
+  ): React.ComponentType {
+    return function Timeline(props: any) {
+      const [selectedItems, setSelectedItems] = React.useState<string[]>([]);
+      const [zoomLevel, setZoomLevel] = React.useState(1);
+      const [visibleRange, setVisibleRange] = React.useState({
+        start: timelineData.timeSpan.start,
+        end: timelineData.timeSpan.end
+      });
+      
+      const handleItemClick = (item: TimelineItem) => {
+        setSelectedItems([item.id]);
+        props.onItemSelect(item);
+      };
+      
+      const handleZoom = (delta: number) => {
+        const newZoom = Math.max(0.1, Math.min(5, zoomLevel + delta));
+        setZoomLevel(newZoom);
+      };
+      
+      return React.createElement('div', {
+        className: 'timeline-view',
+        style: { 
+          height: '100%',
+          overflow: 'auto',
+          padding: '20px'
+        }
+      }, [
+        // 时间线控件
+        React.createElement('div', {
+          key: 'controls',
+          className: 'timeline-controls',
+          style: {
+            marginBottom: '20px',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center'
+          }
+        }, [
+          React.createElement('button', {
+            key: 'zoom-in',
+            onClick: () => handleZoom(0.2)
+          }, '放大'),
+          React.createElement('button', {
+            key: 'zoom-out', 
+            onClick: () => handleZoom(-0.2)
+          }, '缩小'),
+          React.createElement('span', {
+            key: 'zoom-level'
+          }, `缩放: ${Math.round(zoomLevel * 100)}%`)
+        ]),
+        
+        // 时间线内容
+        React.createElement('div', {
+          key: 'timeline',
+          className: 'timeline-content',
+          style: {
+            position: 'relative',
+            transform: `scale(${zoomLevel})`,
+            transformOrigin: 'top left'
+          }
+        }, this.renderTimelineItems(timelineData.items, config, selectedItems, handleItemClick))
+      ]);
+    }.bind(this);
+  }
+  
+  private renderTimelineItems(
+    items: TimelineItem[],
+    config: any,
+    selectedItems: string[],
+    onItemClick: (item: TimelineItem) => void
+  ): React.ReactNode[] {
+    const orientation = config.orientation || 'vertical';
+    const spacing = config.spacing || 20;
+    
+    return items.map((item, index) => {
+      const isSelected = selectedItems.includes(item.id);
+      const position = orientation === 'vertical' 
+        ? { top: index * (80 + spacing) }
+        : { left: index * (200 + spacing) };
+      
+      return React.createElement('div', {
+        key: item.id,
+        className: `timeline-item ${isSelected ? 'selected' : ''}`,
+        style: {
+          position: 'absolute',
+          ...position,
+          width: orientation === 'vertical' ? '100%' : '180px',
+          height: orientation === 'vertical' ? '60px' : 'auto',
+          backgroundColor: isSelected ? '#e3f2fd' : 'white',
+          border: '1px solid #ddd',
+          borderRadius: '8px',
+          padding: '12px',
+          cursor: 'pointer',
+          boxShadow: isSelected ? '0 4px 8px rgba(0,0,0,0.2)' : '0 2px 4px rgba(0,0,0,0.1)'
+        },
+        onClick: () => onItemClick(item)
+      }, [
+        React.createElement('div', {
+          key: 'title',
+          style: { 
+            fontWeight: '500',
+            marginBottom: '4px',
+            color: '#333'
+          }
+        }, item.title),
+        
+        React.createElement('div', {
+          key: 'date',
+          style: {
+            fontSize: '12px',
+            color: '#666',
+            marginBottom: '4px'
+          }
+        }, item.date.toLocaleDateString()),
+        
+        item.description && React.createElement('div', {
+          key: 'description',
+          style: {
+            fontSize: '14px',
+            color: '#888',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }
+        }, item.description)
+      ]);
+    });
+  }
+  
+  private handleItemClick(item: TimelineItem): void {
+    // 处理项目点击
+  }
+  
+  private handleItemSelect(context: RenderViewContext, item: TimelineItem): void {
+    context.eventManager.emit('view.item.selected', {
+      viewId: context.viewDefinition.id,
+      itemId: item.id,
+      timestamp: new Date()
+    });
+  }
+  
+  private handleTimeRangeChange(context: RenderViewContext, range: { start: Date; end: Date }): void {
+    context.eventManager.emit('view.timerange.changed', {
+      viewId: context.viewDefinition.id,
+      range,
+      timestamp: new Date()
+    });
+  }
+  
+  private handleZoom(level: number): void {
+    // 处理缩放
+  }
+  
+  private onItemSelected(event: any): void {
+    // 项目选择事件处理
+  }
+  
+  private onTimeRangeChanged(event: any): void {
+    // 时间范围变化事件处理
+  }
+}
+```
+
+## 视图类型注册和使用
+
+### 注册自定义视图类型
+
+```typescript
+// 在应用启动时注册视图类型
+const viewTypeRegistry = EntityEngine.getViewTypeRegistry();
+
+// 注册看板视图类型
+viewTypeRegistry.register(new KanbanViewType());
+
+// 注册时间线视图类型
+viewTypeRegistry.register(new TimelineViewType());
+
+// 批量注册
+const customViewTypes = [
+  new GalleryViewType(),
+  new MapViewType(), 
+  new ChartViewType(),
+  new CalendarViewType()
+];
+
+customViewTypes.forEach(viewType => {
+  viewTypeRegistry.register(viewType);
+});
+```
+
+### 在视图定义中使用
+
+```typescript
+// 看板视图定义
+const projectKanbanView: IViewDefinition = {
+  id: 'project-kanban',
+  name: 'ProjectKanban',
+  displayName: '项目看板',
+  type: 'kanban',
+  entityType: 'Task',
+  config: {
+    statusField: 'status',
+    statusValues: ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'],
+    cardTitleField: 'title',
+    cardContentFields: ['assignee', 'priority', 'dueDate'],
+    allowDragDrop: true,
+    columnWidth: 320
+  }
+};
+
+// 时间线视图定义
+const projectTimelineView: IViewDefinition = {
+  id: 'project-timeline',
+  name: 'ProjectTimeline', 
+  displayName: '项目时间线',
+  type: 'timeline',
+  entityType: 'Event',
+  config: {
+    dateField: 'eventDate',
+    titleField: 'title',
+    descriptionField: 'description',
+    categoryField: 'type',
+    orientation: 'vertical',
+    showGrid: true,
+    zoomable: true
+  }
+};
+```
+
+## 下一步
+
+了解自定义视图类型后，继续学习：
+
+- [动作处理器](./action-handlers) - 自定义业务逻辑处理
+- [事件钩子](./event-hooks) - 实现事件驱动的扩展功能
+- [视图布局](../views/layout) - 详细了解视图布局系统
