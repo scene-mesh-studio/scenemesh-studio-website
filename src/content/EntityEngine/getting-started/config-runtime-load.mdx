@@ -1,0 +1,492 @@
+# 动态配置管理
+
+学习如何在运行时动态加载和管理 Entity Engine 配置，支持多租户和可扩展的应用架构。
+
+## 适用场景
+
+- **多租户系统** - 不同租户使用不同的模型配置
+- **功能开关** - 动态启用或禁用特定功能
+- **模块化开发** - 按需加载业务模块
+- **配置热更新** - 无需重启即可更新配置
+
+## 基础动态加载
+
+### 环境配置加载
+
+根据环境变量动态选择配置：
+
+```typescript filename="lib/config-loader.ts"
+import type { IEntityModel, IEntityView } from '@scenemesh/entity-engine';
+
+interface ConfigOptions {
+  environment: 'development' | 'staging' | 'production';
+  features: string[];
+}
+
+export async function loadConfig(options: ConfigOptions) {
+  const models: IEntityModel[] = [];
+  const views: IEntityView[] = [];
+
+  // 基础模型（所有环境都加载）
+  const { UserModel } = await import('./models/user.model');
+  models.push(UserModel);
+
+  // 按环境加载不同配置
+  if (options.environment === 'development') {
+    const { DebugModel } = await import('./models/debug.model');
+    models.push(DebugModel);
+  }
+
+  // 按功能开关加载
+  if (options.features.includes('analytics')) {
+    const { AnalyticsModel } = await import('./models/analytics.model');
+    const { AnalyticsViews } = await import('./views/analytics.views');
+    models.push(AnalyticsModel);
+    views.push(...AnalyticsViews);
+  }
+
+  return { models, views };
+}
+```
+
+### 使用配置加载器
+
+在 API 路由中使用动态配置：
+
+```typescript filename="app/api/ee/[[...slug]]/route.ts"
+import { EnginePrimitiveInitializer, fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { loadConfig } from '../../../../lib/config-loader';
+
+// 缓存初始化器避免重复创建
+let cachedInitializer: EnginePrimitiveInitializer | null = null;
+
+async function getInitializer() {
+  if (!cachedInitializer) {
+    const config = await loadConfig({
+      environment: process.env.NODE_ENV as any,
+      features: process.env.ENABLED_FEATURES?.split(',') || []
+    });
+
+    cachedInitializer = new EnginePrimitiveInitializer({
+      models: config.models,
+      views: config.views,
+    });
+  }
+
+  return cachedInitializer;
+}
+
+const handler = async (req: Request) => {
+  const initializer = await getInitializer();
+  
+  return fetchEntityEntranceHandler({
+    request: req,
+    endpoint: '/api/ee',
+    initializer
+  });
+};
+
+export { handler as GET, handler as POST };
+```
+
+## 多租户配置
+
+为不同租户提供不同的模型配置：
+
+### 租户配置加载器
+
+```typescript filename="lib/tenant-config.ts"
+interface TenantConfig {
+  tenantId: string;
+  enabledModels: string[];
+  customFields?: Record<string, any>;
+}
+
+export class TenantConfigLoader {
+  private configCache = new Map<string, { models: IEntityModel[], views: IEntityView[] }>();
+
+  async loadTenantConfig(tenantId: string): Promise<{ models: IEntityModel[], views: IEntityView[] }> {
+    // 检查缓存
+    if (this.configCache.has(tenantId)) {
+      return this.configCache.get(tenantId)!;
+    }
+
+    // 获取租户配置
+    const tenantConfig = await this.getTenantConfig(tenantId);
+    
+    const models: IEntityModel[] = [];
+    const views: IEntityView[] = [];
+
+    // 加载启用的模型
+    for (const modelName of tenantConfig.enabledModels) {
+      try {
+        const modelModule = await import(`../models/${modelName.toLowerCase()}.model`);
+        const viewModule = await import(`../views/${modelName.toLowerCase()}.views`);
+        
+        let model = modelModule[`${modelName}Model`];
+        
+        // 应用租户自定义字段
+        if (tenantConfig.customFields?.[modelName]) {
+          model = this.applyCustomFields(model, tenantConfig.customFields[modelName]);
+        }
+        
+        models.push(model);
+        views.push(...viewModule.views);
+        
+      } catch (error) {
+        console.warn(`Failed to load model ${modelName} for tenant ${tenantId}:`, error);
+      }
+    }
+
+    const result = { models, views };
+    this.configCache.set(tenantId, result);
+    
+    return result;
+  }
+
+  private async getTenantConfig(tenantId: string): Promise<TenantConfig> {
+    // 从数据库或配置服务获取租户配置
+    // 这里使用模拟数据
+    const configs: Record<string, TenantConfig> = {
+      'tenant-a': {
+        tenantId: 'tenant-a',
+        enabledModels: ['User', 'Product', 'Order'],
+        customFields: {
+          User: {
+            department: { type: 'string', title: '部门' }
+          }
+        }
+      },
+      'tenant-b': {
+        tenantId: 'tenant-b',
+        enabledModels: ['User', 'Product'],
+      }
+    };
+
+    return configs[tenantId] || { tenantId, enabledModels: ['User'] };
+  }
+
+  private applyCustomFields(model: IEntityModel, customFields: Record<string, any>): IEntityModel {
+    return {
+      ...model,
+      fields: [
+        ...model.fields,
+        ...Object.entries(customFields).map(([name, config]) => ({
+          name,
+          title: config.title || name,
+          type: config.type || 'string',
+          isRequired: config.required || false,
+        }))
+      ]
+    };
+  }
+}
+
+export const tenantConfigLoader = new TenantConfigLoader();
+```
+
+### 租户路由处理
+
+```typescript filename="app/api/[tenantId]/ee/[[...slug]]/route.ts"
+import { fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { tenantConfigLoader } from '../../../../../lib/tenant-config';
+
+const handler = async (req: Request, { params }: { params: { tenantId: string } }) => {
+  const { tenantId } = params;
+  
+  // 验证租户ID
+  if (!tenantId) {
+    return new Response('Tenant ID required', { status: 400 });
+  }
+
+  try {
+    // 加载租户配置
+    const config = await tenantConfigLoader.loadTenantConfig(tenantId);
+    
+    const initializer = new EnginePrimitiveInitializer({
+      models: config.models,
+      views: config.views,
+    });
+
+    return fetchEntityEntranceHandler({
+      request: req,
+      endpoint: `/api/${tenantId}/ee`,
+      initializer
+    });
+    
+  } catch (error) {
+    console.error(`Failed to load config for tenant ${tenantId}:`, error);
+    return new Response('Configuration error', { status: 500 });
+  }
+};
+
+export { handler as GET, handler as POST };
+```
+
+## 功能开关配置
+
+使用功能开关动态控制模型和视图的加载：
+
+### 功能开关管理
+
+```typescript filename="lib/feature-flags.ts"
+interface FeatureFlag {
+  name: string;
+  enabled: boolean;
+  models?: string[];
+  views?: string[];
+}
+
+export class FeatureFlagManager {
+  private flags: Map<string, FeatureFlag> = new Map();
+
+  constructor() {
+    this.loadFlags();
+  }
+
+  private loadFlags() {
+    // 从环境变量或配置服务加载功能开关
+    const flags: FeatureFlag[] = [
+      {
+        name: 'advanced-analytics',
+        enabled: process.env.ENABLE_ANALYTICS === 'true',
+        models: ['Analytics', 'Report'],
+        views: ['analytics_dashboard', 'report_grid']
+      },
+      {
+        name: 'user-management',
+        enabled: process.env.ENABLE_USER_MGMT !== 'false',
+        models: ['User', 'Role'],
+        views: ['user_grid', 'user_form', 'role_form']
+      }
+    ];
+
+    flags.forEach(flag => {
+      this.flags.set(flag.name, flag);
+    });
+  }
+
+  isEnabled(flagName: string): boolean {
+    return this.flags.get(flagName)?.enabled || false;
+  }
+
+  getEnabledModels(): string[] {
+    const models: string[] = [];
+    
+    for (const flag of this.flags.values()) {
+      if (flag.enabled && flag.models) {
+        models.push(...flag.models);
+      }
+    }
+    
+    return [...new Set(models)]; // 去重
+  }
+
+  getEnabledViews(): string[] {
+    const views: string[] = [];
+    
+    for (const flag of this.flags.values()) {
+      if (flag.enabled && flag.views) {
+        views.push(...flag.views);
+      }
+    }
+    
+    return [...new Set(views)]; // 去重
+  }
+}
+
+export const featureFlags = new FeatureFlagManager();
+```
+
+### 使用功能开关
+
+```typescript filename="lib/config-with-flags.ts"
+import { featureFlags } from './feature-flags';
+
+export async function loadConfigWithFlags() {
+  const models: IEntityModel[] = [];
+  const views: IEntityView[] = [];
+
+  // 获取启用的模型和视图列表
+  const enabledModels = featureFlags.getEnabledModels();
+  const enabledViews = featureFlags.getEnabledViews();
+
+  // 动态加载启用的模型
+  for (const modelName of enabledModels) {
+    try {
+      const modelModule = await import(`../models/${modelName.toLowerCase()}.model`);
+      models.push(modelModule[`${modelName}Model`]);
+    } catch (error) {
+      console.warn(`Model ${modelName} not found:`, error);
+    }
+  }
+
+  // 动态加载启用的视图
+  for (const viewName of enabledViews) {
+    try {
+      const viewModule = await import(`../views/${viewName}.view`);
+      views.push(viewModule.default);
+    } catch (error) {
+      console.warn(`View ${viewName} not found:`, error);
+    }
+  }
+
+  return { models, views };
+}
+```
+
+## 环境变量配置
+
+使用环境变量控制配置加载：
+
+### 环境配置示例
+
+```env filename=".env.local"
+# Entity Engine 基础配置
+EE_DATABASE_URL="postgresql://user:password@localhost:5432/myapp?schema=public"
+NEXT_PUBLIC_API_BASE_URL=""
+NEXT_PUBLIC_API_ENDPOINT="/api/ee"
+
+# 功能开关
+ENABLE_ANALYTICS=true
+ENABLE_USER_MGMT=true
+ENABLE_DEBUG_MODE=false
+
+# 启用的模块列表
+ENABLED_FEATURES="analytics,reporting,user-management"
+
+# 多租户配置
+MULTI_TENANT_MODE=false
+DEFAULT_TENANT="default"
+```
+
+### 配置验证
+
+```typescript filename="lib/config-validator.ts"
+import { z } from 'zod';
+
+const ConfigSchema = z.object({
+  environment: z.enum(['development', 'staging', 'production']),
+  features: z.array(z.string()),
+  multiTenant: z.boolean().default(false),
+  debug: z.boolean().default(false),
+});
+
+export function validateConfig() {
+  const config = {
+    environment: process.env.NODE_ENV,
+    features: process.env.ENABLED_FEATURES?.split(',') || [],
+    multiTenant: process.env.MULTI_TENANT_MODE === 'true',
+    debug: process.env.ENTITY_ENGINE_DEBUG === 'true',
+  };
+
+  try {
+    return ConfigSchema.parse(config);
+  } catch (error) {
+    console.error('Configuration validation failed:', error);
+    throw new Error('Invalid configuration');
+  }
+}
+```
+
+## 最佳实践
+
+### 配置缓存
+
+避免重复加载配置：
+
+```typescript filename="lib/config-cache.ts"
+class ConfigCache {
+  private cache = new Map<string, any>();
+  private ttl = 5 * 60 * 1000; // 5 分钟缓存
+
+  set(key: string, value: any) {
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now()
+    });
+  }
+
+  get(key: string): any | null {
+    const cached = this.cache.get(key);
+    
+    if (!cached) return null;
+    
+    // 检查是否过期
+    if (Date.now() - cached.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.value;
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+export const configCache = new ConfigCache();
+```
+
+### 错误处理
+
+优雅处理配置加载失败：
+
+```typescript filename="lib/safe-config-loader.ts"
+export async function safeLoadConfig(options: any) {
+  try {
+    return await loadConfig(options);
+  } catch (error) {
+    console.error('Failed to load dynamic config, falling back to defaults:', error);
+    
+    // 返回最小化的默认配置
+    return {
+      models: [
+        // 只加载核心模型
+        (await import('./models/user.model')).UserModel
+      ],
+      views: [
+        (await import('./views/user.views')).UserGridView
+      ]
+    };
+  }
+}
+```
+
+### 性能监控
+
+监控配置加载性能：
+
+```typescript filename="lib/config-metrics.ts"
+export function withMetrics<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  
+  return fn()
+    .then(result => {
+      const duration = performance.now() - start;
+      console.log(`Config operation "${name}" took ${duration.toFixed(2)}ms`);
+      return result;
+    })
+    .catch(error => {
+      const duration = performance.now() - start;
+      console.error(`Config operation "${name}" failed after ${duration.toFixed(2)}ms:`, error);
+      throw error;
+    });
+}
+```
+
+## 注意事项
+
+> **警告**  
+> 动态配置功能目前处于实验阶段。在生产环境中使用时，请确保：
+> - 充分测试所有配置组合
+> - 实现适当的错误处理和回退机制
+> - 监控配置加载性能
+> - 考虑配置缓存策略
+
+## 下一步
+
+- [常见问题解答](./faq-beginner) - 解决配置相关问题
+- [项目结构](./project-structure) - 了解模块化组织
+- 查看具体业务场景的配置示例

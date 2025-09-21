@@ -1,0 +1,744 @@
+# 模块生命周期
+
+Entity Engine 的模块生命周期管理提供了三阶段的模块初始化流程：配置设置、组件注册和数据初始化。这种分阶段设计确保了依赖关系的正确处理和系统的稳定启动。每个阶段都有明确的职责和执行顺序，让您能够安全、可靠地构建复杂的模块化应用。
+
+## 三阶段生命周期概览
+
+Entity Engine 采用分阶段的模块初始化策略，按照以下顺序执行：
+
+### 1. 配置阶段 (setupConfig)
+- **目的**：设置模块配置、验证配置参数
+- **执行时机**：所有模块首先完成配置阶段
+- **主要任务**：设置默认配置、验证必需参数、环境适配
+
+### 2. 组件阶段 (setupComponents) 
+- **目的**：注册服务、组件和事件处理器
+- **执行时机**：所有模块配置完成后
+- **主要任务**：服务注册、组件注册、依赖注入
+
+### 3. 数据阶段 (setupData)
+- **执行时机**：所有组件注册完成后
+- **目的**：执行数据迁移、初始化默认数据
+- **主要任务**：数据库迁移、创建默认数据、数据验证
+
+## 模块注册与启动流程
+
+### 基本启动流程
+
+```typescript
+import { engine } from '@scenemesh/entity-engine';
+import { MyModule } from './my-module';
+
+// 1. 注册模块
+engine.moduleRegistry.register(new MyModule());
+
+// 2. 启动 Entity Engine（自动执行三阶段初始化）
+await engine.start();
+```
+
+### 批量注册模块
+
+```typescript
+// 注册多个模块
+engine.moduleRegistry.registerAll([
+  new DatabaseModule(),
+  new AuthModule(),
+  new UserModule(),
+  new BlogModule()
+]);
+
+// 启动系统
+await engine.start();
+```
+
+## setupConfig 阶段详解
+
+配置阶段是模块初始化的第一步，负责设置和验证模块配置。
+
+### 基本配置设置
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      host: 'localhost',
+      port: 5432,
+      maxConnections: 10
+    },
+    cache: {
+      enabled: true,
+      ttl: 3600
+    },
+    logging: {
+      level: 'info'
+    }
+  });
+
+  logger.info(`${this.info.name} configuration initialized`);
+}
+```
+
+### 配置验证
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    apiUrl: 'https://api.example.com',
+    apiKey: '',
+    timeout: 5000
+  });
+
+  // 获取配置进行验证
+  const config = configManager.get(this.info.name);
+
+  // 验证必需配置
+  if (!config.apiKey) {
+    throw new Error('API key is required for external service integration');
+  }
+
+  // 验证配置范围
+  if (config.timeout < 1000 || config.timeout > 30000) {
+    logger.warn('Timeout out of recommended range, adjusting to default');
+    configManager.set(`${this.info.name}.timeout`, 5000);
+  }
+
+  // 验证URL格式
+  try {
+    new URL(config.apiUrl);
+  } catch (error) {
+    throw new Error(`Invalid API URL: ${config.apiUrl}`);
+  }
+
+  logger.info('Configuration validated successfully');
+}
+```
+
+### 环境特定配置
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 基础配置
+  const baseConfig = {
+    debug: false,
+    logLevel: 'warn',
+    cacheSize: 1000
+  };
+
+  // 根据环境调整配置
+  if (process.env.NODE_ENV === 'development') {
+    Object.assign(baseConfig, {
+      debug: true,
+      logLevel: 'debug',
+      cacheSize: 100
+    });
+  } else if (process.env.NODE_ENV === 'test') {
+    Object.assign(baseConfig, {
+      logLevel: 'error',
+      cacheSize: 50
+    });
+  }
+
+  configManager.setDefault(this.info.name, baseConfig);
+
+  // 从环境变量覆盖配置
+  const envOverrides = {};
+  if (process.env.LOG_LEVEL) {
+    envOverrides.logLevel = process.env.LOG_LEVEL;
+  }
+  if (process.env.CACHE_SIZE) {
+    envOverrides.cacheSize = parseInt(process.env.CACHE_SIZE);
+  }
+
+  if (Object.keys(envOverrides).length > 0) {
+    configManager.merge(this.info.name, envOverrides);
+    logger.info('Applied environment configuration overrides');
+  }
+}
+```
+
+## setupComponents 阶段详解
+
+组件阶段负责注册服务、组件和建立依赖关系。
+
+### 服务注册
+
+```typescript
+async setupComponents({ serviceRegistry, componentRegistry, configManager, logger }) {
+  const config = configManager.get(this.info.name);
+
+  // 注册核心服务
+  serviceRegistry.register('DatabaseService', 
+    new DatabaseService(config.database)
+  );
+
+  // 注册依赖其他服务的服务
+  const dbService = serviceRegistry.get('DatabaseService');
+  serviceRegistry.register('UserRepository', 
+    new UserRepository(dbService)
+  );
+
+  // 注册缓存服务（如果启用）
+  if (config.cache.enabled) {
+    serviceRegistry.register('CacheService', 
+      new CacheService(config.cache)
+    );
+  }
+
+  logger.info('Core services registered successfully');
+}
+```
+
+### 组件注册
+
+```typescript
+async setupComponents({ serviceRegistry, componentRegistry, logger }) {
+  // 注册视图组件
+  componentRegistry.registerView(new UserListView());
+  componentRegistry.registerView(new UserDetailView());
+  componentRegistry.registerView(new UserFormView());
+
+  // 注册数据适配器
+  componentRegistry.registerAdapter(new UserDataAdapter());
+
+  // 注册渲染器
+  componentRegistry.registerRenderer({
+    name: 'UserStatusRenderer',
+    slotName: 'status',
+    render: (data) => renderUserStatus(data)
+  });
+
+  logger.info('UI components registered successfully');
+}
+```
+
+### 依赖注入和服务获取
+
+```typescript
+async setupComponents({ serviceRegistry, configManager, logger }) {
+  // 获取依赖的服务
+  const dbService = serviceRegistry.get('DatabaseService');
+  const eventService = serviceRegistry.get('EventService');
+  
+  if (!dbService) {
+    throw new Error('DatabaseService is required but not available');
+  }
+
+  // 注册需要依赖的服务
+  serviceRegistry.register('NotificationService', 
+    new NotificationService(dbService, eventService)
+  );
+
+  // 可选依赖处理
+  const cacheService = serviceRegistry.get('CacheService');
+  if (cacheService) {
+    logger.info('Cache service available, enabling caching');
+    serviceRegistry.register('CachedUserService',
+      new CachedUserService(dbService, cacheService)
+    );
+  } else {
+    logger.warn('Cache service not available, using direct database access');
+    serviceRegistry.register('CachedUserService', 
+      new UserService(dbService)
+    );
+  }
+}
+```
+
+### 事件处理器注册
+
+```typescript
+async setupComponents({ serviceRegistry, logger }) {
+  // 获取事件注册表
+  const eventRegistry = serviceRegistry.get('EventRegistry');
+  
+  if (eventRegistry) {
+    // 注册事件处理器
+    eventRegistry.on('user.created', async (userData) => {
+      await this.handleUserCreated(userData);
+    });
+
+    eventRegistry.on('user.updated', async (userData) => {
+      await this.handleUserUpdated(userData);
+    });
+
+    eventRegistry.on('user.deleted', async (userId) => {
+      await this.handleUserDeleted(userId);
+    });
+
+    logger.info('Event handlers registered successfully');
+  }
+}
+
+private async handleUserCreated(userData) {
+  // 用户创建后的处理逻辑
+  const notificationService = serviceRegistry.get('NotificationService');
+  await notificationService.sendWelcomeEmail(userData);
+}
+```
+
+## setupData 阶段详解
+
+数据阶段负责执行数据库迁移、创建默认数据和数据验证。
+
+### 数据表创建
+
+```typescript
+async setupData({ serviceRegistry, logger }) {
+  const dbService = serviceRegistry.get('DatabaseService');
+
+  try {
+    // 检查表是否存在
+    const tablesExist = await dbService.checkTables(['users', 'user_profiles']);
+    
+    if (!tablesExist) {
+      // 创建用户表
+      await dbService.createTable('users', {
+        id: { type: 'string', primaryKey: true },
+        username: { type: 'string', unique: true, maxLength: 50 },
+        email: { type: 'string', unique: true, maxLength: 255 },
+        passwordHash: { type: 'string', maxLength: 255 },
+        status: { type: 'string', enum: ['active', 'inactive', 'suspended'], default: 'active' },
+        createdAt: { type: 'datetime', default: 'now()' },
+        updatedAt: { type: 'datetime', default: 'now()' }
+      });
+
+      // 创建用户资料表
+      await dbService.createTable('user_profiles', {
+        id: { type: 'string', primaryKey: true },
+        userId: { type: 'string', foreignKey: 'users.id' },
+        firstName: { type: 'string', maxLength: 50 },
+        lastName: { type: 'string', maxLength: 50 },
+        avatar: { type: 'string', nullable: true },
+        bio: { type: 'text', nullable: true },
+        preferences: { type: 'json', nullable: true }
+      });
+
+      logger.info('Database tables created successfully');
+    }
+
+    // 执行数据迁移
+    await this.runDataMigrations(dbService, logger);
+
+  } catch (error) {
+    logger.error('Data initialization failed:', error);
+    throw error;
+  }
+}
+```
+
+### 数据迁移管理
+
+```typescript
+private async runDataMigrations(dbService, logger) {
+  // 检查迁移表是否存在
+  await dbService.ensureTable('_migrations', {
+    version: { type: 'string', primaryKey: true },
+    appliedAt: { type: 'datetime', default: 'now()' }
+  });
+
+  // 定义迁移脚本
+  const migrations = [
+    {
+      version: '1.0.1',
+      description: 'Add user status column',
+      script: async (db) => {
+        await db.addColumn('users', 'status', {
+          type: 'string',
+          enum: ['active', 'inactive', 'suspended'],
+          default: 'active'
+        });
+      }
+    },
+    {
+      version: '1.1.0', 
+      description: 'Create user preferences table',
+      script: async (db) => {
+        await db.createTable('user_preferences', {
+          userId: { type: 'string', primaryKey: true, foreignKey: 'users.id' },
+          theme: { type: 'string', default: 'light' },
+          language: { type: 'string', default: 'en' },
+          notifications: { type: 'json', default: '{}' }
+        });
+      }
+    }
+  ];
+
+  // 执行未应用的迁移
+  for (const migration of migrations) {
+    const applied = await dbService.findOne('_migrations', { version: migration.version });
+    
+    if (!applied) {
+      logger.info(`Applying migration ${migration.version}: ${migration.description}`);
+      
+      try {
+        await migration.script(dbService);
+        await dbService.insert('_migrations', { version: migration.version });
+        
+        logger.info(`Migration ${migration.version} applied successfully`);
+      } catch (error) {
+        logger.error(`Migration ${migration.version} failed:`, error);
+        throw error;
+      }
+    }
+  }
+}
+```
+
+### 默认数据创建
+
+```typescript
+async setupData({ serviceRegistry, configManager, logger }) {
+  const dbService = serviceRegistry.get('DatabaseService');
+  const config = configManager.get(this.info.name);
+
+  // 创建默认管理员用户
+  await this.createDefaultAdmin(dbService, config, logger);
+  
+  // 创建默认角色
+  await this.createDefaultRoles(dbService, logger);
+  
+  // 创建默认设置
+  await this.createDefaultSettings(dbService, config, logger);
+}
+
+private async createDefaultAdmin(dbService, config, logger) {
+  const adminExists = await dbService.findOne('users', { username: 'admin' });
+  
+  if (!adminExists) {
+    const adminUser = {
+      id: generateId(),
+      username: 'admin',
+      email: config.admin?.email || 'admin@example.com',
+      passwordHash: await hashPassword(config.admin?.password || 'admin123'),
+      status: 'active'
+    };
+
+    await dbService.insert('users', adminUser);
+    
+    // 创建管理员资料
+    await dbService.insert('user_profiles', {
+      id: generateId(),
+      userId: adminUser.id,
+      firstName: 'System',
+      lastName: 'Administrator',
+      bio: 'Default system administrator'
+    });
+
+    logger.info('Default administrator created');
+    logger.warn('Please change the default admin password immediately');
+  }
+}
+
+private async createDefaultRoles(dbService, logger) {
+  await dbService.ensureTable('roles', {
+    id: { type: 'string', primaryKey: true },
+    name: { type: 'string', unique: true },
+    description: { type: 'string' },
+    permissions: { type: 'json', default: '[]' }
+  });
+
+  const defaultRoles = [
+    {
+      name: 'admin',
+      description: 'System Administrator',
+      permissions: ['*']
+    },
+    {
+      name: 'user',
+      description: 'Regular User',
+      permissions: ['read:profile', 'update:profile']
+    },
+    {
+      name: 'guest',
+      description: 'Guest User',
+      permissions: ['read:public']
+    }
+  ];
+
+  for (const role of defaultRoles) {
+    const exists = await dbService.findOne('roles', { name: role.name });
+    if (!exists) {
+      await dbService.insert('roles', {
+        id: generateId(),
+        ...role
+      });
+    }
+  }
+
+  logger.info('Default roles created');
+}
+```
+
+## 生命周期最佳实践
+
+### 1. 配置阶段最佳实践
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  try {
+    // 1. 设置完整的默认配置
+    const defaultConfig = {
+      server: {
+        port: 3000,
+        host: '0.0.0.0',
+        cors: {
+          enabled: true,
+          origins: ['http://localhost:3000']
+        }
+      },
+      security: {
+        jwtSecret: '',
+        sessionTimeout: 3600000,
+        passwordPolicy: {
+          minLength: 8,
+          requireUppercase: true,
+          requireNumbers: true
+        }
+      }
+    };
+
+    configManager.setDefault(this.info.name, defaultConfig);
+
+    // 2. 验证必需配置
+    const config = configManager.get(this.info.name);
+    this.validateRequiredConfig(config);
+
+    // 3. 应用环境特定设置
+    this.applyEnvironmentConfig(configManager);
+
+    // 4. 记录配置状态
+    logger.info('Configuration setup completed', {
+      port: config.server.port,
+      corsEnabled: config.server.cors.enabled,
+      environment: process.env.NODE_ENV || 'development'
+    });
+
+  } catch (error) {
+    logger.error('Configuration setup failed:', error);
+    throw error;
+  }
+}
+
+private validateRequiredConfig(config) {
+  const required = [
+    'security.jwtSecret',
+    'server.port'
+  ];
+
+  for (const path of required) {
+    const value = this.getNestedValue(config, path);
+    if (!value) {
+      throw new Error(`Required configuration missing: ${path}`);
+    }
+  }
+}
+```
+
+### 2. 组件阶段最佳实践
+
+```typescript
+async setupComponents({ serviceRegistry, componentRegistry, configManager, logger }) {
+  try {
+    // 1. 按依赖顺序注册服务
+    await this.registerCoreServices(serviceRegistry, configManager);
+    await this.registerBusinessServices(serviceRegistry);
+    await this.registerUIComponents(componentRegistry);
+
+    // 2. 验证关键依赖
+    this.validateCriticalDependencies(serviceRegistry);
+
+    // 3. 设置事件处理
+    this.setupEventHandlers(serviceRegistry);
+
+    logger.info('All components registered successfully');
+
+  } catch (error) {
+    logger.error('Component registration failed:', error);
+    throw error;
+  }
+}
+
+private async registerCoreServices(serviceRegistry, configManager) {
+  const config = configManager.get(this.info.name);
+  
+  // 按依赖顺序注册
+  serviceRegistry.register('ConfigService', new ConfigService(config));
+  serviceRegistry.register('DatabaseService', new DatabaseService(config.database));
+  serviceRegistry.register('AuthService', new AuthService(config.security));
+}
+
+private validateCriticalDependencies(serviceRegistry) {
+  const critical = ['DatabaseService', 'AuthService'];
+  
+  for (const serviceName of critical) {
+    if (!serviceRegistry.has(serviceName)) {
+      throw new Error(`Critical service not available: ${serviceName}`);
+    }
+  }
+}
+```
+
+### 3. 数据阶段最佳实践
+
+```typescript
+async setupData({ serviceRegistry, logger }) {
+  const dbService = serviceRegistry.get('DatabaseService');
+  
+  try {
+    // 1. 数据库连接测试
+    await this.testDatabaseConnection(dbService);
+
+    // 2. 结构迁移
+    await this.runSchemaMigrations(dbService, logger);
+
+    // 3. 数据迁移
+    await this.runDataMigrations(dbService, logger);
+
+    // 4. 默认数据创建
+    await this.createDefaultData(dbService, logger);
+
+    // 5. 数据完整性检查
+    await this.validateDataIntegrity(dbService, logger);
+
+    logger.info('Data initialization completed successfully');
+
+  } catch (error) {
+    logger.error('Data initialization failed:', error);
+    
+    // 提供恢复建议
+    this.provideRecoveryGuidance(error, logger);
+    throw error;
+  }
+}
+
+private async testDatabaseConnection(dbService) {
+  try {
+    await dbService.query('SELECT 1');
+  } catch (error) {
+    throw new Error(`Database connection failed: ${error.message}`);
+  }
+}
+
+private provideRecoveryGuidance(error, logger) {
+  if (error.message.includes('connection')) {
+    logger.error('Recovery: Check database connection settings and ensure database server is running');
+  } else if (error.message.includes('permission')) {
+    logger.error('Recovery: Check database user permissions');
+  } else if (error.message.includes('migration')) {
+    logger.error('Recovery: Check migration scripts and database schema');
+  }
+}
+```
+
+## 错误处理与调试
+
+### 生命周期错误处理
+
+```typescript
+export class RobustModule implements IEntityModule {
+  readonly info = { /* ... */ };
+
+  async setupConfig({ configManager, logger }) {
+    try {
+      // 配置设置逻辑
+      await this.performConfigSetup(configManager);
+    } catch (error) {
+      logger.error('Configuration setup failed:', error);
+      
+      // 提供默认配置作为回退
+      this.setupFallbackConfig(configManager, logger);
+    }
+  }
+
+  async setupComponents({ serviceRegistry, logger }) {
+    const registrationErrors = [];
+
+    // 尝试注册每个组件，收集错误
+    const components = this.getComponentRegistrations();
+    
+    for (const component of components) {
+      try {
+        await component.register(serviceRegistry);
+        logger.debug(`Component registered: ${component.name}`);
+      } catch (error) {
+        registrationErrors.push({ component: component.name, error });
+        logger.warn(`Component registration failed: ${component.name}`, error);
+      }
+    }
+
+    // 检查关键组件是否成功注册
+    const criticalComponents = ['DatabaseService', 'AuthService'];
+    const missingCritical = criticalComponents.filter(
+      name => !serviceRegistry.has(name)
+    );
+
+    if (missingCritical.length > 0) {
+      throw new Error(`Critical components missing: ${missingCritical.join(', ')}`);
+    }
+
+    if (registrationErrors.length > 0) {
+      logger.warn(`${registrationErrors.length} non-critical components failed to register`);
+    }
+  }
+
+  async setupData({ serviceRegistry, logger }) {
+    const dbService = serviceRegistry.get('DatabaseService');
+    
+    // 使用事务确保数据一致性
+    await dbService.transaction(async (trx) => {
+      try {
+        await this.runMigrations(trx, logger);
+        await this.createDefaultData(trx, logger);
+        
+        logger.info('Data setup completed successfully');
+      } catch (error) {
+        logger.error('Data setup failed, rolling back transaction:', error);
+        throw error; // 事务会自动回滚
+      }
+    });
+  }
+}
+```
+
+### 模块启动监控
+
+```typescript
+// 监控模块启动过程
+engine.on('module.config.start', ({ moduleName }) => {
+  console.log(`⚙️  Configuring ${moduleName}...`);
+});
+
+engine.on('module.config.complete', ({ moduleName, duration }) => {
+  console.log(`✅ ${moduleName} configured in ${duration}ms`);
+});
+
+engine.on('module.components.start', ({ moduleName }) => {
+  console.log(`🔧 Registering ${moduleName} components...`);
+});
+
+engine.on('module.components.complete', ({ moduleName, servicesCount, duration }) => {
+  console.log(`✅ ${moduleName} registered ${servicesCount} services in ${duration}ms`);
+});
+
+engine.on('module.data.start', ({ moduleName }) => {
+  console.log(`📊 Initializing ${moduleName} data...`);
+});
+
+engine.on('module.data.complete', ({ moduleName, migrationsRun, duration }) => {
+  console.log(`✅ ${moduleName} data initialized (${migrationsRun} migrations) in ${duration}ms`);
+});
+
+engine.on('module.error', ({ moduleName, phase, error }) => {
+  console.error(`❌ ${moduleName} failed in ${phase}: ${error.message}`);
+});
+```
+
+## 下一步
+
+了解模块生命周期管理后，继续学习：
+
+- [依赖注入](./dependency-injection) - 深入了解依赖注入机制和服务获取
+- [服务注册](./service-registration) - 掌握服务注册和管理的最佳实践
+- [配置管理](./configuration-management) - 学习模块配置系统的高级功能

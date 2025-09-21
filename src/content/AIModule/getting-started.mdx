@@ -1,0 +1,179 @@
+# 快速开始
+
+本指南将帮助您在Entity Engine应用中快速集成和使用AI Module功能。
+
+## 前提条件
+
+在开始之前，请确保您已经：
+
+- ✅ 拥有基于Entity Engine构建的应用项目
+- ✅ 熟悉Entity Engine的基本使用方法
+- ✅ 拥有支持的AI服务商API密钥
+
+## 第一步：安装AI Module
+
+使用您偏好的包管理器安装AI Module：
+
+```bash
+# 使用npm
+npm install @scenemesh/entity-engine-aimodule
+
+# 使用yarn
+yarn add @scenemesh/entity-engine-aimodule
+
+# 使用pnpm
+pnpm add @scenemesh/entity-engine-aimodule
+```
+
+## 第二步：获取AI服务商API密钥
+
+选择一个支持的AI服务商并获取API密钥：
+
+### 通义千问 (推荐)
+
+1. 访问 [阿里云百炼平台](https://bailian.console.aliyun.com/)
+2. 创建应用并获取API密钥
+3. 记录您的API密钥
+
+### DeepSeek
+
+1. 访问 [DeepSeek开放平台](https://platform.deepseek.com/)
+2. 注册账号并创建API密钥
+3. 记录您的API密钥
+
+## 第三步：配置环境变量
+
+在您的项目根目录创建或编辑 `.env.local` 文件：
+
+```bash
+# .env.local
+
+# 通义千问配置（二选一）
+EEAI_QWEN_API_KEY=your-qwen-api-key-here
+
+# DeepSeek配置（二选一）
+EEAI_DEEPSEEK_API_KEY=your-deepseek-api-key-here
+
+# 可选：指定默认提供商
+EEAI_MODEL_PROVIDER=qwen
+# 或
+EEAI_MODEL_PROVIDER=deepseek
+```
+
+## 第四步：注册AI模块
+
+### 服务端注册（Next.js App Router示例）
+
+编辑您的Entity Engine API路由文件（通常是 `app/api/ee/[[...slug]]/route.ts`）：
+
+```typescript
+// app/api/ee/[[...slug]]/route.ts
+import { EnginePrimitiveInitializer, fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+import { models, views } from 'src/entity/model-config';
+
+// 创建初始化器时添加AI模块
+const init = new EnginePrimitiveInitializer({ 
+  models, 
+  views, 
+  modules: [new EntityAIModule()] // 👈 添加这一行
+});
+
+const handler = (req: Request) => fetchEntityEntranceHandler({ 
+  request: req, 
+  endpoint: '/api/ee', 
+  initializer: init 
+});
+
+export { handler as GET, handler as POST };
+```
+
+### 客户端注册
+
+编辑您的Entity Engine Provider配置文件：
+
+```typescript
+// src/entity/provider/entity-engine-provider-wrapper.tsx
+'use client';
+import { useRouter } from 'next/navigation';
+import { createEntityEngineProvider } from '@scenemesh/entity-engine';
+import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+
+export function EntityEngineProviderWrapper({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  
+  const EntityEngineProvider = createEntityEngineProvider({
+    suiteAdapter: { suiteName: 'additions', suiteVersion: '1.0.0' },
+    router: { navigate: (path, state) => router.push(path) },
+    permissionGuard: { checkPermission: async () => true },
+    settings: {
+      baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8082',
+      endpoint: process.env.NEXT_PUBLIC_API_ENDPOINT || '/api/ee',
+      authenticationEnabled: true,
+    },
+    modules: [new EntityAIModule()], // 👈 添加这一行
+  });
+  
+  return <EntityEngineProvider>{children}</EntityEngineProvider>;
+}
+```
+
+## 第五步：验证安装
+
+### 检查AI功能是否可用
+
+1. **启动您的应用**
+   ```bash
+   npm run dev
+   ```
+
+2. **访问任何Entity Engine表单页面**
+
+3. **查找"智能填表"按钮**
+   
+   如果配置正确，您应该能在表单右上角看到一个"智能填表"按钮。
+
+### 测试AI对话功能
+
+1. 点击"智能填表"按钮
+2. 在弹出的对话框中输入测试消息：
+   ```
+   你好，帮我填写用户信息
+   ```
+3. 如果AI正常响应，说明配置成功
+
+## 常见配置问题
+
+### AI按钮没有出现
+
+**可能原因：**
+- AI模块未正确注册
+- 环境变量配置错误
+- API密钥无效
+
+**解决方案：**
+1. 检查模块是否在服务端和客户端都注册了
+2. 验证环境变量名称拼写是否正确
+3. 确认API密钥有效且有使用额度
+
+### AI无法响应
+
+**可能原因：**
+- 网络连接问题
+- API密钥权限不足
+- 服务商服务异常
+
+**解决方案：**
+1. 检查网络连接
+2. 验证API密钥权限
+3. 查看浏览器控制台错误信息
+
+## 下一步
+
+现在您已经成功配置了AI Module，可以：
+
+- 了解[环境配置](./configuration)的更多选项
+- 学习如何使用[智能表单](./smart-forms)功能
+- 探索[Entity集成](./entity-integration)的高级用法
+
+如果遇到问题，请查看[常见问题](./troubleshooting)页面获取帮助。

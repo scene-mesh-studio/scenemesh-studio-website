@@ -1,0 +1,450 @@
+# 项目结构指南
+
+掌握 Entity Engine 项目的最佳组织方式，构建可维护、可扩展的企业级应用架构。
+
+## 为什么结构很重要
+
+良好的项目结构能够：
+
+- **提升开发效率** - 团队成员能快速找到和修改代码
+- **降低维护成本** - 清晰的职责分离让代码更易理解和修改  
+- **支持项目扩展** - 模块化设计让功能扩展更加容易
+- **促进团队协作** - 标准化的结构减少沟通成本
+
+## 核心设计原则
+
+Entity Engine 的项目结构遵循以下原则：
+
+- **关注点分离** - 数据模型、视图配置、业务逻辑分别管理
+- **约定优于配置** - 遵循约定的目录结构减少配置工作
+- **模块化组织** - 支持从小型项目到大型企业应用的渐进式发展
+
+## 基础项目结构
+
+适合中小型项目的标准组织方式：
+
+```
+my-entity-app/
+├── lib/                    # 核心业务逻辑
+│   ├── models.ts          # 📊 数据模型定义
+│   ├── views.ts           # 🎨 UI 视图配置
+│   └── entity-provider.tsx # ⚙️ 客户端配置
+├── app/                    # Next.js 应用目录
+│   ├── api/ee/[[...slug]]/
+│   │   └── route.ts       # 🔌 API 处理器
+│   ├── products/
+│   │   └── page.tsx       # 📄 业务页面
+│   └── layout.tsx         # 🖼️ 应用布局
+├── prisma/
+│   └── schema.prisma      # 🗄️ 数据库结构
+└── .env.local             # 🔐 环境配置
+```
+
+## 核心文件详解
+
+### 模型定义 (`lib/models.ts`)
+
+集中管理所有数据模型：
+
+```typescript filename="lib/models.ts"
+import type { IEntityModel } from '@scenemesh/entity-engine';
+
+export const UserModel: IEntityModel = {
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '姓名',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+    },
+    {
+      name: 'email',
+      title: '邮箱',
+      type: 'string',
+      isRequired: true,
+      isUnique: true,
+    }
+  ]
+};
+
+export const ProductModel: IEntityModel = {
+  name: 'Product',
+  title: '产品',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '产品名称',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+    },
+    {
+      name: 'price',
+      title: '价格',
+      type: 'number',
+      isRequired: true,
+    },
+    {
+      name: 'user',
+      title: '创建者',
+      type: 'many_to_one',
+      refModel: 'User',
+    }
+  ]
+};
+
+// 导出所有模型
+export const models = [UserModel, ProductModel];
+```
+
+### 视图配置 (`lib/views.ts`)
+
+定义用户界面布局：
+
+```typescript filename="lib/views.ts"
+import type { IEntityView } from '@scenemesh/entity-engine';
+
+export const UserGridView: IEntityView = {
+  name: 'user_grid',
+  title: '用户列表',
+  modelName: 'User',
+  viewType: 'grid',
+  items: [
+    { type: 'field', name: 'name', spanCols: 4 },
+    { type: 'field', name: 'email', spanCols: 8 },
+  ]
+};
+
+export const UserFormView: IEntityView = {
+  name: 'user_form',
+  title: '用户表单',
+  modelName: 'User',
+  viewType: 'form',
+  items: [
+    { type: 'field', name: 'name' },
+    { type: 'field', name: 'email' },
+  ]
+};
+
+export const ProductGridView: IEntityView = {
+  name: 'product_grid',
+  title: '产品列表',
+  modelName: 'Product',
+  viewType: 'grid',
+  items: [
+    { type: 'field', name: 'name', spanCols: 4 },
+    { type: 'field', name: 'price', spanCols: 2 },
+    { type: 'field', name: 'user', spanCols: 6 },
+  ]
+};
+
+export const ProductFormView: IEntityView = {
+  name: 'product_form',
+  title: '产品表单',
+  modelName: 'Product',
+  viewType: 'form',
+  items: [
+    { type: 'field', name: 'name' },
+    { type: 'field', name: 'price' },
+    { type: 'field', name: 'user' },
+  ]
+};
+
+// 导出所有视图
+export const views = [
+  UserGridView,
+  UserFormView,
+  ProductGridView,
+  ProductFormView,
+];
+```
+
+### 客户端 Provider (`lib/entity-provider.tsx`)
+
+配置客户端 Entity Engine：
+
+```tsx filename="lib/entity-provider.tsx"
+'use client';
+import { createEntityEngineProvider } from '@scenemesh/entity-engine';
+import { models } from './models';
+import { views } from './views';
+
+export const EntityEngineProvider = createEntityEngineProvider({
+  config: { models, views },
+  settings: {
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || '',
+    endpoint: '/api/ee',
+    authenticationEnabled: false,
+  },
+  router: {
+    navigate: (path: string) => {
+      if (typeof window !== 'undefined') {
+        window.location.href = path;
+      }
+    }
+  },
+  permissionGuard: {
+    checkPermission: async () => true,
+  },
+});
+```
+
+### API 路由 (`app/api/ee/[[...slug]]/route.ts`)
+
+服务端 API 处理器：
+
+```typescript filename="app/api/ee/[[...slug]]/route.ts"
+import { EnginePrimitiveInitializer, fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
+import { models } from '../../../../lib/models';
+import { views } from '../../../../lib/views';
+
+const initializer = new EnginePrimitiveInitializer({
+  models,
+  views,
+});
+
+const handler = (req: Request) => 
+  fetchEntityEntranceHandler({
+    request: req,
+    endpoint: '/api/ee',
+    initializer
+  });
+
+export { handler as GET, handler as POST };
+```
+
+## 大型项目结构
+
+对于复杂应用，推荐使用模块化结构：
+
+```
+src/
+├── entities/
+│   ├── user/
+│   │   ├── models.ts
+│   │   ├── views.ts
+│   │   └── components.tsx
+│   ├── product/
+│   │   ├── models.ts
+│   │   ├── views.ts
+│   │   └── components.tsx
+│   └── order/
+│       ├── models.ts
+│       ├── views.ts
+│       └── components.tsx
+├── lib/
+│   ├── entity-registry.ts  # 统一注册
+│   └── entity-provider.tsx
+└── app/
+    ├── api/ee/[[...slug]]/route.ts
+    └── (business modules)/
+```
+
+### 模块化注册 (`lib/entity-registry.ts`)
+
+统一管理所有实体：
+
+```typescript filename="lib/entity-registry.ts"
+import { models as userModels, views as userViews } from '../entities/user';
+import { models as productModels, views as productViews } from '../entities/product';
+import { models as orderModels, views as orderViews } from '../entities/order';
+
+export const allModels = [
+  ...userModels,
+  ...productModels,
+  ...orderModels,
+];
+
+export const allViews = [
+  ...userViews,
+  ...productViews,
+  ...orderViews,
+];
+```
+
+### 单个实体模块 (`entities/user/models.ts`)
+
+```typescript filename="entities/user/models.ts"
+import type { IEntityModel } from '@scenemesh/entity-engine';
+import { z } from 'zod';
+
+export const UserModel: IEntityModel = {
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true,
+    },
+    {
+      name: 'name',
+      title: '姓名',
+      type: 'string',
+      isRequired: true,
+      searchable: true,
+      schema: z.string().min(2, '姓名至少2个字符').max(50, '姓名最多50个字符'),
+    },
+    {
+      name: 'email',
+      title: '邮箱',
+      type: 'string',
+      isRequired: true,
+      isUnique: true,
+      schema: z.string().email('请输入有效的邮箱地址'),
+    },
+    {
+      name: 'role',
+      title: '角色',
+      type: 'enum',
+      defaultValue: 'user',
+      typeOptions: {
+        options: [
+          { value: 'admin', label: '管理员' },
+          { value: 'user', label: '普通用户' },
+        ]
+      }
+    }
+  ]
+};
+
+export const models = [UserModel];
+```
+
+## 环境配置
+
+### 环境变量 (`.env.local`)
+
+```env filename=".env.local"
+# Entity Engine 数据库
+EE_DATABASE_URL="postgresql://user:password@localhost:5432/myapp?schema=public"
+
+# API 配置
+NEXT_PUBLIC_API_BASE_URL=""
+NEXT_PUBLIC_API_ENDPOINT="/api/ee"
+
+# 可选：开发模式配置
+NODE_ENV="development"
+ENTITY_ENGINE_DEBUG="true"
+```
+
+### TypeScript 配置 (`tsconfig.json`)
+
+```json filename="tsconfig.json" highlight="6-9"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "es6"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/entities/*": ["./entities/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+## 最佳实践
+
+### 命名约定
+
+- **模型名称**: 使用 PascalCase (`UserModel`, `ProductModel`)
+- **视图名称**: 使用 snake_case (`user_grid`, `product_form`)  
+- **文件名**: 使用 kebab-case (`user-profile.tsx`, `order-history.tsx`)
+
+### 代码组织
+
+- **关注点分离**: 模型、视图、组件分别管理
+- **单一职责**: 每个文件只负责一个实体或功能
+- **导入顺序**: 第三方库 → 本地库 → 相对导入
+
+### 性能优化
+
+- **延迟加载**: 大型模块使用动态导入
+- **缓存策略**: 合理使用 React 缓存机制
+- **数据分页**: 大数据集启用分页查询
+
+## 部署结构
+
+### 生产环境目录
+
+```
+production/
+├── .next/                # Next.js 构建输出
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+├── public/
+├── package.json
+└── .env.production       # 生产环境变量
+```
+
+### Docker 配置示例
+
+```dockerfile filename="Dockerfile"
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# 安装依赖
+RUN npm ci --only=production
+
+# 复制源代码
+COPY . .
+
+# 构建应用
+RUN npm run build
+
+# 生成 Prisma Client
+RUN npx prisma generate
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+## 下一步
+
+- [构建第一个完整功能](./first-model-and-view) - 实战演练
+- [高级配置管理](./config-runtime-load) - 动态配置
+- [常见问题解答](./faq-beginner) - 故障排除

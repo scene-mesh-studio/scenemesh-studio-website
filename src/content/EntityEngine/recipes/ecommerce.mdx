@@ -1,0 +1,1892 @@
+# 电商应用
+
+本文介绍如何使用 Entity Engine 构建一个完整的电商应用系统，涵盖产品管理、订单处理、库存管理、支付集成和用户管理等核心功能。
+
+## 系统架构
+
+### 核心实体模型
+
+```typescript
+// 用户模型
+export const UserModel: IEntityModel = {
+  name: 'User',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    email: { type: 'string', unique: true, required: true },
+    password: { type: 'string', required: true },
+    firstName: { type: 'string', required: true },
+    lastName: { type: 'string', required: true },
+    phone: { type: 'string' },
+    dateOfBirth: { type: 'date' },
+    status: { 
+      type: 'enum', 
+      enumValues: ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
+      defaultValue: 'ACTIVE' 
+    },
+    emailVerified: { type: 'boolean', defaultValue: false },
+    addresses: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Address', foreignKey: 'userId' }
+    },
+    orders: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Order', foreignKey: 'userId' }
+    },
+    reviews: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Review', foreignKey: 'userId' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['email'], unique: true },
+    { fields: ['status'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 地址模型
+export const AddressModel: IEntityModel = {
+  name: 'Address',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    userId: { type: 'uuid', required: true },
+    type: { 
+      type: 'enum', 
+      enumValues: ['BILLING', 'SHIPPING'],
+      required: true 
+    },
+    firstName: { type: 'string', required: true },
+    lastName: { type: 'string', required: true },
+    company: { type: 'string' },
+    street1: { type: 'string', required: true },
+    street2: { type: 'string' },
+    city: { type: 'string', required: true },
+    state: { type: 'string', required: true },
+    zipCode: { type: 'string', required: true },
+    country: { type: 'string', required: true, defaultValue: 'US' },
+    isDefault: { type: 'boolean', defaultValue: false },
+    user: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    }
+  },
+  indexes: [
+    { fields: ['userId', 'type'] },
+    { fields: ['userId', 'isDefault'] }
+  ]
+};
+
+// 分类模型
+export const CategoryModel: IEntityModel = {
+  name: 'Category',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', unique: true, required: true },
+    description: { type: 'string' },
+    image: { type: 'string' },
+    parentId: { type: 'uuid' },
+    parent: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Category', targetKey: 'id' }
+    },
+    children: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Category', foreignKey: 'parentId' }
+    },
+    products: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Product', foreignKey: 'categoryId' }
+    },
+    sortOrder: { type: 'number', defaultValue: 0 },
+    isActive: { type: 'boolean', defaultValue: true },
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['slug'], unique: true },
+    { fields: ['parentId'] },
+    { fields: ['isActive', 'sortOrder'] }
+  ]
+};
+
+// 产品模型
+export const ProductModel: IEntityModel = {
+  name: 'Product',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    sku: { type: 'string', unique: true, required: true },
+    name: { type: 'string', required: true },
+    slug: { type: 'string', unique: true, required: true },
+    description: { type: 'string' },
+    shortDescription: { type: 'string' },
+    price: { type: 'decimal', required: true },
+    comparePrice: { type: 'decimal' },
+    cost: { type: 'decimal' },
+    categoryId: { type: 'uuid', required: true },
+    category: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Category', targetKey: 'id' }
+    },
+    brand: { type: 'string' },
+    weight: { type: 'decimal' },
+    dimensions: { type: 'json' }, // { width, height, depth }
+    images: { type: 'json' }, // Array of image URLs
+    attributes: { type: 'json' }, // Custom attributes
+    tags: { type: 'json' }, // Array of tags
+    status: { 
+      type: 'enum', 
+      enumValues: ['DRAFT', 'ACTIVE', 'INACTIVE', 'DISCONTINUED'],
+      defaultValue: 'DRAFT' 
+    },
+    inventory: {
+      type: 'relation',
+      relation: { type: 'one_to_one', model: 'Inventory', foreignKey: 'productId' }
+    },
+    variants: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'ProductVariant', foreignKey: 'productId' }
+    },
+    reviews: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'Review', foreignKey: 'productId' }
+    },
+    seoTitle: { type: 'string' },
+    seoDescription: { type: 'string' },
+    seoKeywords: { type: 'string' },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['sku'], unique: true },
+    { fields: ['slug'], unique: true },
+    { fields: ['categoryId'] },
+    { fields: ['status'] },
+    { fields: ['price'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 产品变体模型
+export const ProductVariantModel: IEntityModel = {
+  name: 'ProductVariant',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    productId: { type: 'uuid', required: true },
+    sku: { type: 'string', unique: true, required: true },
+    name: { type: 'string', required: true },
+    price: { type: 'decimal', required: true },
+    comparePrice: { type: 'decimal' },
+    cost: { type: 'decimal' },
+    options: { type: 'json' }, // { size: 'M', color: 'Red' }
+    images: { type: 'json' },
+    weight: { type: 'decimal' },
+    dimensions: { type: 'json' },
+    isDefault: { type: 'boolean', defaultValue: false },
+    product: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Product', targetKey: 'id' }
+    },
+    inventory: {
+      type: 'relation',
+      relation: { type: 'one_to_one', model: 'Inventory', foreignKey: 'variantId' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['sku'], unique: true },
+    { fields: ['productId'] },
+    { fields: ['productId', 'isDefault'] }
+  ]
+};
+
+// 库存模型
+export const InventoryModel: IEntityModel = {
+  name: 'Inventory',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    productId: { type: 'uuid' },
+    variantId: { type: 'uuid' },
+    quantity: { type: 'number', required: true, defaultValue: 0 },
+    reservedQuantity: { type: 'number', defaultValue: 0 },
+    availableQuantity: { type: 'number', defaultValue: 0 },
+    reorderPoint: { type: 'number', defaultValue: 10 },
+    maxQuantity: { type: 'number' },
+    trackQuantity: { type: 'boolean', defaultValue: true },
+    allowBackorder: { type: 'boolean', defaultValue: false },
+    product: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Product', targetKey: 'id' }
+    },
+    variant: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'ProductVariant', targetKey: 'id' }
+    },
+    movements: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'InventoryMovement', foreignKey: 'inventoryId' }
+    },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['productId'], unique: true },
+    { fields: ['variantId'], unique: true },
+    { fields: ['quantity'] },
+    { fields: ['availableQuantity'] }
+  ]
+};
+
+// 库存变动记录模型
+export const InventoryMovementModel: IEntityModel = {
+  name: 'InventoryMovement',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    inventoryId: { type: 'uuid', required: true },
+    type: { 
+      type: 'enum', 
+      enumValues: ['IN', 'OUT', 'RESERVED', 'RELEASED', 'ADJUSTMENT'],
+      required: true 
+    },
+    quantity: { type: 'number', required: true },
+    reason: { type: 'string', required: true },
+    reference: { type: 'string' }, // Order ID, etc.
+    notes: { type: 'string' },
+    userId: { type: 'uuid' },
+    inventory: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Inventory', targetKey: 'id' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['inventoryId'] },
+    { fields: ['type'] },
+    { fields: ['reference'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 购物车模型
+export const CartModel: IEntityModel = {
+  name: 'Cart',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    userId: { type: 'uuid' },
+    sessionId: { type: 'string' },
+    items: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'CartItem', foreignKey: 'cartId' }
+    },
+    subtotal: { type: 'decimal', defaultValue: 0 },
+    tax: { type: 'decimal', defaultValue: 0 },
+    shipping: { type: 'decimal', defaultValue: 0 },
+    total: { type: 'decimal', defaultValue: 0 },
+    currency: { type: 'string', defaultValue: 'USD' },
+    expiresAt: { type: 'datetime' },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['userId'] },
+    { fields: ['sessionId'] },
+    { fields: ['expiresAt'] }
+  ]
+};
+
+// 购物车项目模型
+export const CartItemModel: IEntityModel = {
+  name: 'CartItem',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    cartId: { type: 'uuid', required: true },
+    productId: { type: 'uuid', required: true },
+    variantId: { type: 'uuid' },
+    quantity: { type: 'number', required: true, defaultValue: 1 },
+    price: { type: 'decimal', required: true },
+    total: { type: 'decimal', required: true },
+    cart: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Cart', targetKey: 'id' }
+    },
+    product: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Product', targetKey: 'id' }
+    },
+    variant: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'ProductVariant', targetKey: 'id' }
+    },
+    addedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['cartId'] },
+    { fields: ['productId'] },
+    { fields: ['variantId'] }
+  ]
+};
+
+// 订单模型
+export const OrderModel: IEntityModel = {
+  name: 'Order',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    orderNumber: { type: 'string', unique: true, required: true },
+    userId: { type: 'uuid', required: true },
+    status: { 
+      type: 'enum', 
+      enumValues: ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'],
+      defaultValue: 'PENDING' 
+    },
+    paymentStatus: { 
+      type: 'enum', 
+      enumValues: ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'],
+      defaultValue: 'PENDING' 
+    },
+    fulfillmentStatus: { 
+      type: 'enum', 
+      enumValues: ['UNFULFILLED', 'PARTIAL', 'FULFILLED'],
+      defaultValue: 'UNFULFILLED' 
+    },
+    user: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    items: {
+      type: 'relation',
+      relation: { type: 'one_to_many', model: 'OrderItem', foreignKey: 'orderId' }
+    },
+    shippingAddress: { type: 'json', required: true },
+    billingAddress: { type: 'json', required: true },
+    subtotal: { type: 'decimal', required: true },
+    taxAmount: { type: 'decimal', defaultValue: 0 },
+    shippingAmount: { type: 'decimal', defaultValue: 0 },
+    discountAmount: { type: 'decimal', defaultValue: 0 },
+    total: { type: 'decimal', required: true },
+    currency: { type: 'string', defaultValue: 'USD' },
+    paymentMethod: { type: 'string' },
+    paymentReference: { type: 'string' },
+    shippingMethod: { type: 'string' },
+    trackingNumber: { type: 'string' },
+    notes: { type: 'string' },
+    customerNotes: { type: 'string' },
+    tags: { type: 'json' },
+    metadata: { type: 'json' },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' },
+    shippedAt: { type: 'datetime' },
+    deliveredAt: { type: 'datetime' }
+  },
+  indexes: [
+    { fields: ['orderNumber'], unique: true },
+    { fields: ['userId'] },
+    { fields: ['status'] },
+    { fields: ['paymentStatus'] },
+    { fields: ['fulfillmentStatus'] },
+    { fields: ['createdAt'] }
+  ]
+};
+
+// 订单项目模型
+export const OrderItemModel: IEntityModel = {
+  name: 'OrderItem',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    orderId: { type: 'uuid', required: true },
+    productId: { type: 'uuid', required: true },
+    variantId: { type: 'uuid' },
+    sku: { type: 'string', required: true },
+    name: { type: 'string', required: true },
+    quantity: { type: 'number', required: true },
+    price: { type: 'decimal', required: true },
+    total: { type: 'decimal', required: true },
+    order: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Order', targetKey: 'id' }
+    },
+    product: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Product', targetKey: 'id' }
+    },
+    variant: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'ProductVariant', targetKey: 'id' }
+    }
+  },
+  indexes: [
+    { fields: ['orderId'] },
+    { fields: ['productId'] },
+    { fields: ['variantId'] },
+    { fields: ['sku'] }
+  ]
+};
+
+// 评价模型
+export const ReviewModel: IEntityModel = {
+  name: 'Review',
+  fields: {
+    id: { type: 'uuid', primaryKey: true },
+    productId: { type: 'uuid', required: true },
+    userId: { type: 'uuid', required: true },
+    orderId: { type: 'uuid' },
+    rating: { type: 'number', required: true, min: 1, max: 5 },
+    title: { type: 'string' },
+    content: { type: 'string' },
+    pros: { type: 'string' },
+    cons: { type: 'string' },
+    images: { type: 'json' },
+    isVerified: { type: 'boolean', defaultValue: false },
+    isRecommended: { type: 'boolean' },
+    helpfulCount: { type: 'number', defaultValue: 0 },
+    status: { 
+      type: 'enum', 
+      enumValues: ['PENDING', 'APPROVED', 'REJECTED'],
+      defaultValue: 'PENDING' 
+    },
+    product: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Product', targetKey: 'id' }
+    },
+    user: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'User', targetKey: 'id' }
+    },
+    order: {
+      type: 'relation',
+      relation: { type: 'many_to_one', model: 'Order', targetKey: 'id' }
+    },
+    createdAt: { type: 'datetime', defaultValue: 'now' },
+    updatedAt: { type: 'datetime', defaultValue: 'now' }
+  },
+  indexes: [
+    { fields: ['productId'] },
+    { fields: ['userId'] },
+    { fields: ['orderId'] },
+    { fields: ['rating'] },
+    { fields: ['status'] },
+    { fields: ['createdAt'] }
+  ]
+};
+```
+
+## 业务逻辑实现
+
+### 购物车管理
+
+```typescript
+// 购物车管理动作处理器
+class CartManagerActionHandler implements IActionHandler {
+  name = 'cart-manager';
+  displayName = '购物车管理';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        enum: ['add', 'update', 'remove', 'clear', 'get'],
+        required: true 
+      },
+      cartId: { type: 'string' },
+      userId: { type: 'string' },
+      sessionId: { type: 'string' },
+      productId: { type: 'string' },
+      variantId: { type: 'string' },
+      quantity: { type: 'number' },
+      itemId: { type: 'string' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager } = context;
+    
+    try {
+      switch (input.action) {
+        case 'add':
+          return await this.addToCart(input, entityManager);
+        case 'update':
+          return await this.updateCartItem(input, entityManager);
+        case 'remove':
+          return await this.removeFromCart(input, entityManager);
+        case 'clear':
+          return await this.clearCart(input, entityManager);
+        case 'get':
+          return await this.getCart(input, entityManager);
+        default:
+          throw new Error(`Unknown cart action: ${input.action}`);
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'CART_ERROR' }
+      };
+    }
+  }
+  
+  private async addToCart(input: any, entityManager: IEntityManager): Promise<ActionResult> {
+    // 获取或创建购物车
+    let cart = await this.getOrCreateCart(input, entityManager);
+    
+    // 获取产品信息
+    const product = await entityManager.get('Product', input.productId);
+    if (!product || product.status !== 'ACTIVE') {
+      throw new Error('Product not available');
+    }
+    
+    // 检查库存
+    const inventory = await this.checkInventory(input.productId, input.variantId, input.quantity, entityManager);
+    if (!inventory.available) {
+      throw new Error('Insufficient inventory');
+    }
+    
+    // 检查是否已存在相同商品
+    const existingItem = await entityManager.query({
+      entityType: 'CartItem',
+      filter: {
+        cartId: cart.id,
+        productId: input.productId,
+        variantId: input.variantId || null
+      }
+    });
+    
+    let cartItem;
+    if (existingItem.data.length > 0) {
+      // 更新数量
+      cartItem = existingItem.data[0];
+      cartItem.quantity += input.quantity;
+      cartItem.total = cartItem.quantity * cartItem.price;
+      await entityManager.update('CartItem', cartItem.id, cartItem);
+    } else {
+      // 添加新项目
+      const price = input.variantId ? 
+        (await entityManager.get('ProductVariant', input.variantId)).price : 
+        product.price;
+      
+      cartItem = await entityManager.create('CartItem', {
+        cartId: cart.id,
+        productId: input.productId,
+        variantId: input.variantId,
+        quantity: input.quantity,
+        price,
+        total: input.quantity * price
+      });
+    }
+    
+    // 更新购物车总计
+    cart = await this.updateCartTotals(cart.id, entityManager);
+    
+    return {
+      success: true,
+      data: { cart, cartItem },
+      events: [{
+        type: 'cart.item_added',
+        data: {
+          cartId: cart.id,
+          productId: input.productId,
+          variantId: input.variantId,
+          quantity: input.quantity
+        }
+      }]
+    };
+  }
+  
+  private async updateCartItem(input: any, entityManager: IEntityManager): Promise<ActionResult> {
+    const cartItem = await entityManager.get('CartItem', input.itemId);
+    if (!cartItem) {
+      throw new Error('Cart item not found');
+    }
+    
+    // 检查库存
+    const inventory = await this.checkInventory(
+      cartItem.productId, 
+      cartItem.variantId, 
+      input.quantity, 
+      entityManager
+    );
+    if (!inventory.available) {
+      throw new Error('Insufficient inventory');
+    }
+    
+    // 更新项目
+    cartItem.quantity = input.quantity;
+    cartItem.total = cartItem.quantity * cartItem.price;
+    await entityManager.update('CartItem', cartItem.id, cartItem);
+    
+    // 更新购物车总计
+    const cart = await this.updateCartTotals(cartItem.cartId, entityManager);
+    
+    return {
+      success: true,
+      data: { cart, cartItem },
+      events: [{
+        type: 'cart.item_updated',
+        data: {
+          cartId: cartItem.cartId,
+          itemId: cartItem.id,
+          newQuantity: input.quantity
+        }
+      }]
+    };
+  }
+  
+  private async removeFromCart(input: any, entityManager: IEntityManager): Promise<ActionResult> {
+    const cartItem = await entityManager.get('CartItem', input.itemId);
+    if (!cartItem) {
+      throw new Error('Cart item not found');
+    }
+    
+    const cartId = cartItem.cartId;
+    await entityManager.delete('CartItem', input.itemId);
+    
+    // 更新购物车总计
+    const cart = await this.updateCartTotals(cartId, entityManager);
+    
+    return {
+      success: true,
+      data: { cart },
+      events: [{
+        type: 'cart.item_removed',
+        data: {
+          cartId,
+          itemId: input.itemId,
+          productId: cartItem.productId
+        }
+      }]
+    };
+  }
+  
+  private async clearCart(input: any, entityManager: IEntityManager): Promise<ActionResult> {
+    const cart = await this.getOrCreateCart(input, entityManager);
+    
+    // 删除所有购物车项目
+    const items = await entityManager.query({
+      entityType: 'CartItem',
+      filter: { cartId: cart.id }
+    });
+    
+    for (const item of items.data) {
+      await entityManager.delete('CartItem', item.id);
+    }
+    
+    // 重置购物车总计
+    await entityManager.update('Cart', cart.id, {
+      subtotal: 0,
+      tax: 0,
+      shipping: 0,
+      total: 0
+    });
+    
+    return {
+      success: true,
+      data: { cart: { ...cart, subtotal: 0, tax: 0, shipping: 0, total: 0, items: [] } },
+      events: [{
+        type: 'cart.cleared',
+        data: { cartId: cart.id }
+      }]
+    };
+  }
+  
+  private async getCart(input: any, entityManager: IEntityManager): Promise<ActionResult> {
+    const cart = await this.getOrCreateCart(input, entityManager);
+    
+    // 获取购物车项目及关联信息
+    const items = await entityManager.query({
+      entityType: 'CartItem',
+      filter: { cartId: cart.id },
+      include: ['product', 'variant']
+    });
+    
+    return {
+      success: true,
+      data: { 
+        cart: { ...cart, items: items.data },
+        itemCount: items.data.length
+      }
+    };
+  }
+  
+  private async getOrCreateCart(input: any, entityManager: IEntityManager): Promise<any> {
+    let cart;
+    
+    if (input.cartId) {
+      cart = await entityManager.get('Cart', input.cartId);
+      if (cart) return cart;
+    }
+    
+    // 根据用户ID或会话ID查找购物车
+    const filter: any = {};
+    if (input.userId) {
+      filter.userId = input.userId;
+    } else if (input.sessionId) {
+      filter.sessionId = input.sessionId;
+    } else {
+      throw new Error('Either userId or sessionId is required');
+    }
+    
+    const existingCarts = await entityManager.query({
+      entityType: 'Cart',
+      filter
+    });
+    
+    if (existingCarts.data.length > 0) {
+      cart = existingCarts.data[0];
+    } else {
+      // 创建新购物车
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30天后过期
+      
+      cart = await entityManager.create('Cart', {
+        userId: input.userId,
+        sessionId: input.sessionId,
+        subtotal: 0,
+        tax: 0,
+        shipping: 0,
+        total: 0,
+        expiresAt
+      });
+    }
+    
+    return cart;
+  }
+  
+  private async checkInventory(
+    productId: string, 
+    variantId?: string, 
+    quantity: number = 1,
+    entityManager?: IEntityManager
+  ): Promise<{ available: boolean; availableQuantity: number }> {
+    const filter: any = {};
+    if (variantId) {
+      filter.variantId = variantId;
+    } else {
+      filter.productId = productId;
+    }
+    
+    const inventories = await entityManager!.query({
+      entityType: 'Inventory',
+      filter
+    });
+    
+    if (inventories.data.length === 0) {
+      return { available: false, availableQuantity: 0 };
+    }
+    
+    const inventory = inventories.data[0];
+    const available = inventory.trackQuantity ? 
+      inventory.availableQuantity >= quantity : 
+      true;
+    
+    return {
+      available,
+      availableQuantity: inventory.availableQuantity
+    };
+  }
+  
+  private async updateCartTotals(cartId: string, entityManager: IEntityManager): Promise<any> {
+    // 获取购物车项目
+    const items = await entityManager.query({
+      entityType: 'CartItem',
+      filter: { cartId }
+    });
+    
+    const subtotal = items.data.reduce((sum, item) => sum + parseFloat(item.total), 0);
+    const tax = subtotal * 0.1; // 简化税率计算
+    const shipping = subtotal > 100 ? 0 : 10; // 免费配送条件
+    const total = subtotal + tax + shipping;
+    
+    const cart = await entityManager.update('Cart', cartId, {
+      subtotal,
+      tax,
+      shipping,
+      total
+    });
+    
+    return cart;
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.action) errors.push('action is required');
+    if (!['add', 'update', 'remove', 'clear', 'get'].includes(input.action)) {
+      errors.push('Invalid action');
+    }
+    
+    if (input.action === 'add') {
+      if (!input.productId) errors.push('productId is required for add action');
+      if (!input.quantity || input.quantity < 1) errors.push('Valid quantity is required for add action');
+    }
+    
+    if (input.action === 'update') {
+      if (!input.itemId) errors.push('itemId is required for update action');
+      if (!input.quantity || input.quantity < 1) errors.push('Valid quantity is required for update action');
+    }
+    
+    if (input.action === 'remove') {
+      if (!input.itemId) errors.push('itemId is required for remove action');
+    }
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['cart_access'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 10000,
+      retryable: true,
+      maxRetries: 2
+    };
+  }
+}
+```
+
+### 订单处理流程
+
+```typescript
+// 订单处理动作处理器
+class OrderProcessingActionHandler implements IActionHandler {
+  name = 'process-order';
+  displayName = '处理订单';
+  category = ActionCategory.BUSINESS;
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      cartId: { type: 'string', required: true },
+      paymentMethod: { type: 'string', required: true },
+      paymentToken: { type: 'string' },
+      shippingAddress: { type: 'object', required: true },
+      billingAddress: { type: 'object', required: true },
+      shippingMethod: { type: 'string', required: true },
+      customerNotes: { type: 'string' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager, actionManager, user } = context;
+    
+    try {
+      // 开始事务
+      return await context.transaction.run(async () => {
+        // 1. 验证购物车
+        const cart = await this.validateCart(input.cartId, entityManager);
+        
+        // 2. 预留库存
+        await this.reserveInventory(cart, entityManager);
+        
+        // 3. 创建订单
+        const order = await this.createOrder(cart, input, user, entityManager);
+        
+        // 4. 处理支付
+        const paymentResult = await this.processPayment(order, input, actionManager);
+        
+        if (!paymentResult.success) {
+          // 释放库存
+          await this.releaseInventory(cart, entityManager);
+          throw new Error('Payment failed');
+        }
+        
+        // 5. 更新订单状态
+        await entityManager.update('Order', order.id, {
+          status: 'CONFIRMED',
+          paymentStatus: 'PAID',
+          paymentReference: paymentResult.data.transactionId
+        });
+        
+        // 6. 减少库存
+        await this.reduceInventory(cart, entityManager);
+        
+        // 7. 清空购物车
+        await actionManager.execute('cart-manager', {
+          action: 'clear',
+          cartId: input.cartId
+        });
+        
+        // 8. 发送确认邮件
+        await actionManager.execute('send-email', {
+          to: user?.email,
+          template: 'order-confirmation',
+          data: { order }
+        });
+        
+        return {
+          success: true,
+          data: { order },
+          events: [{
+            type: 'order.created',
+            data: {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              userId: order.userId,
+              total: order.total
+            }
+          }]
+        };
+      });
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'ORDER_PROCESSING_FAILED' }
+      };
+    }
+  }
+  
+  private async validateCart(cartId: string, entityManager: IEntityManager): Promise<any> {
+    const cart = await entityManager.get('Cart', cartId);
+    if (!cart) {
+      throw new Error('Cart not found');
+    }
+    
+    const items = await entityManager.query({
+      entityType: 'CartItem',
+      filter: { cartId },
+      include: ['product', 'variant']
+    });
+    
+    if (items.data.length === 0) {
+      throw new Error('Cart is empty');
+    }
+    
+    // 验证所有商品仍然可用
+    for (const item of items.data) {
+      if (item.product.status !== 'ACTIVE') {
+        throw new Error(`Product ${item.product.name} is no longer available`);
+      }
+      
+      // 检查价格是否有变化
+      const currentPrice = item.variantId ? item.variant.price : item.product.price;
+      if (currentPrice !== item.price) {
+        throw new Error(`Price has changed for ${item.product.name}`);
+      }
+      
+      // 检查库存
+      const inventory = await this.checkInventory(
+        item.productId, 
+        item.variantId, 
+        item.quantity, 
+        entityManager
+      );
+      if (!inventory.available) {
+        throw new Error(`Insufficient inventory for ${item.product.name}`);
+      }
+    }
+    
+    return { ...cart, items: items.data };
+  }
+  
+  private async reserveInventory(cart: any, entityManager: IEntityManager): Promise<void> {
+    for (const item of cart.items) {
+      const filter: any = {};
+      if (item.variantId) {
+        filter.variantId = item.variantId;
+      } else {
+        filter.productId = item.productId;
+      }
+      
+      const inventories = await entityManager.query({
+        entityType: 'Inventory',
+        filter
+      });
+      
+      if (inventories.data.length > 0) {
+        const inventory = inventories.data[0];
+        await entityManager.update('Inventory', inventory.id, {
+          reservedQuantity: inventory.reservedQuantity + item.quantity,
+          availableQuantity: inventory.availableQuantity - item.quantity
+        });
+        
+        // 记录库存变动
+        await entityManager.create('InventoryMovement', {
+          inventoryId: inventory.id,
+          type: 'RESERVED',
+          quantity: item.quantity,
+          reason: 'Order reservation',
+          reference: cart.id
+        });
+      }
+    }
+  }
+  
+  private async createOrder(cart: any, input: any, user: any, entityManager: IEntityManager): Promise<any> {
+    // 生成订单号
+    const orderNumber = await this.generateOrderNumber();
+    
+    // 创建订单
+    const order = await entityManager.create('Order', {
+      orderNumber,
+      userId: user?.id || cart.userId,
+      status: 'PENDING',
+      paymentStatus: 'PENDING',
+      fulfillmentStatus: 'UNFULFILLED',
+      shippingAddress: input.shippingAddress,
+      billingAddress: input.billingAddress,
+      subtotal: cart.subtotal,
+      taxAmount: cart.tax,
+      shippingAmount: cart.shipping,
+      total: cart.total,
+      currency: cart.currency,
+      paymentMethod: input.paymentMethod,
+      shippingMethod: input.shippingMethod,
+      customerNotes: input.customerNotes
+    });
+    
+    // 创建订单项目
+    for (const item of cart.items) {
+      await entityManager.create('OrderItem', {
+        orderId: order.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        sku: item.variantId ? item.variant.sku : item.product.sku,
+        name: item.product.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      });
+    }
+    
+    return order;
+  }
+  
+  private async processPayment(order: any, input: any, actionManager: IActionManager): Promise<ActionResult> {
+    return await actionManager.execute('process-payment', {
+      orderId: order.id,
+      amount: order.total,
+      currency: order.currency,
+      paymentMethod: input.paymentMethod,
+      paymentToken: input.paymentToken,
+      billingAddress: input.billingAddress
+    });
+  }
+  
+  private async reduceInventory(cart: any, entityManager: IEntityManager): Promise<void> {
+    for (const item of cart.items) {
+      const filter: any = {};
+      if (item.variantId) {
+        filter.variantId = item.variantId;
+      } else {
+        filter.productId = item.productId;
+      }
+      
+      const inventories = await entityManager.query({
+        entityType: 'Inventory',
+        filter
+      });
+      
+      if (inventories.data.length > 0) {
+        const inventory = inventories.data[0];
+        await entityManager.update('Inventory', inventory.id, {
+          quantity: inventory.quantity - item.quantity,
+          reservedQuantity: inventory.reservedQuantity - item.quantity
+        });
+        
+        // 记录库存变动
+        await entityManager.create('InventoryMovement', {
+          inventoryId: inventory.id,
+          type: 'OUT',
+          quantity: item.quantity,
+          reason: 'Order fulfillment',
+          reference: cart.id
+        });
+      }
+    }
+  }
+  
+  private async releaseInventory(cart: any, entityManager: IEntityManager): Promise<void> {
+    for (const item of cart.items) {
+      const filter: any = {};
+      if (item.variantId) {
+        filter.variantId = item.variantId;
+      } else {
+        filter.productId = item.productId;
+      }
+      
+      const inventories = await entityManager.query({
+        entityType: 'Inventory',
+        filter
+      });
+      
+      if (inventories.data.length > 0) {
+        const inventory = inventories.data[0];
+        await entityManager.update('Inventory', inventory.id, {
+          reservedQuantity: inventory.reservedQuantity - item.quantity,
+          availableQuantity: inventory.availableQuantity + item.quantity
+        });
+        
+        // 记录库存变动
+        await entityManager.create('InventoryMovement', {
+          inventoryId: inventory.id,
+          type: 'RELEASED',
+          quantity: item.quantity,
+          reason: 'Order failed',
+          reference: cart.id
+        });
+      }
+    }
+  }
+  
+  private async generateOrderNumber(): Promise<string> {
+    const timestamp = Date.now().toString();
+    const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+    return `ORD-${timestamp.substr(-6)}-${random}`;
+  }
+  
+  private async checkInventory(
+    productId: string, 
+    variantId?: string, 
+    quantity: number = 1,
+    entityManager?: IEntityManager
+  ): Promise<{ available: boolean; availableQuantity: number }> {
+    const filter: any = {};
+    if (variantId) {
+      filter.variantId = variantId;
+    } else {
+      filter.productId = productId;
+    }
+    
+    const inventories = await entityManager!.query({
+      entityType: 'Inventory',
+      filter
+    });
+    
+    if (inventories.data.length === 0) {
+      return { available: false, availableQuantity: 0 };
+    }
+    
+    const inventory = inventories.data[0];
+    const available = inventory.trackQuantity ? 
+      inventory.availableQuantity >= quantity : 
+      true;
+    
+    return {
+      available,
+      availableQuantity: inventory.availableQuantity
+    };
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.cartId) errors.push('cartId is required');
+    if (!input.paymentMethod) errors.push('paymentMethod is required');
+    if (!input.shippingAddress) errors.push('shippingAddress is required');
+    if (!input.billingAddress) errors.push('billingAddress is required');
+    if (!input.shippingMethod) errors.push('shippingMethod is required');
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['create_order'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: false
+    };
+  }
+}
+```
+
+### 支付集成
+
+```typescript
+// 支付处理动作处理器
+class PaymentProcessorActionHandler implements IActionHandler {
+  name = 'process-payment';
+  displayName = '处理支付';
+  category = ActionCategory.INTEGRATION;
+  
+  private paymentProviders = new Map<string, IPaymentProvider>();
+  
+  async initialize(context: ActionHandlerContext): Promise<void> {
+    // 注册支付提供商
+    this.paymentProviders.set('stripe', new StripePaymentProvider());
+    this.paymentProviders.set('paypal', new PayPalPaymentProvider());
+    this.paymentProviders.set('square', new SquarePaymentProvider());
+    
+    for (const provider of this.paymentProviders.values()) {
+      await provider.initialize();
+    }
+  }
+  
+  inputSchema: ActionInputSchema = {
+    type: 'object',
+    properties: {
+      orderId: { type: 'string', required: true },
+      amount: { type: 'number', required: true },
+      currency: { type: 'string', required: true },
+      paymentMethod: { type: 'string', required: true },
+      paymentToken: { type: 'string' },
+      billingAddress: { type: 'object', required: true },
+      metadata: { type: 'object' }
+    }
+  };
+  
+  async execute(context: ActionExecutionContext): Promise<ActionResult> {
+    const { input, entityManager } = context;
+    
+    try {
+      // 获取支付提供商
+      const provider = this.getPaymentProvider(input.paymentMethod);
+      
+      // 创建支付记录
+      const payment = await entityManager.create('Payment', {
+        orderId: input.orderId,
+        amount: input.amount,
+        currency: input.currency,
+        method: input.paymentMethod,
+        status: 'PENDING',
+        metadata: input.metadata || {}
+      });
+      
+      // 处理支付
+      const paymentResult = await provider.processPayment({
+        amount: input.amount,
+        currency: input.currency,
+        paymentToken: input.paymentToken,
+        billingAddress: input.billingAddress,
+        metadata: {
+          orderId: input.orderId,
+          paymentId: payment.id
+        }
+      });
+      
+      // 更新支付记录
+      await entityManager.update('Payment', payment.id, {
+        status: paymentResult.success ? 'COMPLETED' : 'FAILED',
+        transactionId: paymentResult.transactionId,
+        gatewayResponse: paymentResult.rawResponse,
+        errorMessage: paymentResult.error?.message,
+        processedAt: new Date()
+      });
+      
+      if (paymentResult.success) {
+        return {
+          success: true,
+          data: {
+            paymentId: payment.id,
+            transactionId: paymentResult.transactionId,
+            amount: input.amount,
+            currency: input.currency
+          },
+          events: [{
+            type: 'payment.completed',
+            data: {
+              orderId: input.orderId,
+              paymentId: payment.id,
+              amount: input.amount,
+              currency: input.currency
+            }
+          }]
+        };
+      } else {
+        return {
+          success: false,
+          error: {
+            message: paymentResult.error?.message || 'Payment failed',
+            code: 'PAYMENT_FAILED',
+            details: paymentResult.error
+          },
+          events: [{
+            type: 'payment.failed',
+            data: {
+              orderId: input.orderId,
+              paymentId: payment.id,
+              error: paymentResult.error
+            }
+          }]
+        };
+      }
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: error.message, code: 'PAYMENT_ERROR' }
+      };
+    }
+  }
+  
+  private getPaymentProvider(paymentMethod: string): IPaymentProvider {
+    // 根据支付方式确定提供商
+    let providerName: string;
+    
+    if (paymentMethod.startsWith('card_')) {
+      providerName = 'stripe';
+    } else if (paymentMethod === 'paypal') {
+      providerName = 'paypal';
+    } else if (paymentMethod.startsWith('square_')) {
+      providerName = 'square';
+    } else {
+      throw new Error(`Unsupported payment method: ${paymentMethod}`);
+    }
+    
+    const provider = this.paymentProviders.get(providerName);
+    if (!provider) {
+      throw new Error(`Payment provider '${providerName}' not available`);
+    }
+    
+    return provider;
+  }
+  
+  async validate(input: any): Promise<ValidationResult> {
+    const errors: string[] = [];
+    
+    if (!input.orderId) errors.push('orderId is required');
+    if (!input.amount || input.amount <= 0) errors.push('Valid amount is required');
+    if (!input.currency) errors.push('currency is required');
+    if (!input.paymentMethod) errors.push('paymentMethod is required');
+    if (!input.billingAddress) errors.push('billingAddress is required');
+    
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+  
+  getRequiredPermissions(): string[] {
+    return ['process_payment'];
+  }
+  
+  getMetadata(): ActionHandlerMetadata {
+    return {
+      async: false,
+      timeout: 30000,
+      retryable: false
+    };
+  }
+}
+
+// Stripe支付提供商实现
+class StripePaymentProvider implements IPaymentProvider {
+  private stripe: any;
+  
+  async initialize(): Promise<void> {
+    // 初始化Stripe客户端
+    this.stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  }
+  
+  async processPayment(request: PaymentRequest): Promise<PaymentResult> {
+    try {
+      const paymentIntent = await this.stripe.paymentIntents.create({
+        amount: Math.round(request.amount * 100), // 转换为分
+        currency: request.currency.toLowerCase(),
+        payment_method: request.paymentToken,
+        confirmation_method: 'manual',
+        confirm: true,
+        metadata: request.metadata
+      });
+      
+      if (paymentIntent.status === 'succeeded') {
+        return {
+          success: true,
+          transactionId: paymentIntent.id,
+          amount: request.amount,
+          currency: request.currency,
+          rawResponse: paymentIntent
+        };
+      } else {
+        return {
+          success: false,
+          error: {
+            message: 'Payment requires additional authentication',
+            code: 'AUTHENTICATION_REQUIRED'
+          },
+          rawResponse: paymentIntent
+        };
+      }
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code || 'PAYMENT_ERROR'
+        },
+        rawResponse: error
+      };
+    }
+  }
+  
+  async refundPayment(transactionId: string, amount?: number): Promise<PaymentResult> {
+    try {
+      const refund = await this.stripe.refunds.create({
+        payment_intent: transactionId,
+        amount: amount ? Math.round(amount * 100) : undefined
+      });
+      
+      return {
+        success: true,
+        transactionId: refund.id,
+        amount: refund.amount / 100,
+        currency: refund.currency.toUpperCase(),
+        rawResponse: refund
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code || 'REFUND_ERROR'
+        },
+        rawResponse: error
+      };
+    }
+  }
+  
+  getName(): string {
+    return 'stripe';
+  }
+  
+  getSupportedMethods(): string[] {
+    return ['card_visa', 'card_mastercard', 'card_amex'];
+  }
+}
+```
+
+## 视图定义
+
+### 产品管理视图
+
+```typescript
+// 产品列表视图
+export const ProductListView: IViewDefinition = {
+  id: 'product-list',
+  name: 'ProductList',
+  displayName: '产品列表',
+  type: 'table',
+  entityType: 'Product',
+  config: {
+    columns: [
+      {
+        name: 'image',
+        displayName: '图片',
+        type: 'image',
+        width: 80,
+        renderer: 'product-image',
+        options: { size: 'small', shape: 'square' }
+      },
+      {
+        name: 'name',
+        displayName: '产品名称',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 200
+      },
+      {
+        name: 'sku',
+        displayName: 'SKU',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 120
+      },
+      {
+        name: 'category.name',
+        displayName: '分类',
+        type: 'string',
+        sortable: true,
+        filterable: true,
+        width: 120
+      },
+      {
+        name: 'price',
+        displayName: '价格',
+        type: 'currency',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        format: { currency: 'USD', precision: 2 }
+      },
+      {
+        name: 'inventory.availableQuantity',
+        displayName: '库存',
+        type: 'number',
+        sortable: true,
+        filterable: true,
+        width: 80,
+        renderer: 'inventory-status'
+      },
+      {
+        name: 'status',
+        displayName: '状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'status-badge'
+      },
+      {
+        name: 'createdAt',
+        displayName: '创建时间',
+        type: 'datetime',
+        sortable: true,
+        width: 120,
+        format: { dateStyle: 'short', timeStyle: 'short' }
+      }
+    ],
+    defaultSort: [{ field: 'createdAt', direction: 'desc' }],
+    defaultFilter: { status: 'ACTIVE' },
+    pageSize: 25,
+    enableSearch: true,
+    enableFilters: true,
+    enableExport: true,
+    actions: [
+      {
+        name: 'create',
+        displayName: '新增产品',
+        type: 'primary',
+        icon: 'plus',
+        handler: 'navigate-to-form'
+      },
+      {
+        name: 'bulk-update',
+        displayName: '批量更新',
+        type: 'secondary',
+        icon: 'edit',
+        handler: 'bulk-update-modal',
+        requiresSelection: true
+      },
+      {
+        name: 'export',
+        displayName: '导出',
+        type: 'secondary',
+        icon: 'download',
+        handler: 'export-data'
+      }
+    ],
+    rowActions: [
+      {
+        name: 'edit',
+        displayName: '编辑',
+        icon: 'edit',
+        handler: 'navigate-to-form'
+      },
+      {
+        name: 'duplicate',
+        displayName: '复制',
+        icon: 'copy',
+        handler: 'duplicate-product'
+      },
+      {
+        name: 'delete',
+        displayName: '删除',
+        icon: 'trash',
+        handler: 'delete-confirm',
+        confirmMessage: '确定要删除这个产品吗？'
+      }
+    ]
+  }
+};
+
+// 产品详情视图
+export const ProductDetailView: IViewDefinition = {
+  id: 'product-detail',
+  name: 'ProductDetail',
+  displayName: '产品详情',
+  type: 'detail',
+  entityType: 'Product',
+  config: {
+    layout: {
+      type: 'sections',
+      sections: [
+        {
+          title: '基本信息',
+          collapsible: true,
+          columns: 2,
+          fields: [
+            { name: 'name', displayName: '产品名称', required: true },
+            { name: 'sku', displayName: 'SKU', required: true },
+            { name: 'categoryId', displayName: '分类', type: 'select', required: true },
+            { name: 'brand', displayName: '品牌' },
+            { name: 'status', displayName: '状态', type: 'select', required: true },
+            { name: 'tags', displayName: '标签', type: 'tags' }
+          ]
+        },
+        {
+          title: '价格和成本',
+          collapsible: true,
+          columns: 3,
+          fields: [
+            { name: 'price', displayName: '售价', type: 'currency', required: true },
+            { name: 'comparePrice', displayName: '比较价格', type: 'currency' },
+            { name: 'cost', displayName: '成本', type: 'currency' }
+          ]
+        },
+        {
+          title: '产品描述',
+          collapsible: true,
+          columns: 1,
+          fields: [
+            { name: 'shortDescription', displayName: '简短描述', type: 'textarea', rows: 3 },
+            { name: 'description', displayName: '详细描述', type: 'rich-text', rows: 8 }
+          ]
+        },
+        {
+          title: '产品图片',
+          collapsible: true,
+          columns: 1,
+          fields: [
+            { 
+              name: 'images', 
+              displayName: '产品图片', 
+              type: 'image-gallery',
+              options: {
+                maxImages: 10,
+                allowReorder: true,
+                sizes: ['thumbnail', 'medium', 'large']
+              }
+            }
+          ]
+        },
+        {
+          title: '物理属性',
+          collapsible: true,
+          columns: 2,
+          fields: [
+            { name: 'weight', displayName: '重量 (kg)', type: 'number', step: 0.01 },
+            { name: 'dimensions.width', displayName: '宽度 (cm)', type: 'number' },
+            { name: 'dimensions.height', displayName: '高度 (cm)', type: 'number' },
+            { name: 'dimensions.depth', displayName: '深度 (cm)', type: 'number' }
+          ]
+        },
+        {
+          title: 'SEO设置',
+          collapsible: true,
+          columns: 1,
+          fields: [
+            { name: 'seoTitle', displayName: 'SEO标题', maxLength: 60 },
+            { name: 'seoDescription', displayName: 'SEO描述', type: 'textarea', rows: 3, maxLength: 160 },
+            { name: 'seoKeywords', displayName: 'SEO关键词', placeholder: '用逗号分隔' }
+          ]
+        }
+      ]
+    },
+    relatedViews: [
+      {
+        name: 'variants',
+        displayName: '产品变体',
+        viewId: 'product-variant-list',
+        filter: { productId: '{{id}}' },
+        position: 'tab'
+      },
+      {
+        name: 'inventory',
+        displayName: '库存管理',
+        viewId: 'inventory-detail',
+        filter: { productId: '{{id}}' },
+        position: 'tab'
+      },
+      {
+        name: 'reviews',
+        displayName: '用户评价',
+        viewId: 'review-list',
+        filter: { productId: '{{id}}' },
+        position: 'tab'
+      }
+    ],
+    actions: [
+      {
+        name: 'save',
+        displayName: '保存',
+        type: 'primary',
+        handler: 'save-entity'
+      },
+      {
+        name: 'save-and-continue',
+        displayName: '保存并继续编辑',
+        type: 'secondary',
+        handler: 'save-and-stay'
+      },
+      {
+        name: 'duplicate',
+        displayName: '复制产品',
+        type: 'secondary',
+        handler: 'duplicate-product'
+      },
+      {
+        name: 'preview',
+        displayName: '预览',
+        type: 'secondary',
+        handler: 'preview-product'
+      }
+    ]
+  }
+};
+
+// 订单列表视图
+export const OrderListView: IViewDefinition = {
+  id: 'order-list',
+  name: 'OrderList',
+  displayName: '订单列表',
+  type: 'table',
+  entityType: 'Order',
+  config: {
+    columns: [
+      {
+        name: 'orderNumber',
+        displayName: '订单号',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 140,
+        renderer: 'order-link'
+      },
+      {
+        name: 'user.name',
+        displayName: '客户',
+        type: 'string',
+        sortable: true,
+        searchable: true,
+        width: 120
+      },
+      {
+        name: 'status',
+        displayName: '订单状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'order-status-badge'
+      },
+      {
+        name: 'paymentStatus',
+        displayName: '支付状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'payment-status-badge'
+      },
+      {
+        name: 'fulfillmentStatus',
+        displayName: '发货状态',
+        type: 'enum',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        renderer: 'fulfillment-status-badge'
+      },
+      {
+        name: 'total',
+        displayName: '总金额',
+        type: 'currency',
+        sortable: true,
+        filterable: true,
+        width: 100,
+        format: { currency: 'USD', precision: 2 }
+      },
+      {
+        name: 'createdAt',
+        displayName: '下单时间',
+        type: 'datetime',
+        sortable: true,
+        width: 140,
+        format: { dateStyle: 'short', timeStyle: 'short' }
+      }
+    ],
+    defaultSort: [{ field: 'createdAt', direction: 'desc' }],
+    pageSize: 25,
+    enableSearch: true,
+    enableFilters: true,
+    enableExport: true,
+    filters: [
+      {
+        name: 'status',
+        displayName: '订单状态',
+        type: 'select',
+        options: [
+          { label: '待确认', value: 'PENDING' },
+          { label: '已确认', value: 'CONFIRMED' },
+          { label: '处理中', value: 'PROCESSING' },
+          { label: '已发货', value: 'SHIPPED' },
+          { label: '已送达', value: 'DELIVERED' },
+          { label: '已取消', value: 'CANCELLED' },
+          { label: '已退款', value: 'REFUNDED' }
+        ]
+      },
+      {
+        name: 'paymentStatus',
+        displayName: '支付状态',
+        type: 'select',
+        options: [
+          { label: '待支付', value: 'PENDING' },
+          { label: '已支付', value: 'PAID' },
+          { label: '支付失败', value: 'FAILED' },
+          { label: '已退款', value: 'REFUNDED' },
+          { label: '部分退款', value: 'PARTIALLY_REFUNDED' }
+        ]
+      },
+      {
+        name: 'dateRange',
+        displayName: '下单日期',
+        type: 'dateRange',
+        field: 'createdAt'
+      }
+    ],
+    actions: [
+      {
+        name: 'export',
+        displayName: '导出订单',
+        type: 'secondary',
+        icon: 'download',
+        handler: 'export-orders'
+      },
+      {
+        name: 'bulk-update-status',
+        displayName: '批量更新状态',
+        type: 'secondary',
+        icon: 'edit',
+        handler: 'bulk-update-status',
+        requiresSelection: true
+      }
+    ],
+    rowActions: [
+      {
+        name: 'view',
+        displayName: '查看详情',
+        icon: 'eye',
+        handler: 'navigate-to-detail'
+      },
+      {
+        name: 'update-status',
+        displayName: '更新状态',
+        icon: 'edit',
+        handler: 'update-status-modal'
+      },
+      {
+        name: 'print',
+        displayName: '打印',
+        icon: 'print',
+        handler: 'print-order'
+      },
+      {
+        name: 'refund',
+        displayName: '退款',
+        icon: 'refund',
+        handler: 'refund-modal',
+        condition: { paymentStatus: 'PAID' }
+      }
+    ]
+  }
+};
+```
+
+## 下一步
+
+完成电商应用的基础架构后，可以继续学习：
+
+- [内容管理](./cms) - CMS系统的设计模式
+- [客户关系管理](./crm) - CRM系统的最佳实践
+- [博客系统](./blog) - 博客和内容发布系统

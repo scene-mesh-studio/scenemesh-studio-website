@@ -1,0 +1,1209 @@
+# 配置管理
+
+Entity Engine 通过 `configManager` 提供了灵活的配置管理系统。您可以在模块的 `setupConfig` 阶段设置默认配置，在其他生命周期阶段获取和使用配置。配置管理支持环境变量覆盖、嵌套配置访问和动态配置更新，让您的应用能够适应不同的部署环境。
+
+## 基本配置操作
+
+### 设置默认配置
+
+在模块的 `setupConfig` 阶段设置默认配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置模块的默认配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      password: 'password',
+      database: 'myapp',
+      pool: {
+        min: 2,
+        max: 10
+      }
+    },
+    cache: {
+      enabled: true,
+      type: 'memory',
+      ttl: 3600,
+      maxSize: 1000
+    },
+    logging: {
+      level: 'info',
+      format: 'json',
+      outputs: ['console']
+    }
+  });
+
+  logger.info(`Default configuration set for ${this.info.name}`);
+}
+```
+
+### 获取配置
+
+在模块的任何阶段都可以获取配置：
+
+```typescript
+async setupComponents({ configManager, serviceRegistry, logger }) {
+  // 获取整个模块配置
+  const config = configManager.get(this.info.name);
+
+  // 获取特定配置项
+  const dbConfig = configManager.get(`${this.info.name}.database`);
+  const cacheConfig = configManager.get(`${this.info.name}.cache`);
+
+  // 使用配置创建服务
+  serviceRegistry.register('DatabaseService', 
+    new DatabaseService(dbConfig)
+  );
+
+  if (cacheConfig.enabled) {
+    serviceRegistry.register('CacheService', 
+      new CacheService(cacheConfig)
+    );
+  }
+
+  logger.info('Services configured successfully');
+}
+```
+
+### 设置和更新配置
+
+除了默认配置，还可以动态设置配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    apiUrl: 'https://api.example.com',
+    timeout: 5000,
+    retries: 3
+  });
+
+  // 根据环境覆盖配置
+  if (process.env.NODE_ENV === 'development') {
+    configManager.set(`${this.info.name}.apiUrl`, 'http://localhost:3000');
+    configManager.set(`${this.info.name}.timeout`, 10000);
+  } else if (process.env.NODE_ENV === 'production') {
+    configManager.set(`${this.info.name}.retries`, 5);
+  }
+
+  // 批量设置配置
+  configManager.merge(this.info.name, {
+    features: {
+      enableAnalytics: true,
+      enableNotifications: false
+    }
+  });
+
+  logger.info('Configuration updated for environment');
+}
+```
+
+## 环境变量支持
+
+### 环境变量覆盖
+
+Entity Engine 支持使用环境变量覆盖配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      password: 'password'
+    },
+    jwt: {
+      secret: 'default-secret',
+      expiresIn: '24h'
+    }
+  });
+
+  // 从环境变量读取敏感配置
+  const envOverrides = {};
+
+  if (process.env.DB_HOST) {
+    envOverrides['database.host'] = process.env.DB_HOST;
+  }
+  if (process.env.DB_PORT) {
+    envOverrides['database.port'] = parseInt(process.env.DB_PORT);
+  }
+  if (process.env.DB_USER) {
+    envOverrides['database.username'] = process.env.DB_USER;
+  }
+  if (process.env.DB_PASSWORD) {
+    envOverrides['database.password'] = process.env.DB_PASSWORD;
+  }
+  if (process.env.JWT_SECRET) {
+    envOverrides['jwt.secret'] = process.env.JWT_SECRET;
+  }
+
+  // 应用环境变量覆盖
+  for (const [key, value] of Object.entries(envOverrides)) {
+    configManager.set(`${this.info.name}.${key}`, value);
+  }
+
+  logger.info(`Applied ${Object.keys(envOverrides).length} environment overrides`);
+}
+```
+
+### 环境配置模式
+
+为不同环境设置不同的配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  const env = process.env.NODE_ENV || 'development';
+
+  // 基础配置
+  const baseConfig = {
+    server: {
+      port: 3000,
+      host: '0.0.0.0'
+    },
+    database: {
+      host: 'localhost',
+      port: 5432
+    },
+    logging: {
+      level: 'info'
+    }
+  };
+
+  // 环境特定配置
+  const envConfigs = {
+    development: {
+      server: {
+        port: 3001,
+        cors: {
+          origin: ['http://localhost:3000', 'http://localhost:3001']
+        }
+      },
+      database: {
+        database: 'myapp_dev',
+        logging: true
+      },
+      logging: {
+        level: 'debug'
+      },
+      features: {
+        enableDevtools: true,
+        hotReload: true
+      }
+    },
+    test: {
+      database: {
+        database: 'myapp_test',
+        logging: false
+      },
+      logging: {
+        level: 'error'
+      },
+      features: {
+        enableDevtools: false,
+        mockServices: true
+      }
+    },
+    production: {
+      server: {
+        port: parseInt(process.env.PORT || '8080'),
+        cors: {
+          origin: process.env.ALLOWED_ORIGINS?.split(',') || []
+        }
+      },
+      database: {
+        database: process.env.DB_NAME || 'myapp',
+        ssl: true
+      },
+      logging: {
+        level: 'warn'
+      },
+      features: {
+        enableDevtools: false,
+        monitoring: true
+      }
+    }
+  };
+
+  // 合并配置
+  const config = {
+    ...baseConfig,
+    ...envConfigs[env] || {}
+  };
+
+  configManager.setDefault(this.info.name, config);
+  logger.info(`Configuration loaded for ${env} environment`);
+}
+```
+
+## 配置验证
+
+### 必需配置验证
+
+验证关键配置是否存在：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置默认配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      host: 'localhost',
+      port: 5432,
+      username: '',
+      password: '',
+      database: ''
+    },
+    jwt: {
+      secret: '',
+      expiresIn: '24h'
+    }
+  });
+
+  // 获取配置进行验证
+  const config = configManager.get(this.info.name);
+
+  // 验证必需的配置
+  const requiredConfigs = [
+    'database.username',
+    'database.password', 
+    'database.database',
+    'jwt.secret'
+  ];
+
+  const missingConfigs = [];
+
+  for (const configPath of requiredConfigs) {
+    const value = this.getNestedValue(config, configPath);
+    if (!value || value === '') {
+      missingConfigs.push(configPath);
+    }
+  }
+
+  if (missingConfigs.length > 0) {
+    throw new Error(
+      `Missing required configuration: ${missingConfigs.join(', ')}`
+    );
+  }
+
+  logger.info('Configuration validation passed');
+}
+
+private getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+```
+
+### 配置格式验证
+
+验证配置值的格式和范围：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  configManager.setDefault(this.info.name, {
+    server: {
+      port: 3000,
+      timeout: 30000
+    },
+    database: {
+      pool: {
+        min: 2,
+        max: 10
+      }
+    },
+    email: {
+      from: '',
+      smtp: {
+        host: '',
+        port: 587
+      }
+    }
+  });
+
+  const config = configManager.get(this.info.name);
+
+  // 端口范围验证
+  if (config.server.port < 1 || config.server.port > 65535) {
+    throw new Error(`Invalid server port: ${config.server.port}`);
+  }
+
+  // 超时时间验证
+  if (config.server.timeout < 1000 || config.server.timeout > 300000) {
+    logger.warn('Server timeout out of recommended range, adjusting to default');
+    configManager.set(`${this.info.name}.server.timeout`, 30000);
+  }
+
+  // 连接池配置验证
+  if (config.database.pool.min >= config.database.pool.max) {
+    throw new Error('Database pool min must be less than max');
+  }
+
+  // 邮箱格式验证
+  if (config.email.from && !this.isValidEmail(config.email.from)) {
+    throw new Error(`Invalid email format: ${config.email.from}`);
+  }
+
+  // SMTP端口验证
+  const validSmtpPorts = [25, 587, 465, 2525];
+  if (!validSmtpPorts.includes(config.email.smtp.port)) {
+    logger.warn(`Unusual SMTP port: ${config.email.smtp.port}`);
+  }
+
+  logger.info('Configuration format validation completed');
+}
+
+private isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+```
+
+## 嵌套配置访问
+
+### 深层配置读取
+
+Entity Engine 支持使用路径访问嵌套配置：
+
+```typescript
+async setupComponents({ configManager, serviceRegistry, logger }) {
+  // 设置嵌套配置
+  configManager.setDefault(this.info.name, {
+    services: {
+      payment: {
+        stripe: {
+          apiKey: '',
+          webhookSecret: '',
+          currency: 'usd'
+        },
+        paypal: {
+          clientId: '',
+          clientSecret: '',
+          sandbox: true
+        }
+      },
+      notification: {
+        email: {
+          provider: 'smtp',
+          templates: {
+            welcome: 'welcome.html',
+            reset: 'password-reset.html'
+          }
+        },
+        sms: {
+          provider: 'twilio',
+          from: '+1234567890'
+        }
+      }
+    }
+  });
+
+  // 使用路径访问深层配置
+  const stripeConfig = configManager.get(`${this.info.name}.services.payment.stripe`);
+  const emailTemplates = configManager.get(`${this.info.name}.services.notification.email.templates`);
+  const smsProvider = configManager.get(`${this.info.name}.services.notification.sms.provider`);
+
+  // 注册服务时使用特定配置
+  if (stripeConfig.apiKey) {
+    serviceRegistry.register('StripeService', 
+      new StripeService(stripeConfig)
+    );
+  }
+
+  serviceRegistry.register('NotificationService', 
+    new NotificationService({
+      emailTemplates,
+      smsProvider: smsProvider === 'twilio' ? 'twilio' : 'mock'
+    })
+  );
+
+  logger.info('Services registered with nested configuration');
+}
+```
+
+### 配置分组管理
+
+将相关配置分组管理：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  const moduleName = this.info.name;
+
+  // 数据库配置组
+  configManager.setDefault(`${moduleName}.database`, {
+    primary: {
+      host: 'localhost',
+      port: 5432,
+      database: 'app_primary',
+      pool: { min: 5, max: 20 }
+    },
+    readonly: {
+      host: 'localhost',
+      port: 5433,
+      database: 'app_readonly',
+      pool: { min: 2, max: 10 }
+    }
+  });
+
+  // 缓存配置组
+  configManager.setDefault(`${moduleName}.cache`, {
+    redis: {
+      host: 'localhost',
+      port: 6379,
+      database: 0,
+      keyPrefix: 'app:'
+    },
+    memory: {
+      maxSize: 1000,
+      ttl: 3600
+    }
+  });
+
+  // 外部服务配置组
+  configManager.setDefault(`${moduleName}.external`, {
+    apis: {
+      weather: {
+        baseUrl: 'https://api.weather.com',
+        apiKey: '',
+        timeout: 5000
+      },
+      geocoding: {
+        baseUrl: 'https://api.mapbox.com',
+        accessToken: '',
+        timeout: 3000
+      }
+    }
+  });
+
+  logger.info('Configuration groups initialized');
+}
+
+async setupComponents({ configManager, serviceRegistry, logger }) {
+  const moduleName = this.info.name;
+
+  // 使用分组配置
+  const dbConfig = configManager.get(`${moduleName}.database`);
+  const cacheConfig = configManager.get(`${moduleName}.cache`);
+  const externalConfig = configManager.get(`${moduleName}.external`);
+
+  // 注册数据库服务
+  serviceRegistry.register('PrimaryDatabase', 
+    new DatabaseService(dbConfig.primary)
+  );
+  serviceRegistry.register('ReadonlyDatabase', 
+    new DatabaseService(dbConfig.readonly)
+  );
+
+  // 注册缓存服务
+  if (cacheConfig.redis.host) {
+    serviceRegistry.register('CacheService', 
+      new RedisCache(cacheConfig.redis)
+    );
+  } else {
+    serviceRegistry.register('CacheService', 
+      new MemoryCache(cacheConfig.memory)
+    );
+  }
+
+  // 注册外部API服务
+  Object.entries(externalConfig.apis).forEach(([name, config]) => {
+    const serviceName = `${name.charAt(0).toUpperCase() + name.slice(1)}ApiService`;
+    serviceRegistry.register(serviceName, new ApiService(config));
+  });
+
+  logger.info('Services registered using grouped configuration');
+}
+```
+
+## 配置热更新
+
+### 监听配置变化
+
+Entity Engine 支持配置的动态更新：
+
+```typescript
+async setupComponents({ configManager, serviceRegistry, logger }) {
+  // 初始化服务
+  const config = configManager.get(this.info.name);
+  let cacheService = new CacheService(config.cache);
+  serviceRegistry.register('CacheService', cacheService);
+
+  // 监听缓存配置变化
+  configManager.watch(`${this.info.name}.cache`, (newConfig, oldConfig) => {
+    logger.info('Cache configuration changed, updating service');
+    
+    try {
+      // 停止旧服务
+      if (cacheService && typeof cacheService.dispose === 'function') {
+        cacheService.dispose();
+      }
+
+      // 创建新服务
+      cacheService = new CacheService(newConfig);
+      serviceRegistry.register('CacheService', cacheService);
+      
+      logger.info('Cache service updated successfully');
+    } catch (error) {
+      logger.error('Failed to update cache service:', error);
+    }
+  });
+
+  // 监听日志级别变化
+  configManager.watch(`${this.info.name}.logging.level`, (newLevel) => {
+    logger.info(`Log level changed to: ${newLevel}`);
+    // 更新日志服务配置
+    const loggingService = serviceRegistry.get('LoggingService');
+    if (loggingService && loggingService.setLevel) {
+      loggingService.setLevel(newLevel);
+    }
+  });
+
+  logger.info('Configuration watchers established');
+}
+```
+
+### 配置刷新
+
+提供配置刷新机制：
+
+```typescript
+class ConfigurableService {
+  private config: any;
+  private configManager: any;
+  private moduleName: string;
+
+  constructor(configManager: any, moduleName: string) {
+    this.configManager = configManager;
+    this.moduleName = moduleName;
+    this.loadConfig();
+    this.setupConfigWatcher();
+  }
+
+  private loadConfig() {
+    this.config = this.configManager.get(this.moduleName);
+    console.log('Configuration loaded:', this.config);
+  }
+
+  private setupConfigWatcher() {
+    this.configManager.watch(this.moduleName, () => {
+      console.log('Configuration changed, reloading...');
+      this.loadConfig();
+      this.onConfigChanged();
+    });
+  }
+
+  private onConfigChanged() {
+    // 配置变化时的处理逻辑
+    if (this.config.features?.enableNewFeature) {
+      this.enableNewFeature();
+    }
+
+    if (this.config.performance?.cacheSize !== this.currentCacheSize) {
+      this.resizeCache(this.config.performance.cacheSize);
+    }
+  }
+
+  refreshConfig() {
+    // 手动刷新配置
+    this.loadConfig();
+    this.onConfigChanged();
+  }
+
+  private enableNewFeature() {
+    console.log('Enabling new feature...');
+  }
+
+  private resizeCache(newSize: number) {
+    console.log(`Resizing cache to ${newSize}`);
+    this.currentCacheSize = newSize;
+  }
+
+  private currentCacheSize = 0;
+}
+
+// 在模块中使用
+async setupComponents({ configManager, serviceRegistry }) {
+  const configurableService = new ConfigurableService(configManager, this.info.name);
+  serviceRegistry.register('ConfigurableService', configurableService);
+}
+```
+
+## 多环境配置管理
+
+### 环境配置文件
+
+支持多个环境配置文件：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  const env = process.env.NODE_ENV || 'development';
+  
+  // 基础配置
+  configManager.setDefault(this.info.name, {
+    app: {
+      name: 'MyApp',
+      version: '1.0.0'
+    },
+    server: {
+      port: 3000,
+      host: '0.0.0.0'
+    }
+  });
+
+  // 环境特定配置
+  const envConfigMap = {
+    development: {
+      server: {
+        port: 3001,
+        debug: true
+      },
+      database: {
+        host: 'localhost',
+        database: 'myapp_dev',
+        logging: true
+      },
+      external: {
+        apiBaseUrl: 'http://localhost:4000'
+      }
+    },
+    staging: {
+      server: {
+        port: 8080
+      },
+      database: {
+        host: 'staging-db.example.com',
+        database: 'myapp_staging',
+        ssl: true
+      },
+      external: {
+        apiBaseUrl: 'https://staging-api.example.com'
+      }
+    },
+    production: {
+      server: {
+        port: parseInt(process.env.PORT || '8080'),
+        debug: false
+      },
+      database: {
+        host: process.env.DB_HOST || 'prod-db.example.com',
+        database: process.env.DB_NAME || 'myapp',
+        ssl: true,
+        logging: false
+      },
+      external: {
+        apiBaseUrl: process.env.API_BASE_URL || 'https://api.example.com'
+      }
+    }
+  };
+
+  // 合并环境配置
+  if (envConfigMap[env]) {
+    configManager.merge(this.info.name, envConfigMap[env]);
+    logger.info(`Applied ${env} environment configuration`);
+  }
+
+  // 从环境变量中读取敏感信息
+  if (process.env.DB_PASSWORD) {
+    configManager.set(`${this.info.name}.database.password`, process.env.DB_PASSWORD);
+  }
+  if (process.env.JWT_SECRET) {
+    configManager.set(`${this.info.name}.jwt.secret`, process.env.JWT_SECRET);
+  }
+
+  logger.info(`Configuration loaded for ${env} environment`);
+}
+```
+
+### 配置继承
+
+实现配置的继承和覆盖：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 全局默认配置
+  const globalDefaults = {
+    timeouts: {
+      api: 5000,
+      database: 30000,
+      cache: 1000
+    },
+    retries: {
+      api: 3,
+      database: 1
+    },
+    features: {
+      enableLogging: true,
+      enableMetrics: false,
+      enableTracing: false
+    }
+  };
+
+  // 环境基础配置
+  const envConfigs = {
+    development: {
+      timeouts: {
+        api: 10000 // 开发环境API超时更长
+      },
+      features: {
+        enableMetrics: true,
+        enableTracing: true
+      }
+    },
+    test: {
+      timeouts: {
+        api: 2000, // 测试环境超时更短
+        database: 5000
+      },
+      features: {
+        enableLogging: false // 测试时关闭日志
+      }
+    },
+    production: {
+      retries: {
+        api: 5, // 生产环境重试更多次
+        database: 2
+      },
+      features: {
+        enableMetrics: true
+      }
+    }
+  };
+
+  const env = process.env.NODE_ENV || 'development';
+
+  // 合并配置（深度合并）
+  const finalConfig = this.deepMerge(
+    globalDefaults,
+    envConfigs[env] || {}
+  );
+
+  configManager.setDefault(this.info.name, finalConfig);
+  
+  logger.info(`Configuration merged for ${env}:`, {
+    apiTimeout: finalConfig.timeouts.api,
+    enableMetrics: finalConfig.features.enableMetrics,
+    apiRetries: finalConfig.retries.api
+  });
+}
+
+private deepMerge(target: any, source: any): any {
+  const result = { ...target };
+  
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      result[key] = this.deepMerge(result[key] || {}, source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  
+  return result;
+}
+```
+
+## 配置安全
+
+### 敏感配置保护
+
+保护敏感配置信息：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  // 设置基础配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      host: 'localhost',
+      port: 5432,
+      username: '',
+      password: '', // 敏感信息
+      database: 'myapp'
+    },
+    jwt: {
+      secret: '', // 敏感信息
+      expiresIn: '24h'
+    },
+    external: {
+      stripe: {
+        publicKey: '',
+        secretKey: '' // 敏感信息
+      }
+    }
+  });
+
+  // 从环境变量读取敏感信息
+  const sensitiveConfigs = {
+    'database.password': process.env.DB_PASSWORD,
+    'jwt.secret': process.env.JWT_SECRET,
+    'external.stripe.publicKey': process.env.STRIPE_PUBLIC_KEY,
+    'external.stripe.secretKey': process.env.STRIPE_SECRET_KEY
+  };
+
+  // 设置敏感配置
+  for (const [path, value] of Object.entries(sensitiveConfigs)) {
+    if (value) {
+      configManager.set(`${this.info.name}.${path}`, value);
+    }
+  }
+
+  // 验证关键敏感配置
+  const config = configManager.get(this.info.name);
+  
+  if (!config.database.password) {
+    logger.warn('Database password not set, using development default');
+    configManager.set(`${this.info.name}.database.password`, 'dev-password');
+  }
+
+  if (!config.jwt.secret || config.jwt.secret.length < 32) {
+    throw new Error('JWT secret must be at least 32 characters long');
+  }
+
+  // 在日志中隐藏敏感信息
+  logger.info('Configuration loaded', {
+    database: {
+      host: config.database.host,
+      port: config.database.port,
+      username: config.database.username,
+      password: '***' // 隐藏密码
+    },
+    jwt: {
+      secret: '***', // 隐藏密钥
+      expiresIn: config.jwt.expiresIn
+    }
+  });
+}
+```
+
+### 配置加密
+
+对敏感配置进行加密处理：
+
+```typescript
+class ConfigEncryption {
+  private readonly encryptionKey: string;
+
+  constructor() {
+    this.encryptionKey = process.env.CONFIG_ENCRYPTION_KEY || 'default-key';
+  }
+
+  encrypt(value: string): string {
+    // 简化的加密实现，实际应用中使用更强的加密
+    const encoded = Buffer.from(value).toString('base64');
+    return `encrypted:${encoded}`;
+  }
+
+  decrypt(encryptedValue: string): string {
+    if (!encryptedValue.startsWith('encrypted:')) {
+      return encryptedValue; // 未加密的值直接返回
+    }
+
+    const encoded = encryptedValue.replace('encrypted:', '');
+    return Buffer.from(encoded, 'base64').toString('utf8');
+  }
+
+  isEncrypted(value: string): boolean {
+    return typeof value === 'string' && value.startsWith('encrypted:');
+  }
+}
+
+async setupConfig({ configManager, logger }) {
+  const encryption = new ConfigEncryption();
+
+  // 设置可能包含加密值的配置
+  configManager.setDefault(this.info.name, {
+    database: {
+      password: process.env.DB_PASSWORD_ENCRYPTED || 'plain-password'
+    },
+    apis: {
+      secretKey: process.env.API_SECRET_ENCRYPTED || 'plain-secret'
+    }
+  });
+
+  // 解密配置值
+  const config = configManager.get(this.info.name);
+  
+  if (encryption.isEncrypted(config.database.password)) {
+    const decryptedPassword = encryption.decrypt(config.database.password);
+    configManager.set(`${this.info.name}.database.password`, decryptedPassword);
+  }
+
+  if (encryption.isEncrypted(config.apis.secretKey)) {
+    const decryptedKey = encryption.decrypt(config.apis.secretKey);
+    configManager.set(`${this.info.name}.apis.secretKey`, decryptedKey);
+  }
+
+  logger.info('Encrypted configuration values processed');
+}
+```
+
+## 配置最佳实践
+
+### 1. 配置分层结构
+
+使用清晰的层次结构组织配置：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  configManager.setDefault(this.info.name, {
+    // 应用层配置
+    app: {
+      name: 'MyApplication',
+      version: '1.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    },
+
+    // 服务器配置
+    server: {
+      port: 3000,
+      host: '0.0.0.0',
+      cors: {
+        enabled: true,
+        origins: ['http://localhost:3000']
+      }
+    },
+
+    // 数据库配置
+    database: {
+      primary: {
+        host: 'localhost',
+        port: 5432,
+        database: 'myapp'
+      },
+      redis: {
+        host: 'localhost',
+        port: 6379,
+        database: 0
+      }
+    },
+
+    // 外部服务配置
+    external: {
+      payment: {
+        stripe: { /* ... */ },
+        paypal: { /* ... */ }
+      },
+      notification: {
+        email: { /* ... */ },
+        sms: { /* ... */ }
+      }
+    },
+
+    // 功能开关
+    features: {
+      enableRegistration: true,
+      enablePayments: false,
+      enableNotifications: true
+    },
+
+    // 性能配置
+    performance: {
+      cacheSize: 1000,
+      maxConnections: 100,
+      timeouts: {
+        api: 5000,
+        database: 30000
+      }
+    }
+  });
+}
+```
+
+### 2. 配置验证规则
+
+建立完整的配置验证机制：
+
+```typescript
+class ConfigValidator {
+  static validate(config: any): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // 验证服务器配置
+    if (!config.server?.port || config.server.port < 1 || config.server.port > 65535) {
+      errors.push('Invalid server port');
+    }
+
+    // 验证数据库配置
+    if (!config.database?.primary?.host) {
+      errors.push('Database host is required');
+    }
+
+    if (!config.database?.primary?.database) {
+      errors.push('Database name is required');
+    }
+
+    // 验证外部服务配置
+    if (config.features?.enablePayments) {
+      if (!config.external?.payment?.stripe?.secretKey) {
+        errors.push('Stripe secret key is required when payments are enabled');
+      }
+    }
+
+    if (config.features?.enableNotifications) {
+      if (!config.external?.notification?.email?.smtp?.host) {
+        errors.push('SMTP host is required when notifications are enabled');
+      }
+    }
+
+    // 验证性能配置
+    if (config.performance?.cacheSize < 0) {
+      errors.push('Cache size must be non-negative');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+}
+
+async setupConfig({ configManager, logger }) {
+  // 设置配置...
+  
+  // 验证配置
+  const config = configManager.get(this.info.name);
+  const validation = ConfigValidator.validate(config);
+
+  if (!validation.valid) {
+    const errorMessage = `Configuration validation failed: ${validation.errors.join(', ')}`;
+    logger.error(errorMessage);
+    throw new Error(errorMessage);
+  }
+
+  logger.info('Configuration validation passed');
+}
+```
+
+### 3. 配置文档化
+
+为配置项提供清晰的文档：
+
+```typescript
+async setupConfig({ configManager, logger }) {
+  const configSchema = {
+    server: {
+      port: {
+        type: 'number',
+        default: 3000,
+        description: '服务器监听端口',
+        min: 1,
+        max: 65535
+      },
+      host: {
+        type: 'string', 
+        default: '0.0.0.0',
+        description: '服务器绑定地址'
+      }
+    },
+    database: {
+      host: {
+        type: 'string',
+        default: 'localhost',
+        description: '数据库主机地址',
+        required: true
+      },
+      port: {
+        type: 'number',
+        default: 5432,
+        description: '数据库端口'
+      },
+      pool: {
+        min: {
+          type: 'number',
+          default: 2,
+          description: '连接池最小连接数'
+        },
+        max: {
+          type: 'number',
+          default: 10,
+          description: '连接池最大连接数'
+        }
+      }
+    }
+  };
+
+  // 根据 schema 生成默认配置
+  const defaultConfig = this.generateDefaultConfig(configSchema);
+  configManager.setDefault(this.info.name, defaultConfig);
+
+  logger.info('Configuration initialized with schema');
+}
+
+private generateDefaultConfig(schema: any): any {
+  const config = {};
+  
+  for (const [key, value] of Object.entries(schema)) {
+    if (typeof value === 'object' && value !== null) {
+      if ('default' in value) {
+        config[key] = value.default;
+      } else {
+        config[key] = this.generateDefaultConfig(value);
+      }
+    }
+  }
+  
+  return config;
+}
+```
+
+### 4. 配置监控
+
+监控配置变化和使用情况：
+
+```typescript
+class ConfigMonitor {
+  private accessCount = new Map<string, number>();
+  private lastAccess = new Map<string, Date>();
+
+  trackAccess(key: string) {
+    this.accessCount.set(key, (this.accessCount.get(key) || 0) + 1);
+    this.lastAccess.set(key, new Date());
+  }
+
+  getUsageStats() {
+    return {
+      totalKeys: this.accessCount.size,
+      mostAccessed: [...this.accessCount.entries()]
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10),
+      recentlyAccessed: [...this.lastAccess.entries()]
+        .sort(([,a], [,b]) => b.getTime() - a.getTime())
+        .slice(0, 10)
+    };
+  }
+}
+
+async setupComponents({ configManager, serviceRegistry, logger }) {
+  const monitor = new ConfigMonitor();
+
+  // 包装 configManager.get 方法来追踪访问
+  const originalGet = configManager.get.bind(configManager);
+  configManager.get = (key: string) => {
+    monitor.trackAccess(key);
+    return originalGet(key);
+  };
+
+  serviceRegistry.register('ConfigMonitor', monitor);
+
+  // 定期报告配置使用统计
+  setInterval(() => {
+    const stats = monitor.getUsageStats();
+    logger.debug('Configuration usage statistics:', stats);
+  }, 60000); // 每分钟报告一次
+
+  logger.info('Configuration monitoring enabled');
+}
+```
+
+## 下一步
+
+了解配置管理后，您已经掌握了 Entity Engine 模块系统的所有核心概念：
+
+- ✅ [模块概览](./overview) - 模块系统整体架构
+- ✅ [模块定义](./module-definition) - 如何定义和创建模块
+- ✅ [模块生命周期](./module-lifecycle) - 三阶段生命周期管理
+- ✅ [依赖注入](./dependency-injection) - 服务依赖和注入
+- ✅ [服务注册](./service-registration) - 服务注册和管理
+- ✅ **配置管理** - 模块配置系统
+
+现在您可以开始构建自己的 Entity Engine 模块了！建议从简单的模块开始，逐步掌握各个概念的实际应用。

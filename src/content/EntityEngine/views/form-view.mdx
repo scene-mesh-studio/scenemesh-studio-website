@@ -1,0 +1,375 @@
+# 表单视图
+
+表单视图是Entity Engine中最常用的视图类型，专门用于数据的录入、编辑和查看。无论是简单的用户注册表单，还是复杂的多步骤订单创建，表单视图都能通过灵活的配置满足您的需求。
+
+## 创建表单视图
+
+创建表单视图时，您需要配置字段布局、按钮行为和验证规则。表单视图支持多种布局方式，包括网格布局、弹性布局、标签页和手风琴布局，让您可以根据业务需求选择最合适的展示方式。
+
+### 网格布局表单
+
+网格布局适合字段较多的表单，可以充分利用水平空间。您可以设置网格列数，并为每个字段指定占用的列数，实现灵活的布局控制。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserFormView',
+  title: '用户信息',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    gridCols: 2,
+    fields: ['name', 'email', 'phone', 'department'],
+    submitText: '保存用户',
+    validateOnChange: true
+  }
+});
+```
+
+### 分组表单
+
+对于字段较多的表单，可以使用分组的方式让用户更容易理解和填写。分组可以将相关的字段组织在一起，提高表单的可用性。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Product',
+  name: 'ProductFormView',
+  title: '产品信息',
+  type: 'FormView',
+  config: {
+    layout: 'section',
+    sections: [
+      {
+        title: '基本信息',
+        fields: ['name', 'sku', 'category', 'brand']
+      },
+      {
+        title: '价格信息',
+        fields: ['price', 'costPrice', 'discountPrice']
+      }
+    ],
+    autoSave: true,
+    autoSaveInterval: 30000
+  }
+});
+```
+
+## 表单布局类型
+
+### 标签页布局
+
+标签页布局非常适合信息量大的表单，可以将相关字段分组到不同的标签页中，避免单个页面过于复杂。用户可以按照逻辑分类逐步填写信息。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Company',
+  name: 'CompanyFormView',
+  title: '公司信息',
+  type: 'FormView',
+  config: {
+    layout: 'tabs',
+    tabs: [
+      {
+        title: '基本信息',
+        icon: 'building',
+        fields: ['name', 'code', 'type', 'industry', 'description']
+      },
+      {
+        title: '联系信息', 
+        icon: 'contact',
+        fields: ['address', 'phone', 'email', 'website']
+      },
+      {
+        title: '财务信息',
+        icon: 'money',
+        fields: ['registeredCapital', 'taxNumber', 'bankAccount']
+      }
+    ],
+    allowTabNavigation: true,
+    validateOnChange: true
+  }
+});
+```
+
+### 向导式表单
+
+对于复杂的业务流程，向导式表单可以将整个表单分解为多个步骤，引导用户逐步完成。这种方式特别适合订单创建、申请流程等场景。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderWizardView',
+  title: '订单创建向导',
+  type: 'FormView',
+  config: {
+    layout: 'wizard',
+    steps: [
+      {
+        name: 'customer',
+        title: '选择客户',
+        description: '选择订单客户',
+        icon: 'user',
+        fields: ['customer'],
+        required: true
+      },
+      {
+        name: 'items',
+        title: '添加商品',
+        description: '添加订单商品',
+        icon: 'shopping-cart',
+        fields: ['items'],
+        required: true
+      },
+      {
+        name: 'shipping',
+        title: '配送信息',
+        description: '设置配送地址',
+        icon: 'truck',
+        fields: ['shippingAddress']
+      },
+      {
+        name: 'payment',
+        title: '支付方式',
+        description: '选择支付方式',
+        icon: 'credit-card',
+        fields: ['paymentMethod']
+      }
+    ],
+    showStepIndicator: true,
+    allowStepNavigation: false,
+    submitText: '创建订单'
+  }
+});
+```
+
+## 表单高级功能
+
+### 条件显示字段
+
+在表单中，您可以根据用户的选择动态显示或隐藏字段。这种功能对于不同类型的用户注册、不同类型的产品信息等场景非常有用。
+
+### 动态表单示例
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserRegistrationView',
+  title: '用户注册',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    fields: ['userType', 'firstName', 'lastName', 'idNumber', 'companyName', 'businessLicense'],
+    conditionalFields: [
+      {
+        condition: 'userType == "individual"',
+        fields: ['firstName', 'lastName', 'idNumber']
+      },
+      {
+        condition: 'userType == "enterprise"',
+        fields: ['companyName', 'businessLicense']
+      }
+    ],
+    validateOnChange: true
+  }
+});
+```
+
+### 自动保存功能
+
+对于长表单或重要数据，您可以开启自动保存功能，避免用户因意外关闭页面而丢失数据。系统会定时保存用户的输入内容。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Article',
+  name: 'ArticleFormView',
+  title: '文章编辑',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    fields: ['title', 'content', 'tags', 'status'],
+    autoSave: true,
+    autoSaveInterval: 30000, // 30秒自动保存
+    showAutoSaveStatus: true,
+    validateOnChange: true
+  }
+});
+```
+
+## 表单验证
+
+表单验证是确保数据质量的重要环节。Entity Engine 提供了多种验证方式，包括字段级验证、表单级验证和异步验证。您可以设置验证的触发时机，如实时验证、失焦验证或提交时验证。
+
+### 字段验证配置
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserFormView',
+  title: '用户注册',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    fields: ['username', 'password', 'confirmPassword', 'email'],
+    fieldValidation: {
+      username: {
+        required: true,
+        minLength: 3,
+        maxLength: 20,
+        pattern: '^[a-zA-Z0-9_]+$',
+        asyncValidator: 'checkUsernameUnique'
+      },
+      password: {
+        required: true,
+        minLength: 8,
+        pattern: '(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)'
+      },
+      confirmPassword: {
+        required: true,
+        matchField: 'password'
+      },
+      email: {
+        required: true,
+        email: true,
+        asyncValidator: 'checkEmailUnique'
+      }
+    },
+    validateOnChange: true,
+    validateOnBlur: true,
+    showValidationSummary: true
+  }
+});
+```
+
+## 表单自定义功能
+
+### 自定义组件配置
+
+对于复杂的业务场景，Entity Engine 允许您使用自定义组件来处理特殊的数据类型。比如订单项编辑器、文件上传器、流程设计器等。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderFormView',
+  title: '订单编辑',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    fields: ['customer', 'items', 'attachments', 'notes'],
+    customWidgets: {
+      items: {
+        widget: 'order-item-table',
+        props: {
+          allowAdd: true,
+          allowEdit: true,
+          allowDelete: true,
+          showTotal: true
+        }
+      },
+      attachments: {
+        widget: 'file-upload-list',
+        props: {
+          maxFiles: 10,
+          maxSize: '10MB',
+          allowedTypes: ['pdf', 'doc', 'jpg', 'png']
+        }
+      }
+    }
+  }
+});
+```
+
+### 表单事件处理
+
+表单支持多种事件处理，包括字段值变化、失焦、提交前后等。您可以通过事件处理器实现字段互动、数据验证、自动填充等功能。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Product',
+  name: 'ProductFormView',
+  title: '产品编辑',
+  type: 'FormView',
+  config: {
+    layout: 'grid',
+    fields: ['name', 'slug', 'category', 'tags'],
+    fieldEvents: {
+      name: {
+        onChange: 'generateSlug',
+        onBlur: 'validateProductName'
+      },
+      category: {
+        onChange: 'loadCategoryDefaults'
+      }
+    },
+    eventHandlers: {
+      generateSlug: (value, context) => {
+        const slug = generateSlugFromName(value);
+        context.setFieldValue('slug', slug);
+      },
+      loadCategoryDefaults: async (categoryId, context) => {
+        const category = await loadCategory(categoryId);
+        if (category.defaultTags) {
+          context.setFieldValue('tags', category.defaultTags);
+        }
+      }
+    }
+  }
+});
+```
+
+## 表单性能优化
+
+对于字段较多或操作复杂的表单，Entity Engine 提供了多种性能优化手段。您可以通过延迟加载、虚拟滚动、防抖验证等方式来提升表单的响应速度和用户体验。
+
+### 性能优化配置
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'ComplexEntity',
+  name: 'OptimizedFormView',
+  title: '大型表单',
+  type: 'FormView',
+  config: {
+    layout: 'tabs',
+    lazyTabs: true,
+    performance: {
+      debounceValidation: 300,
+      lazyValidation: true,
+      virtualScroll: true,
+      memoizeComponents: true
+    },
+    autoSave: true,
+    autoSaveInterval: 60000,
+    autoSaveFields: ['name', 'status']
+  }
+});
+```
+
+## 最佳实践
+
+### 表单设计原则
+
+在设计表单时，建议遵循以下原则以提供最佳用户体验：
+
+- **逻辑分组**：将相关字段组织在一起，使用分组或标签页进行划分
+- **渐进式引导**：对于复杂表单，使用向导式布局引导用户逐步完成
+- **即时反馈**：开启实时验证，让用户及时了解输入是否正确
+- **自动保存**：为重要数据启用自动保存，防止意外丢失
+- **响应式设计**：确保表单在不同设备上都有良好的显示效果
+
+### 常见使用场景
+
+表单视图适用于以下业务场景：
+
+- **用户注册和资料编辑**：收集用户基本信息和偏好设置
+- **内容创建和编辑**：文章编写、产品信息维护、订单创建
+- **设置和配置**：系统参数配置、用户权限设置、应用配置
+- **申请和审批**：请假申请、费用报销、采购申请等流程表单
+- **数据采集**：问卷调查、意见反馈、用户反馈收集
+
+## 下一步
+
+了解表单视图后，继续学习：
+
+- [网格视图](/views/grid-view) - 学习如何创建数据列表界面
+- [详情视图](/views/detail-view) - 学习如何创建数据展示界面
+- [视图概览](/views/overview) - 回顾所有视图类型的使用场景

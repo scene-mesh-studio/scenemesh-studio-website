@@ -1,0 +1,446 @@
+# 网格视图
+
+网格视图是Entity Engine中专门用于展示列表数据的视图类型，适合处理大量数据的浏览、搜索、排序和批量操作。无论是用户管理、订单列表还是产品目录，网格视图都能提供高效的数据管理体验。
+
+## 创建网格视图
+
+创建网格视图时，您需要指定要显示的列、配置分页、排序和筛选功能。网格视图支持多种显示模式，包括简单列表、分组显示和可展开行等。
+
+### 基础列表配置
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'User',
+  name: 'UserGridView',
+  title: '用户列表',
+  type: 'GridView',
+  config: {
+    columns: ['avatar', 'name', 'email', 'department', 'status', 'createdAt'],
+    pageSize: 20,
+    sortable: true,
+    searchable: true,
+    filterable: true,
+    actions: ['view', 'edit', 'delete']
+  }
+});
+```
+
+### 高级网格功能
+
+对于复杂的业务场景，网格视图提供了大量高级功能，包括行操作、批量操作、过滤器、排序和导出等。这些功能让用户能够高效地管理大量数据。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderGridView',
+  title: '订单管理',
+  type: 'GridView',
+  config: {
+    columns: ['orderNumber', 'customer', 'items', 'totalAmount', 'status', 'createdAt'],
+    pageSize: 50,
+    sortable: true,
+    searchable: true,
+    selectable: true,
+    multiSelect: true,
+    
+    actions: [
+      {
+        name: 'view',
+        title: '查看',
+        icon: 'eye',
+        type: 'link'
+      },
+      {
+        name: 'edit', 
+        title: '编辑',
+        icon: 'edit',
+        condition: 'status == "draft"'
+      },
+      {
+        name: 'cancel',
+        title: '取消',
+        icon: 'close',
+        variant: 'danger',
+        condition: 'status in ["pending", "confirmed"]'
+      }
+    ],
+    
+    bulkActions: [
+      {
+        name: 'export',
+        title: '批量导出',
+        icon: 'download'
+      },
+      {
+        name: 'updateStatus',
+        title: '批量更新状态',
+        icon: 'edit',
+        requiresSelection: true
+      }
+    ],
+    
+    filters: [
+      {
+        field: 'status',
+        type: 'select',
+        options: ['draft', 'pending', 'confirmed', 'shipped', 'completed', 'cancelled']
+      },
+      {
+        field: 'createdAt',
+        type: 'dateRange'
+      },
+      {
+        field: 'totalAmount',
+        type: 'numberRange'
+      }
+    ],
+    
+    defaultSort: { field: 'createdAt', direction: 'desc' }
+  }
+});
+```
+
+## 网格视图类型
+
+### 分组显示
+
+当需要按照某些字段对数据进行分组显示时，可以使用分组网格。这种显示方式特别适合销售报表、部门统计等场景。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Sale',
+  name: 'SalesGroupedView',
+  title: '销售分组视图',
+  type: 'GridView',
+  config: {
+    columns: ['product', 'quantity', 'unitPrice', 'amount', 'saleDate'],
+    pageSize: 100,
+    
+    groupBy: [
+      {
+        field: 'department',
+        title: '部门',
+        expanded: true,
+        showSummary: true
+      },
+      {
+        field: 'salesperson',
+        title: '销售员',
+        expanded: false,
+        showSummary: true
+      }
+    ],
+    
+    aggregates: [
+      {
+        field: 'quantity',
+        type: 'sum',
+        title: '总数量'
+      },
+      {
+        field: 'amount',
+        type: 'sum',
+        title: '总金额'
+      },
+      {
+        field: 'amount',
+        type: 'avg',
+        title: '平均金额'
+      }
+    ],
+    
+    summary: {
+      position: 'bottom',
+      showTotals: true
+    },
+    
+    exportOptions: {
+      formats: ['excel'],
+      includeGroups: true,
+      includeSummary: true
+    }
+  }
+});
+```
+
+### 可展开行网格
+
+对于具有主从关系的数据，可以使用可展开行网格。用户点击主记录时，可以展开显示相关的子记录。这种方式非常适合订单详情、文件目录等场景。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderExpandableView',
+  title: '订单主从视图',
+  type: 'GridView',
+  config: {
+    columns: ['orderNumber', 'customer', 'itemCount', 'totalAmount', 'status', 'createdAt'],
+    expandable: true,
+    expandOnClick: true,
+    
+    expandedContent: {
+      type: 'nested-grid',
+      modelName: 'OrderItem',
+      relationField: 'orderId',
+      columns: ['product', 'quantity', 'unitPrice', 'discount', 'subtotal'],
+      showSummary: true
+    }
+  }
+});
+```
+
+### 高性能网格
+
+对于需要处理大量数据的场景，Entity Engine 提供了虚拟滚动功能。这种技术只渲染可见区域的数据，大幅提升性能和响应速度。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Transaction',
+  name: 'TransactionVirtualView',
+  title: '交易记录大量数据',
+  type: 'GridView',
+  config: {
+    columns: ['id', 'type', 'account', 'amount', 'balance', 'timestamp'],
+    
+    performance: {
+      virtualScroll: true,
+      rowHeight: 48,
+      bufferSize: 50,
+      pageSize: 1000,
+      serverSidePaging: true
+    },
+    
+    features: {
+      sortable: true,
+      filterable: true,
+      searchable: false,
+      selectable: false
+    },
+    
+    optimizations: {
+      lazyLoading: true,
+      memoizeRows: true,
+      debounceResize: 300
+    }
+  }
+});
+```
+
+## 网格高级功能
+
+### 自定义单元格渲染
+
+对于复杂的数据展示需求，您可以使用自定义组件来渲染单元格内容。这种方式特别适合显示图表、进度条、复杂状态等内容。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Product',
+  name: 'ProductCustomView',
+  title: '产品自定义网格',
+  type: 'GridView',
+  config: {
+    columns: ['image', 'name', 'inventory', 'pricing', 'sales', 'status'],
+    rowHeight: 120,
+    pageSize: 25,
+    
+    customWidgets: {
+      image: {
+        widget: 'product-image',
+        props: {
+          size: 64,
+          zoomable: true
+        }
+      },
+      name: {
+        widget: 'product-info-cell',
+        props: {
+          showSku: true,
+          showCategory: true,
+          linkTo: '/products/{id}'
+        }
+      },
+      inventory: {
+        widget: 'inventory-indicator',
+        props: {
+          showWarnings: true,
+          lowStockThreshold: 10
+        }
+      },
+      sales: {
+        widget: 'sales-chart-cell',
+        props: {
+          chartType: 'sparkline',
+          period: '30d',
+          showTrend: true
+        },
+        lazy: true
+      }
+    }
+  }
+});
+```
+
+### 网格事件处理
+
+网格视图支持多种事件处理，包括行点击、双击、选择变化、排序和筛选等。通过事件处理器，您可以实现复杂的交互逻辑。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Order',
+  name: 'OrderEventView',
+  title: '订单事件网格',
+  type: 'GridView',
+  config: {
+    columns: ['orderNumber', 'customer', 'totalAmount', 'status'],
+    
+    events: {
+      onRowClick: 'handleRowClick',
+      onRowDoubleClick: 'handleRowDoubleClick',
+      onSelectionChange: 'handleSelectionChange'
+    },
+    
+    eventHandlers: {
+      handleRowClick: (row, event, context) => {
+        if (event.ctrlKey) {
+          window.open(`/orders/${row.id}`, '_blank');
+        } else {
+          context.toggleRowSelection(row.id);
+        }
+      },
+      
+      handleRowDoubleClick: (row, event, context) => {
+        context.openEditDialog(row.id);
+      },
+      
+      handleSelectionChange: (selectedRows, context) => {
+        const totalAmount = selectedRows.reduce((sum, row) => sum + row.totalAmount, 0);
+        context.updateSelectionSummary({
+          count: selectedRows.length,
+          totalAmount
+        });
+      }
+    }
+  }
+});
+```
+
+## 网格性能优化
+
+对于大量数据的处理，Entity Engine 提供了多种性能优化手段。合理使用这些优化选项可以显著提升网格的响应速度和用户体验。
+
+### 性能优化配置
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'LargeDataset',
+  name: 'HighPerformanceView',
+  title: '高性能网格',
+  type: 'GridView',
+  config: {
+    columns: ['id', 'name', 'value', 'timestamp'],
+    
+    performance: {
+      virtualScroll: true,
+      rowHeight: 40,
+      bufferSize: 20,
+      pageSize: 500,
+      serverSide: true
+    },
+    
+    optimizations: {
+      lazyLoading: true,
+      memoizeRows: true,
+      debounceFilter: 500,
+      debounceSearch: 300,
+      cacheData: true,
+      preloadPages: 2
+    },
+    
+    features: {
+      selectable: false,
+      expandable: false,
+      dragAndDrop: false
+    },
+    
+    loading: {
+      showSkeleton: true,
+      skeletonRows: 10
+    }
+  }
+});
+```
+
+### 数据导出功能
+
+网格视图支持多种格式的数据导出，包括 Excel、CSV、PDF 和 JSON 等。您可以根据不同的业务需求配置适合的导出选项。
+
+```typescript
+await engine.metaRegistry.updateOrRegisterView({
+  modelName: 'Report',
+  name: 'ExportableView',
+  title: '可导出网格',
+  type: 'GridView',
+  config: {
+    columns: ['name', 'value', 'category', 'date'],
+    
+    export: {
+      formats: [
+        {
+          type: 'excel',
+          title: '导出 Excel',
+          filename: 'report_{date}.xlsx',
+          includeFilters: true,
+          maxRows: 10000
+        },
+        {
+          type: 'csv',
+          title: '导出 CSV',
+          filename: 'report_{date}.csv',
+          encoding: 'utf-8'
+        },
+        {
+          type: 'pdf',
+          title: '导出 PDF',
+          filename: 'report_{date}.pdf',
+          orientation: 'landscape'
+        }
+      ],
+      
+      permissions: {
+        roles: ['admin', 'analyst'],
+        maxRows: 50000
+      }
+    }
+  }
+});
+```
+
+## 最佳实践
+
+### 网格设计原则
+
+在设计网格视图时，建议遵循以下原则：
+
+- **信息层次**：将最重要的信息放在最左侧，按重要性递减排列
+- **适度分页**：根据数据量和用户习惯设置合理的页面大小
+- **智能过滤**：提供常用的预设过滤条件，方便用户快速筛选
+- **操作便利**：将常用操作放在显眼位置，危险操作需要确认
+- **性能优先**：对于大数据量场景，优先考虑性能而非功能丰富性
+
+### 常见使用场景
+
+网格视图适用于以下业务场景：
+
+- **用户管理**：用户列表、角色管理、权限设置
+- **内容管理**：文章列表、产品目录、媒体文件管理
+- **交易管理**：订单列表、支付记录、退款申请
+- **系统管理**：日志查看、配置管理、数据备份
+- **报表分析**：数据报表、统计分析、财务报表
+
+## 下一步
+
+了解网格视图后，继续学习：
+
+- [详情视图](/views/detail-view) - 学习如何创建数据展示界面
+- [表单视图](/views/form-view) - 学习如何创建数据编辑界面
+- [视图概览](/views/overview) - 回顾所有视图类型的使用场景

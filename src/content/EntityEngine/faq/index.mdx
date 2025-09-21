@@ -1,0 +1,694 @@
+# 常见问题
+
+这里收集了 Entity Engine 使用过程中最常遇到的问题和解决方案。如果您的问题没有在这里找到答案，请访问我们的 [GitHub Issues](https://github.com/scenemesh/entity-engine/issues) 或加入社区讨论。
+
+## 🚀 快速解答
+
+### Q: Entity Engine 适合什么类型的项目？
+
+**A:** Entity Engine 特别适合以下类型的项目：
+- 中大型企业应用
+- 内容管理系统 (CMS)
+- 电商平台
+- 客户关系管理系统 (CRM)
+- 需要复杂数据关系的应用
+- 实时协作应用
+
+### Q: Entity Engine 与其他 ORM 框架有什么区别？
+
+**A:** Entity Engine 的主要优势：
+- **类型安全**: 完整的 TypeScript 支持
+- **灵活的视图系统**: 支持多种输出格式
+- **实时数据同步**: 内置 WebSocket 支持
+- **智能查询优化**: 自动查询性能优化
+- **企业级功能**: 权限管理、审计日志、性能监控
+
+### Q: 支持哪些数据库？
+
+**A:** Entity Engine 目前支持以下数据库：
+- PostgreSQL ✅ (当前主要支持)
+- MySQL 🔄 (计划支持)
+- SQLite 🔄 (计划支持) 
+- MongoDB 🔄 (计划支持)
+
+Entity Engine 基于 Prisma 构建，理论上可以支持 Prisma 支持的所有数据库，但目前主要针对 PostgreSQL 进行了优化和测试。
+
+## 📚 新手入门
+
+### Q: 如何快速开始使用 Entity Engine？
+
+**A:** 三步快速开始：
+
+```bash
+# 1. 安装
+npm install @scenemesh/entity-engine
+
+# 2. 配置PostgreSQL数据库连接
+echo "EE_DATABASE_URL=postgresql://user:pass@localhost:5432/db" > .env
+
+# 3. 运行开发服务器
+npm run dev
+```
+
+### Q: 需要什么技术基础？
+
+**A:** 推荐的技术背景：
+- **必须**: JavaScript/TypeScript 基础
+- **推荐**: Node.js 开发经验
+- **有帮助**: 数据库基础知识
+- **加分**: 现代 Web 框架经验 (React/Vue/Angular)
+
+### Q: 有哪些学习资源？
+
+**A:** 学习资源：
+- [官方文档](/) - 完整的使用指南
+- [实战示例](/recipes) - 真实项目案例
+- [视频教程](https://youtube.com/@scenemesh) - 入门到进阶
+- [社区论坛](https://forum.scenemesh.io) - 问答和讨论
+- [GitHub 仓库](https://github.com/scenemesh/entity-engine) - 源码和示例
+
+## 💻 开发问题
+
+### Q: 如何定义实体关系？
+
+**A:** 在模型配置中定义关系：
+
+```typescript
+const UserModel: IEntityModel = {
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      isPrimaryKey: true
+    },
+    {
+      name: 'name',
+      title: '姓名',
+      type: 'string',
+      isRequired: true
+    },
+    {
+      name: 'posts',
+      title: '文章',
+      type: 'one_to_many',
+      refModel: 'Post'
+    }
+  ]
+};
+
+const PostModel: IEntityModel = {
+  name: 'Post',
+  title: '文章',
+  fields: [
+    {
+      name: 'id',
+      title: 'ID', 
+      type: 'string',
+      isPrimaryKey: true
+    },
+    {
+      name: 'title',
+      title: '标题',
+      type: 'string',
+      isRequired: true
+    },
+    {
+      name: 'author',
+      title: '作者',
+      type: 'many_to_one',
+      refModel: 'User'
+    }
+  ]
+};
+```
+
+### Q: 如何实现数据验证？
+
+**A:** 使用Zod schema进行验证：
+
+```typescript
+import { z } from 'zod';
+
+const UserModel: IEntityModel = {
+  name: 'User',
+  title: '用户',
+  fields: [
+    {
+      name: 'email',
+      title: '邮箱',
+      type: 'string',
+      isRequired: true,
+      schema: z.string().email('邮箱格式不正确').min(5, '至少5个字符')
+    },
+    {
+      name: 'age',
+      title: '年龄',
+      type: 'number',
+      schema: z.number().min(18, '年龄不能小于18').max(120, '年龄不能大于120')
+    }
+  ]
+};
+```
+
+### Q: 如何处理异步操作？
+
+**A:** Entity Engine 全面支持 async/await：
+
+```typescript
+async function createUser(data: any) {
+  const engine = await getEntityEngine();
+  
+  // 创建用户
+  const user = await engine.dataSource.create({
+    modelName: 'User',
+    data: {
+      modelName: 'User',
+      values: data
+    }
+  });
+  
+  // 发送欢迎邮件
+  await sendWelcomeEmail(user?.values.email);
+  
+  return user;
+}
+```
+
+### Q: 如何优化查询性能？
+
+**A:** 几种优化方式：
+
+```typescript
+// 1. 使用分页查询大量数据
+const result = await engine.dataSource.findMany({
+  modelName: 'User',
+  query: {
+    pageSize: 50,
+    pageIndex: 0
+  }
+});
+
+// 2. 使用关联查询
+const userWithPosts = await engine.dataSource.findOneWithReferences({
+  modelName: 'User',
+  id: 'user-id',
+  includeFieldNames: ['posts']
+});
+
+// 3. 使用过滤条件
+const activeUsers = await engine.dataSource.findMany({
+  modelName: 'User', 
+  query: {
+    filter: {
+      field: 'status',
+      operator: QueryOperator.EQ,
+      value: 'active'
+    }
+  }
+});
+```
+
+### Q: 如何实现实时数据同步？
+
+**A:** Entity Engine 通过事件系统实现数据同步：
+
+```typescript
+// 监听数据变化事件
+engine.eventManager.on('entity.created', (event) => {
+  if (event.modelName === 'User') {
+    // 处理用户创建事件
+    console.log('新用户创建:', event.entity);
+  }
+});
+
+// 触发自定义事件
+engine.eventManager.emit('user.login', {
+  userId: user.id,
+  timestamp: new Date()
+});
+```
+
+## 🚀 部署问题
+
+### Q: 推荐的生产环境部署方式？
+
+**A:** 推荐的部署架构：
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    image: my-entity-engine-app
+    environment:
+      - NODE_ENV=production
+      - EE_DATABASE_URL=postgresql://user:password@postgres:5432/myapp
+    depends_on:
+      - postgres
+  
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+### Q: 如何配置环境变量？
+
+**A:** 在 `.env` 文件中配置：
+
+```bash
+# Entity Engine 数据库配置
+EE_DATABASE_URL=postgresql://user:pass@localhost:5432/dbname
+
+# 应用配置
+PORT=3000
+NODE_ENV=production
+
+# JWT配置 (如果使用认证)
+JWT_SECRET=your-secret-key
+
+# 日志配置
+ENTITY_ENGINE_DEBUG=true
+```
+
+### Q: 如何进行数据库迁移？
+
+**A:** Entity Engine 基于 Prisma，使用 Prisma 命令进行迁移：
+
+```bash
+# 推送模型变更到数据库
+npx prisma db push
+
+# 生成 Prisma 客户端
+npx prisma generate
+
+# 查看数据库结构
+npx prisma studio
+```
+
+### Q: 如何监控应用性能？
+
+**A:** 可以通过以下方式监控 Entity Engine 应用：
+
+```typescript
+// 启用调试模式查看详细日志
+process.env.ENTITY_ENGINE_DEBUG = 'true';
+
+// 监控数据库查询
+const result = await engine.dataSource.findMany({
+  modelName: 'User',
+  query: { pageSize: 10 }
+});
+
+console.log('查询结果:', result.count, '条记录');
+
+// 使用 Prisma 日志监控
+// 在 prisma/schema.prisma 中配置：
+// generator client {
+//   provider = "prisma-client-js"
+//   log = ["query", "info", "warn", "error"]
+// }
+```
+
+## ⚡ 性能问题
+
+### Q: 为什么查询很慢？
+
+**A:** 常见原因和解决方案：
+
+1. **缺少索引**
+   ```typescript
+   // 在模型中定义唯一字段
+   const UserModel: IEntityModel = {
+     name: 'User',
+     fields: [
+       {
+         name: 'email',
+         type: 'string',
+         isUnique: true  // 会创建索引
+       }
+     ]
+   };
+   ```
+
+2. **N+1 查询问题**
+   ```typescript
+   // 使用关联查询一次性获取数据
+   const posts = await engine.dataSource.findManyWithReferences({
+     modelName: 'Post',
+     childrenFieldName: 'author'
+   });
+   ```
+
+3. **查询条件过于复杂**
+   ```typescript
+   // 简化查询条件
+   const result = await engine.dataSource.findMany({
+     modelName: 'Post',
+     query: {
+       filter: {
+         field: 'status',
+         operator: QueryOperator.EQ,
+         value: 'published'
+       },
+       pageSize: 20
+     }
+   });
+   ```
+
+### Q: 内存使用量过高怎么办？
+
+**A:** 优化内存使用：
+
+```typescript
+// 1. 使用分页查询避免一次加载大量数据
+const result = await engine.dataSource.findMany({
+  modelName: 'User',
+  query: {
+    pageSize: 100,
+    pageIndex: 0
+  }
+});
+
+// 2. 只查询必要的字段
+const users = await engine.dataSource.findMany({
+  modelName: 'User',
+  query: {
+    pageSize: 50
+  }
+});
+
+// 3. 及时清理不需要的数据
+// Entity Engine 会自动管理内存，无需手动清理
+```
+
+### Q: 并发处理能力不足？
+
+**A:** 提高并发性能：
+
+```typescript
+// 1. 使用批量操作
+const users = await Promise.all([
+  engine.dataSource.findOne({ id: 'user1', modelName: 'User' }),
+  engine.dataSource.findOne({ id: 'user2', modelName: 'User' }),
+  engine.dataSource.findOne({ id: 'user3', modelName: 'User' })
+]);
+
+// 2. 配置 Prisma 连接池（在 prisma/schema.prisma 中）
+// datasource db {
+//   provider = "postgresql" 
+//   url      = env("EE_DATABASE_URL")
+//   connection_limit = 20
+//   pool_timeout = 10
+// }
+```
+
+## 🔧 故障排除
+
+### Q: "连接数据库失败" 错误？
+
+**A:** 检查以下几点：
+
+1. **数据库服务是否运行**
+   ```bash
+   # PostgreSQL
+   sudo systemctl status postgresql
+   
+   # MySQL
+   sudo systemctl status mysql
+   ```
+
+2. **连接配置是否正确**
+   ```typescript
+   const config = {
+     host: 'localhost',
+     port: 5432,
+     database: 'myapp',
+     username: 'user',
+     password: 'password'
+   };
+   ```
+
+3. **网络连接是否正常**
+   ```bash
+   # 测试连接
+   telnet localhost 5432
+   ```
+
+### Q: "实体未找到" 错误？
+
+**A:** 可能的原因：
+
+1. **模型未注册**
+   ```typescript
+   // 确保模型已注册到初始化器中
+   const initializer = new EnginePrimitiveInitializer({
+     models: [UserModel, PostModel], // 确保包含所有模型
+     views: [UserListView]
+   });
+   ```
+
+2. **模型名称不匹配**
+   ```typescript
+   // 确保查询时使用正确的模型名称
+   const users = await engine.dataSource.findMany({
+     modelName: 'User' // 必须与模型定义中的 name 一致
+   });
+   ```
+
+3. **模型定义错误**
+   ```typescript
+   // 检查模型定义是否正确
+   const UserModel: IEntityModel = {
+     name: 'User', // 确保名称正确
+     title: '用户',
+     fields: [
+       // 确保包含必要字段
+     ]
+   };
+   ```
+
+### Q: "权限被拒绝" 错误？
+
+**A:** 权限问题排查：
+
+1. **检查认证配置**
+   ```typescript
+   // 确保已正确配置认证
+   const engine = await getEntityEngine();
+   if (engine.settings.authenticationEnabled) {
+     // 检查用户会话
+     const session = await engine.sessionManager.getSession();
+     console.log('当前用户:', session?.userInfo);
+   }
+   ```
+
+2. **验证视图权限配置**
+   ```typescript
+   // 检查视图的权限设置
+   const viewConfig: IEntityView = {
+     name: 'UserList',
+     modelName: 'User',
+     viewType: 'grid',
+     canEdit: true,   // 是否允许编辑
+     canNew: true,    // 是否允许新建
+     canDelete: true, // 是否允许删除
+     items: []
+   };
+   ```
+
+## 💡 最佳实践
+
+### Q: 如何组织项目结构？
+
+**A:** 推荐的项目结构：
+
+```
+src/
+├── entities/          # 实体定义
+│   ├── User.ts
+│   ├── Post.ts
+│   └── index.ts
+├── services/          # 业务逻辑
+│   ├── UserService.ts
+│   └── PostService.ts
+├── controllers/       # 控制器
+│   ├── UserController.ts
+│   └── PostController.ts
+├── middleware/        # 中间件
+├── config/           # 配置文件
+├── migrations/       # 数据库迁移
+└── tests/           # 测试文件
+```
+
+### Q: 如何处理错误？
+
+**A:** 统一错误处理：
+
+```typescript
+// 自定义错误类
+class BusinessError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number = 400
+  ) {
+    super(message);
+    this.name = 'BusinessError';
+  }
+}
+
+// 全局错误处理中间件
+app.use((error, req, res, next) => {
+  if (error instanceof BusinessError) {
+    return res.status(error.statusCode).json({
+      error: error.message,
+      code: error.code
+    });
+  }
+  
+  // 记录未知错误
+  console.error(error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+```
+
+### Q: 如何编写测试？
+
+**A:** 完整的测试策略：
+
+```typescript
+// 单元测试
+describe('UserService', () => {
+  let userService: UserService;
+  let mockEntityManager: jest.Mocked<IEntityManager>;
+
+  beforeEach(() => {
+    mockEntityManager = createMockEntityManager();
+    userService = new UserService(mockEntityManager);
+  });
+
+  it('should create user successfully', async () => {
+    const userData = { name: 'John', email: 'john@example.com' };
+    const createdUser = { id: '1', ...userData };
+    
+    mockEntityManager.create.mockResolvedValue(createdUser);
+    
+    const result = await userService.createUser(userData);
+    
+    expect(result).toEqual(createdUser);
+    expect(mockEntityManager.create).toHaveBeenCalledWith('User', userData);
+  });
+});
+
+// 集成测试
+describe('User API', () => {
+  let app: Application;
+  
+  beforeAll(async () => {
+    app = await createTestApp();
+  });
+  
+  it('should create user via API', async () => {
+    const response = await request(app)
+      .post('/api/users')
+      .send({ name: 'John', email: 'john@example.com' })
+      .expect(201);
+      
+    expect(response.body).toMatchObject({
+      name: 'John',
+      email: 'john@example.com'
+    });
+  });
+});
+```
+
+## 🔄 迁移升级
+
+### Q: 如何从旧版本升级？
+
+**A:** 升级步骤：
+
+```bash
+# 1. 备份数据
+pg_dump myapp > backup.sql
+
+# 2. 更新依赖
+npm update @scenemesh/entity-engine
+
+# 3. 运行迁移
+npx entity-engine migration:run
+
+# 4. 验证升级
+npm test
+```
+
+### Q: 升级后出现兼容性问题？
+
+**A:** 检查兼容性：
+
+1. **查看变更日志**
+   ```bash
+   npx entity-engine changelog
+   ```
+
+2. **运行兼容性检查**
+   ```bash
+   npx entity-engine check-compatibility
+   ```
+
+3. **使用兼容模式**
+   ```typescript
+   const app = new EntityEngine({
+     compatibility: {
+       version: '2.0.0',
+       strict: false
+     }
+   });
+   ```
+
+### Q: 如何从其他 ORM 迁移？
+
+**A:** 提供迁移工具：
+
+```bash
+# 从 TypeORM 迁移
+npx entity-engine migrate:from-typeorm
+
+# 从 Sequelize 迁移  
+npx entity-engine migrate:from-sequelize
+
+# 从 Prisma 迁移
+npx entity-engine migrate:from-prisma
+```
+
+---
+
+## 💬 获取帮助
+
+如果您的问题没有在这里找到答案，可以通过以下方式获取帮助：
+
+- **GitHub Issues**: [报告问题或请求功能](https://github.com/scenemesh/entity-engine/issues)
+- **Discord 社区**: [实时讨论和支持](https://discord.gg/scenemesh)
+- **官方论坛**: [深度技术讨论](https://forum.scenemesh.io)
+- **企业支持**: [commercial@scenemesh.io](mailto:commercial@scenemesh.io)
+
+我们的社区非常活跃，通常在几小时内就会有回复。在提问时，请提供以下信息：
+
+- Entity Engine 版本
+- Node.js 版本
+- 数据库类型和版本
+- 完整的错误消息
+- 相关的代码片段
+
+这样可以帮助我们更快地定位和解决问题。

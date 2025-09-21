@@ -1,0 +1,265 @@
+# 自定义视图类型
+
+当内置的列表、表格等视图类型无法满足您的展示需求时，可以创建自定义视图类型。视图类型决定了数据在界面上的呈现方式和用户的交互体验，让您能够为不同的业务场景提供最适合的数据展示界面。
+
+## 什么是视图类型
+
+视图类型定义了数据的展示方式和交互逻辑。不同的视图类型适合不同的使用场景：
+
+- **卡片网格**：适合展示图片较多的产品、人员等信息
+- **看板视图**：适合项目管理、任务跟踪等工作流场景  
+- **时间线视图**：适合展示历史事件、项目进度等时间相关数据
+- **地图视图**：适合展示包含地理位置信息的数据
+- **仪表盘**：适合展示统计数据和关键指标
+
+每个视图类型包含以下核心能力：
+- **数据渲染**：将原始数据转换为可视化界面
+- **交互处理**：响应用户的点击、拖拽等操作
+- **配置管理**：支持不同的显示选项和参数
+- **事件响应**：处理数据变化和用户操作事件
+
+## 创建流程
+
+### 第一步：定义视图类型
+
+创建一个类来定义您的视图类型，指定名称、显示名称和渲染逻辑：
+
+```typescript
+class CardGridViewType {
+  get name() { return 'card-grid'; }
+  get displayName() { return '卡片网格'; }
+  
+  render(data, config) {
+    // 将数据转换为卡片网格格式
+    return {
+      type: 'card-grid',
+      items: data.map(item => ({
+        id: item.id,
+        title: item[config.titleField],
+        image: item[config.imageField],
+        description: item[config.descriptionField]
+      })),
+      columns: config.columns || 3
+    };
+  }
+}
+```
+
+### 第二步：配置选项
+
+定义视图类型支持的配置参数：
+
+```typescript
+getConfigOptions() {
+  return {
+    titleField: {
+      type: 'field-select',
+      required: true,
+      description: '卡片标题字段'
+    },
+    imageField: {
+      type: 'field-select',
+      fieldType: 'image',
+      description: '卡片图片字段'
+    },
+    columns: {
+      type: 'number',
+      default: 3,
+      min: 1,
+      max: 6,
+      description: '网格列数'
+    }
+  };
+}
+```
+
+### 第三步：注册和使用
+
+注册视图类型并在视图定义中使用：
+
+```typescript
+// 注册视图类型
+engine.viewTypeRegistry.register(new CardGridViewType());
+
+// 在视图定义中使用
+{
+  name: 'ProductGrid',
+  title: '产品网格',
+  type: 'card-grid',
+  entityType: 'Product',
+  config: {
+    titleField: 'name',
+    imageField: 'thumbnail',
+    columns: 4
+  }
+}
+```
+
+## 常见视图类型示例
+
+### 看板视图
+
+看板视图适合展示具有状态流转的数据，如任务管理、项目跟踪等场景。
+
+**核心功能**：
+- 按状态字段将数据分组到不同的列
+- 支持拖拽改变项目状态
+- 可配置卡片显示字段和列样式
+
+**主要配置**：
+- `statusField` - 用作看板列的状态字段
+- `cardTitleField` - 卡片标题字段  
+- `allowDragDrop` - 是否允许拖拽卡片
+
+### 时间线视图
+
+时间线视图适合展示按时间序列排列的数据，如项目进度、历史事件等。
+
+**核心功能**：
+- 根据日期字段对数据进行时间轴排序
+- 支持时间范围设置和缩放
+- 可按类别对时间线项目进行分组
+
+**主要配置**：
+- `dateField` - 用于时间排序的日期字段
+- `orientation` - 时间线方向（垂直/水平）
+- `zoomable` - 是否允许时间轴缩放
+
+### 地图视图
+
+地图视图用于展示包含地理位置信息的数据。
+
+**核心功能**：
+- 在地图上显示数据点标记
+- 支持标记聚合和分类显示
+- 可配置地图类型和显示范围
+
+**主要配置**：
+- `latitudeField` - 纬度字段
+- `longitudeField` - 经度字段
+- `mapType` - 地图类型（路线图/卫星图等）
+
+## 注册和管理
+
+### 注册视图类型
+
+创建好视图类型后，需要将其注册到引擎中：
+
+```typescript
+// 注册单个视图类型
+engine.viewTypeRegistry.register(new KanbanViewType());
+
+// 批量注册多个视图类型
+const customViewTypes = [
+  new KanbanViewType(),
+  new TimelineViewType(),
+  new MapViewType()
+];
+
+customViewTypes.forEach(viewType => {
+  engine.viewTypeRegistry.register(viewType);
+});
+```
+
+### 检查可用性
+
+```typescript
+// 检查特定视图类型是否已注册
+const kanbanType = engine.viewTypeRegistry.get('kanban');
+if (kanbanType) {
+  console.log('看板视图类型已可用');
+}
+
+// 获取所有已注册的视图类型
+const allViewTypes = engine.viewTypeRegistry.getAll();
+console.log('可用的视图类型：', allViewTypes.map(t => t.name));
+```
+
+### 在视图定义中使用
+
+注册后，就可以在视图定义中使用这些自定义视图类型：
+
+```typescript
+// 使用看板视图类型
+await engine.metaRegistry.updateOrRegister({
+  name: 'ProjectKanban',
+  title: '项目看板',
+  type: 'kanban',
+  entityType: 'Task',
+  config: {
+    statusField: 'status',
+    cardTitleField: 'title',
+    allowDragDrop: true
+  }
+});
+```
+
+## 最佳实践
+
+### 设计原则
+
+**功能专一**：每个视图类型应该专注于一种特定的数据展示方式，避免功能重叠。
+
+**配置灵活**：通过丰富的配置选项支持不同的使用场景，而不是创建多个相似的视图类型。
+
+**性能优化**：考虑大数据量的处理，实现合适的分页、虚拟滚动或数据聚合。
+
+**用户体验**：提供直观的交互方式和清晰的视觉反馈。
+
+### 错误处理
+
+确保视图类型能够优雅地处理错误情况：
+
+```typescript
+render(data, config) {
+  try {
+    // 验证必需的配置
+    if (!config.requiredField) {
+      throw new Error('缺少必需的配置项');
+    }
+    
+    // 处理空数据
+    if (!Array.isArray(data) || data.length === 0) {
+      return { type: 'empty', message: '暂无数据' };
+    }
+    
+    // 正常渲染逻辑
+    return this.renderContent(data, config);
+    
+  } catch (error) {
+    return { type: 'error', message: error.message };
+  }
+}
+```
+
+### 命名规范
+
+为自定义视图类型使用清晰的命名：
+
+- 类名使用 PascalCase 并以 ViewType 结尾
+- 视图类型名使用 kebab-case
+- 显示名称使用中文，简洁明了
+
+```typescript
+// ✅ 推荐的命名方式
+class ProductGalleryViewType {
+  get name() { return 'product-gallery'; }
+  get displayName() { return '产品画廊'; }
+}
+```
+
+### 性能考虑
+
+**数据处理优化**：对大量数据进行合理的分页或虚拟化处理。
+
+**渲染优化**：避免在渲染方法中进行复杂计算，预先处理数据。
+
+**内存管理**：及时清理不需要的资源和事件监听器。
+
+## 下一步
+
+掌握了自定义视图类型后，您可以继续学习：
+
+- [动作处理器](./action-handlers) - 实现自定义业务逻辑处理
+- [自定义渲染器](./renderers) - 在界面特定位置显示自定义内容
+- [扩展模块](./modules) - 创建完整的功能模块

@@ -1,0 +1,94 @@
+# 安装集成
+
+将 Studio Module 集成到你的 Entity Engine 应用中。
+
+## 安装
+
+```bash
+npm install @scenemesh/entity-engine-studio
+```
+
+## 依赖要求
+
+确保项目已安装以下依赖：
+
+```json
+{
+  "react": "^19.1.0",
+  "react-dom": "^19.1.0", 
+  "@mantine/core": "8.2.5",
+  "@mantine/hooks": "8.2.5",
+  "@mantine/modals": "8.2.5",
+  "@mantine/notifications": "8.2.5"
+}
+```
+
+## 集成步骤
+
+### 1. 注册渲染器
+
+在你的 Entity Engine 配置中注册 Studio 渲染器：
+
+```typescript
+import { studioRenderers } from '@scenemesh/entity-engine-studio';
+
+// 批量注册
+engine.registerRenderers(studioRenderers);
+```
+
+或单独注册：
+
+```typescript
+import { EntityEngineStudioLauncher } from '@scenemesh/entity-engine-studio';
+
+engine.registerRenderer(EntityEngineStudioLauncher);
+```
+
+### 2. 配置 ModalsProvider
+
+确保应用根部包含 Mantine 的 ModalsProvider：
+
+```typescript
+import { ModalsProvider } from '@mantine/modals';
+import { MantineProvider } from '@mantine/core';
+
+function App() {
+  return (
+    <MantineProvider>
+      <ModalsProvider>
+        {/* 你的 Entity Engine 应用 */}
+        <EntityEngineApp />
+      </ModalsProvider>
+    </MantineProvider>
+  );
+}
+```
+
+### 3. 完整示例
+
+```typescript
+import React from 'react';
+import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
+import { EntityEngine } from '@scenemesh/entity-engine';
+import { studioRenderers } from '@scenemesh/entity-engine-studio';
+
+const engine = new EntityEngine();
+engine.registerRenderers(studioRenderers);
+
+function App() {
+  return (
+    <MantineProvider>
+      <ModalsProvider>
+        <EntityEngineProvider engine={engine}>
+          <YourApp />
+        </EntityEngineProvider>
+      </ModalsProvider>
+    </MantineProvider>
+  );
+}
+```
+
+## 验证安装
+
+集成完成后，在 Entity Engine 应用的设置菜单中应该能看到**"打开 Studio"**选项。点击即可打开可视化工作室。

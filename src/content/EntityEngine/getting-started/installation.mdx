@@ -1,0 +1,362 @@
+# 安装指南
+
+将 Entity Engine 添加到您的 Next.js 项目中，开始构建强大的数据驱动应用。
+
+## 概述
+
+Entity Engine 是一个 TypeScript 优先的开发框架，专为快速构建企业级数据管理应用而设计。它自动生成 UI 组件、处理数据验证，并提供丰富的表单和表格功能。
+
+## 前提条件
+
+开始之前，请确保您的开发环境满足以下要求：
+
+- **Node.js** 18.0.0 或更高版本
+- **PostgreSQL** 12+ 数据库
+- **Next.js** 14+ 项目（支持 App Router 和 Pages Router）
+
+> **信息**  
+> Entity Engine 专为 PostgreSQL 优化，利用其 JSON 查询和高级索引特性提供最佳性能。
+
+## 安装方式
+
+Entity Engine 安装方式
+
+### 使用 CLI 快速初始化
+
+Entity Engine 提供了强大的 CLI 工具 `setup-ee`，可以快速初始化一个完整的项目：
+
+```bash
+# 初始化 Entity Engine 项目的数据层
+npx setup-ee 
+
+CLI 工具会自动：
+- 配置数据层（生成prisma客户端和数据库结构）
+
+### 1. 安装核心包
+
+在您的 Next.js 项目中安装 Entity Engine：
+
+```bash
+npm install @scenemesh/entity-engine
+```
+
+### 2. 安装 UI 依赖
+
+Entity Engine 基于 Mantine 构建，需要安装以下 UI 组件：
+
+```bash
+# Mantine 组件库 (必需版本)
+npm install @mantine/core@8.2.5 @mantine/hooks@8.2.5
+npm install @mantine/modals@8.2.5 @mantine/notifications@8.2.5  
+npm install mantine-datatable@8.2.0
+
+# 表单和日期处理
+npm install react-hook-form dayjs
+```
+
+### 手动数据库配置
+
+#### 1. 准备 PostgreSQL 数据库
+
+确保您已安装并启动 PostgreSQL：
+
+```bash
+# 验证 PostgreSQL 运行状态
+pg_isready -h localhost -p 5432
+```
+
+如果看到 `accepting connections`，说明数据库正常运行。
+
+#### 2. 创建应用数据库
+
+连接到 PostgreSQL 并创建专用数据库：
+
+```sql
+-- 连接到 PostgreSQL
+psql -U postgres
+
+-- 创建数据库和专用用户
+CREATE DATABASE my_entity_app;
+CREATE USER entity_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE my_entity_app TO entity_user;
+
+-- 退出 psql
+\q
+```
+
+#### 3. 配置环境变量
+
+在项目根目录创建 `.env.local` 文件：
+
+```env filename=".env.local"
+# Entity Engine 专用数据库连接
+EE_DATABASE_URL="postgresql://entity_user:secure_password@localhost:5432/my_entity_app?schema=public"
+
+# API 端点配置
+NEXT_PUBLIC_API_BASE_URL=""
+NEXT_PUBLIC_API_ENDPOINT="/api/ee"
+```
+
+> **重要**  
+> Entity Engine 使用专用的 `EE_DATABASE_URL` 环境变量，这与标准的 `DATABASE_URL` 不同。请确保使用正确的变量名。
+
+## Prisma 数据库配置
+
+### 1. 初始化 Prisma
+
+如果您的项目还没有 Prisma，请先初始化：
+
+```bash
+npx prisma init
+```
+
+### 2. 配置数据库 Schema
+
+Entity Engine 需要特定的数据库结构。将以下内容写入 `prisma/schema.prisma`：
+
+```prisma filename="prisma/schema.prisma"
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("EE_DATABASE_URL")
+}
+
+// Entity Engine 核心数据表
+model EntityObject {
+  id        String   @id @db.VarChar(32)
+  modelName String   @db.VarChar(255)
+  values    Json     @default("{}")
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 性能优化索引
+  @@index([modelName])
+  @@index([modelName, isDeleted])
+  @@index([modelName, createdAt])
+
+  // 关联关系
+  EntityObjectReference EntityObjectReference[] @relation(name: "to")
+}
+
+// 实体间关联关系表
+model EntityObjectReference {
+  id            Int      @id @default(autoincrement())
+  fromFieldName String   @db.VarChar(255)
+  fromModelName String   @db.VarChar(255)
+  fromObjectId  String   @db.VarChar(32)
+  toModelName   String   @db.VarChar(255)
+  toObjectId    String   @db.VarChar(32)
+  toObject      EntityObject @relation(fields: [toObjectId], references: [id], name: "to")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 关联查询优化索引
+  @@index([fromModelName, fromObjectId])
+  @@index([toModelName, toObjectId])
+  @@index([fromModelName, fromFieldName])
+}
+```
+
+### 3. 生成数据库表
+
+运行以下命令创建数据库表结构：
+
+```bash
+# 生成 Prisma 客户端代码
+npx prisma generate
+
+# 将 Schema 同步到数据库
+npx prisma db push
+```
+
+如果一切正常，您应该看到类似的输出：
+```
+🚀  Your database is now in sync with your Prisma schema.
+✔ Generated Prisma Client (v5.x.x)
+```
+
+## 样式配置
+
+Entity Engine 需要导入必要的 CSS 样式文件才能正常显示 UI 组件。
+
+### 导入样式文件
+
+根据您使用的 Next.js 路由模式，选择对应的配置方式：
+
+#### App Router
+
+在 `app/layout.tsx` 中导入所有必需的样式：
+
+```typescript filename="app/layout.tsx"
+import '@scenemesh/entity-engine/main.css';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/modals/styles.css';
+import 'mantine-datatable/styles.css';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="zh">
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+#### Pages Router
+
+在 `pages/_app.tsx` 中导入所有必需的样式：
+
+```typescript filename="pages/_app.tsx"
+import '@scenemesh/entity-engine/main.css';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/modals/styles.css';
+import 'mantine-datatable/styles.css';
+import type { AppProps } from 'next/app';
+
+export default function App({ Component, pageProps }: AppProps) {
+  return <Component {...pageProps} />;
+}
+```
+
+> **信息**  
+> 这些样式文件的导入顺序很重要，请按照示例中的顺序导入以避免样式冲突。
+
+### 创建验证脚本
+
+在项目根目录创建 `scripts/verify-installation.ts`：
+
+```typescript filename="scripts/verify-installation.ts"
+import { EnginePrimitiveInitializer } from '@scenemesh/entity-engine/server';
+import { PrismaClient } from '@prisma/client';
+
+async function verifyInstallation() {
+  console.log('🔍 验证 Entity Engine 安装...\n');
+
+  try {
+    // 1. 测试数据库连接
+    console.log('1. 检查数据库连接...');
+    const prisma = new PrismaClient();
+    await prisma.$connect();
+    console.log('   ✅ 数据库连接成功');
+
+    // 2. 检查核心表是否存在
+    console.log('2. 检查数据库表结构...');
+    await prisma.entityObject.findMany({ take: 1 });
+    await prisma.entityObjectReference.findMany({ take: 1 });
+    console.log('   ✅ 数据库表结构正确');
+
+    // 3. 测试 Entity Engine 初始化
+    console.log('3. 测试 Entity Engine 初始化...');
+    const initializer = new EnginePrimitiveInitializer({
+      models: [],
+      views: [],
+    });
+    console.log('   ✅ Entity Engine 初始化成功');
+
+    await prisma.$disconnect();
+    console.log('\n🎉 安装验证完成！您可以开始使用 Entity Engine 了。');
+
+  } catch (error) {
+    console.error('\n❌ 验证失败:');
+    if (error instanceof Error) {
+      console.error(`   错误: ${error.message}`);
+    } else {
+      console.error(`   未知错误: ${error}`);
+    }
+    console.log('\n💡 请检查：');
+    console.log('   • PostgreSQL 服务是否正在运行');
+    console.log('   • EE_DATABASE_URL 环境变量是否正确设置');
+    console.log('   • 是否已运行 npx prisma db push');
+  }
+}
+
+verifyInstallation();
+```
+
+### 运行验证
+
+```bash
+# 如果还没有安装 tsx，先安装它
+npm install -D tsx
+
+# 运行验证脚本
+npx tsx scripts/verify-installation.ts
+```
+
+如果安装正确，您应该看到：
+
+```
+🔍 验证 Entity Engine 安装...
+
+1. 检查数据库连接...
+   ✅ 数据库连接成功
+2. 检查数据库表结构...
+   ✅ 数据库表结构正确
+3. 测试 Entity Engine 初始化...
+   ✅ Entity Engine 初始化成功
+
+🎉 安装验证完成！您可以开始使用 Entity Engine 了。
+```
+
+## 常见问题
+
+安装过程中可能遇到的问题和解决方案：
+
+### 数据库连接问题
+
+**错误**: `Can't reach database server at localhost:5432`
+
+**解决方案**:
+1. 确认 PostgreSQL 正在运行：`pg_isready -h localhost -p 5432`
+2. 检查 `EE_DATABASE_URL` 连接字符串格式
+3. 验证数据库用户权限是否正确
+
+### 依赖安装问题
+
+**错误**: `Cannot find module '@scenemesh/entity-engine'`
+
+**解决方案**:
+1. 清理并重新安装：`rm -rf node_modules package-lock.json && npm install`
+2. 确认 Node.js 版本 >= 18.0.0
+3. 检查网络连接和 npm 源配置
+
+### 样式显示问题
+
+**错误**: UI 组件样式缺失或错乱
+
+**解决方案**:
+1. 确认已按正确顺序导入所有 CSS 文件
+2. 检查 Mantine 版本是否为指定版本（8.2.5）
+3. 清理 Next.js 缓存：`rm -rf .next && npm run dev`
+
+### CLI 工具问题
+
+**错误**: `Command 'setup-ee' not found`
+
+**解决方案**:
+1. 确认使用 `npx setup-ee` 而不是直接运行 `setup-ee`
+2. 检查网络连接，确保能够下载 npm 包
+3. 尝试清理 npx 缓存：`npx clear-npx-cache`
+
+> **提示**  
+> 如果遇到其他问题，可以运行验证脚本获取详细的错误信息，或查看 [常见问题解答](./faq-beginner) 获取更多帮助。
+
+## 下一步
+
+安装完成后，您可以：
+
+1. **[快速开始](./quick-start-nextjs)** - 15 分钟创建第一个产品管理应用
+2. **[了解项目结构](./project-structure)** - 学习如何组织代码和最佳实践  
+3. **[构建完整应用](./first-model-and-view)** - 深入学习模型定义和视图配置
+
+🎯 **推荐路径**: 先完成快速开始教程，体验 Entity Engine 的核心功能，然后深入学习项目结构和高级特性。

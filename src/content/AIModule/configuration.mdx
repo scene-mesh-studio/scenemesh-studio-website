@@ -1,0 +1,191 @@
+# 环境配置
+
+AI Module通过环境变量进行配置，支持通义千问和DeepSeek两个AI服务商。
+
+## 基础环境变量
+
+### AI服务商配置
+
+至少需要配置一个AI服务商的API密钥：
+
+```bash
+# .env.local
+
+# 通义千问配置
+EEAI_QWEN_API_KEY=your-qwen-api-key
+
+# DeepSeek配置  
+EEAI_DEEPSEEK_API_KEY=your-deepseek-api-key
+```
+
+### 服务商选择
+
+```bash
+# 指定默认使用的AI服务商
+EEAI_MODEL_PROVIDER=qwen
+# 或
+EEAI_MODEL_PROVIDER=deepseek
+```
+
+## 高级配置
+
+### 自定义API地址
+
+如果需要使用自定义的API端点：
+
+```bash
+# 通义千问自定义地址
+EEAI_QWEN_BASE_URL=https://your-custom-qwen-endpoint.com
+
+# DeepSeek自定义地址
+EEAI_DEEPSEEK_BASE_URL=https://your-custom-deepseek-endpoint.com
+```
+
+### 模型配置
+
+```bash
+# 指定可用的文本模型（逗号分隔）
+EEAI_TEXT_MODELS=qwen-turbo,qwen-plus,deepseek-chat
+
+# 指定默认模型
+EEAI_DEFAULT_MODEL=qwen-turbo
+```
+
+## 通义千问配置详解
+
+### 获取API密钥
+
+1. 访问 [阿里云百炼平台](https://bailian.console.aliyun.com/)
+2. 登录您的阿里云账号
+3. 创建应用并获取API密钥
+4. 确保账户有足够的调用额度
+
+### 配置示例
+
+```bash
+# 通义千问完整配置
+EEAI_QWEN_API_KEY=sk-your-qwen-api-key
+EEAI_QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EEAI_MODEL_PROVIDER=qwen
+EEAI_TEXT_MODELS=qwen-turbo,qwen-plus,qwen-max
+```
+
+### 支持的模型
+
+- `qwen-turbo` - 快速响应，适合日常对话
+- `qwen-plus` - 平衡性能，推荐使用
+- `qwen-max` - 最强性能，处理复杂任务
+
+## DeepSeek配置详解
+
+### 获取API密钥
+
+1. 访问 [DeepSeek开放平台](https://platform.deepseek.com/)
+2. 注册并登录账号
+3. 在API密钥页面创建新的密钥
+4. 充值获取调用额度
+
+### 配置示例
+
+```bash
+# DeepSeek完整配置
+EEAI_DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+EEAI_DEEPSEEK_BASE_URL=https://api.deepseek.com
+EEAI_MODEL_PROVIDER=deepseek
+EEAI_TEXT_MODELS=deepseek-chat,deepseek-coder
+```
+
+### 支持的模型
+
+- `deepseek-chat` - 通用对话模型
+- `deepseek-coder` - 代码专用模型
+
+## 多服务商配置
+
+您可以同时配置多个服务商，系统会根据配置自动选择：
+
+```bash
+# 同时配置两个服务商
+EEAI_QWEN_API_KEY=your-qwen-key
+EEAI_DEEPSEEK_API_KEY=your-deepseek-key
+
+# 设置首选服务商
+EEAI_MODEL_PROVIDER=qwen
+
+# 配置所有可用模型
+EEAI_TEXT_MODELS=qwen-turbo,qwen-plus,deepseek-chat
+```
+
+## 配置验证
+
+### 检查配置是否正确
+
+在您的应用中，可以通过以下方式验证配置：
+
+1. **查看控制台日志**
+   启动应用时查看是否有AI相关的错误信息
+
+2. **测试API连接**
+   点击"智能填表"按钮，发送测试消息验证连接
+
+3. **检查网络请求**
+   在浏览器开发工具的Network面板中查看API请求是否成功
+
+### 常见配置错误
+
+**环境变量未生效**
+- 确保`.env.local`文件在项目根目录
+- 重启开发服务器
+- 检查变量名拼写是否正确
+
+**API密钥无效**
+- 验证密钥是否正确复制
+- 确认密钥未过期
+- 检查账户余额是否充足
+
+**网络连接问题**
+- 确认网络可以访问AI服务商API
+- 检查防火墙设置
+- 验证自定义API地址是否正确
+
+## 生产环境配置
+
+### 安全考虑
+
+```bash
+# 生产环境配置示例
+EEAI_QWEN_API_KEY=your-production-qwen-key
+EEAI_MODEL_PROVIDER=qwen
+EEAI_TEXT_MODELS=qwen-plus
+
+# 不要在生产环境中启用调试
+# AI_DEBUG=false
+```
+
+### 性能优化
+
+- 选择合适的模型（速度vs性能权衡）
+- 配置合理的超时时间
+- 考虑使用缓存机制
+
+### 监控和日志
+
+建议在生产环境中：
+- 监控API调用频率和成本
+- 设置调用量报警
+- 记录异常和错误日志
+
+## 环境变量完整列表
+
+| 变量名 | 必需 | 说明 | 默认值 |
+|--------|------|------|--------|
+| `EEAI_QWEN_API_KEY` | 条件必需* | 通义千问API密钥 | - |
+| `EEAI_DEEPSEEK_API_KEY` | 条件必需* | DeepSeek API密钥 | - |
+| `EEAI_MODEL_PROVIDER` | 否 | 默认AI服务商 | 自动检测 |
+| `EEAI_QWEN_BASE_URL` | 否 | 通义千问API地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `EEAI_DEEPSEEK_BASE_URL` | 否 | DeepSeek API地址 | `https://api.deepseek.com` |
+| `EEAI_TEXT_MODELS` | 否 | 可用文本模型列表 | 基于配置的服务商自动检测 |
+
+*至少需要配置一个AI服务商的API密钥
+
+配置完成后，您可以开始使用[智能表单](./smart-forms)功能了。

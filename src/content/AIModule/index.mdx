@@ -1,0 +1,95 @@
+# AI Module
+
+为Entity Engine提供原生AI能力的集成模块，让您的数据应用具备智能化操作能力。
+
+## 什么是AI Module
+
+AI Module是专为SceneMesh Entity Engine设计的AI集成模块，它为基于Entity Engine构建的应用提供完整的AI功能支持。通过AI Module，您可以：
+
+- **智能表单填写** - AI可以理解您的意图，自动填写表单字段
+- **对话式数据操作** - 用自然语言与您的数据进行交互
+- **实体数据查询** - AI可以帮您查询和分析Entity Engine中的数据
+- **视图控制器操作** - AI可以直接操作Entity Engine的视图组件
+
+## 快速开始
+
+### 前提条件
+
+- 已有基于Entity Engine的应用项目
+- 支持的AI服务商API密钥（通义千问或DeepSeek）
+
+### 安装
+
+```bash
+npm install @scenemesh/entity-engine-aimodule
+```
+
+### 基础配置
+
+1. **添加环境变量**
+
+```bash
+# .env.local
+# 至少配置一个AI提供商
+EEAI_QWEN_API_KEY=your-qwen-api-key
+# 或者
+EEAI_DEEPSEEK_API_KEY=your-deepseek-api-key
+```
+
+2. **注册AI模块**
+
+在您的Entity Engine初始化代码中添加AI模块：
+
+```typescript
+import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+
+// 在modules数组中添加AI模块
+const modules = [new EntityAIModule()];
+```
+
+3. **开始使用**
+
+配置完成后，您的Entity Engine表单会自动出现"智能填表"按钮，点击即可开始使用AI功能。
+
+## 主要功能
+
+### 智能表单操作
+- AI可以读取和设置表单字段值
+- 支持表单验证和重置
+- 理解字段含义，提供智能建议
+
+### 数据查询与分析
+- 用自然语言查询Entity Engine数据
+- 支持复杂条件筛选
+- 提供数据分析和洞察
+
+### 对话式交互
+- 流式对话体验
+- 上下文理解
+- 多轮对话支持
+
+## 支持的AI服务商
+
+目前AI Module支持以下AI服务商：
+
+- **通义千问 (Qwen)** - 阿里云大模型服务
+- **DeepSeek** - DeepSeek大模型服务
+
+## 文档导航
+
+- [快速开始](./getting-started) - 详细的安装和配置指南
+- [环境配置](./configuration) - 环境变量和服务商配置
+- [智能表单](./smart-forms) - 如何使用AI操作表单
+- [Entity集成](./entity-integration) - 与Entity Engine的集成使用
+- [支持的服务商](./supported-providers) - AI服务商配置详情
+- [常见问题](./troubleshooting) - 故障排除和调试指南
+
+## 重要说明
+
+⚠️ **AI Module专为Entity Engine设计**
+
+此模块专门为SceneMesh Entity Engine框架设计，如果您的项目不是基于Entity Engine构建，请考虑使用其他通用AI SDK。
+
+💡 **最佳体验建议**
+
+为获得最佳使用体验，建议在配置AI Module前先熟悉Entity Engine的基本概念和使用方法。

@@ -1,0 +1,187 @@
+# 创建模块
+
+当 Entity Engine 内置的功能无法满足复杂业务需求时，您可以创建自定义模块。模块是一个完整的功能包，可以包含数据模型、视图、组件、动作处理器等，实现特定的业务逻辑或集成第三方服务。
+
+## 何时创建模块
+
+**完整业务功能**：需要提供一整套相关功能时，如用户管理系统、支付集成或内容管理系统。
+
+**第三方服务集成**：集成外部服务时，如邮件服务、短信平台、云存储或分析工具。
+
+**跨项目复用**：有一套业务逻辑需要在多个项目中复用时，如审计系统、权限管理或数据同步。
+
+**插件化扩展**：希望功能可以独立配置和管理时，如不同的支付方式或通知渠道。
+
+## 模块基本结构
+
+Entity Engine 的模块需要实现 `IEntityModule` 接口，包含模块信息和三个核心方法：
+
+```typescript
+class NotificationModule implements IEntityModule {
+  readonly info = {
+    name: 'notification',
+    description: '通知模块，提供邮件和短信发送功能',
+    provider: 'MyCompany',
+    version: '1.0.0'
+  };
+  
+  async setupConfig(args) { /* 配置数据和业务逻辑 */ }
+  async setupComponents(args) { /* 配置界面组件 */ }
+  async setupData(args) { /* 导入初始数据 */ }
+}
+```
+
+## 三个核心方法
+
+模块通过三个方法来配置不同类型的功能组件：
+
+### setupConfig 方法
+
+这是模块的核心配置方法，用于定义数据层和业务逻辑：
+
+**配置数据模型**：定义模块需要的实体类型和字段结构
+**注册动作处理器**：添加自定义的业务操作和处理逻辑
+**配置事件监听器**：监听系统事件并做出响应
+**定义服务接口**：提供API接口供其他模块调用
+**设置视图元信息**：配置数据展示的视图定义
+
+### setupComponents 方法
+
+这个方法专门处理界面相关的组件配置：
+
+**注册视图组件**：添加自定义的数据展示组件
+**配置渲染器**：在特定位置显示自定义界面元素
+**添加表单小部件**：提供专用的数据输入控件
+**设置主题样式**：定义模块专用的界面风格
+
+### setupData 方法
+
+这个方法用于导入模块运行所需的初始数据：
+
+**示例数据**：提供演示和测试用的示例记录
+**配置数据**：导入系统运行必需的配置信息
+**关联关系**：建立不同实体之间的引用关系
+**默认设置**：初始化模块的默认参数和选项
+
+## 实际应用场景
+
+### 通知模块示例
+
+通知模块是一个典型的业务功能模块，它整合了数据模型、业务逻辑和界面组件：
+
+- 在 setupConfig 中定义通知数据模型和发送动作处理器
+- 在 setupComponents 中添加通知按钮渲染器到工具栏
+- 在 setupData 中导入默认的通知模板和配置
+
+### 审计模块示例
+
+审计模块专注于记录和追踪系统操作：
+
+- 监听实体变化事件，自动记录操作日志
+- 提供审计查询的动作处理器和视图组件
+- 导入审计配置和保留策略数据
+
+### 报表模块示例
+
+报表模块提供数据分析和可视化功能：
+
+- 定义报表配置的数据模型
+- 注册图表渲染器和数据导出处理器
+- 导入预设的报表模板和样式配置
+
+## 注册和管理
+
+### 模块注册
+
+创建好模块后，通过模块注册表将其注册到 Entity Engine 中：
+
+```typescript
+// 注册单个模块
+await engine.moduleRegistry.registerModule(new NotificationModule());
+
+// 批量注册
+for (const module of [new NotificationModule(), new ReportModule()]) {
+  await engine.moduleRegistry.registerModule(module);
+}
+```
+
+### 模块查询
+
+注册后可以通过注册表查询和管理模块：
+
+```typescript
+// 获取特定模块
+const module = engine.moduleRegistry.getModule('notification');
+
+// 获取所有模块
+const allModules = engine.moduleRegistry.getAllModules();
+```
+
+## 开发最佳实践
+
+### 模块信息规范
+
+为模块提供清晰完整的信息：
+
+- **name** - 使用小写字母和连字符，如 `user-auth`
+- **version** - 遵循语义化版本规范，如 `1.0.0`  
+- **description** - 简洁描述模块功能
+- **provider** - 标识开发者或组织
+
+### 功能分离原则
+
+将不同类型的功能分配到相应的方法中：
+
+- **setupConfig** - 专注于数据层和业务逻辑配置
+- **setupComponents** - 专注于界面和交互组件
+- **setupData** - 专注于数据导入和初始化
+
+### 错误处理
+
+模块的配置方法都是异步的，需要妥善处理可能的错误：
+
+```typescript
+async setupConfig(args) {
+  try {
+    await this.initializeServices();
+    args.actionHandlers.push(this.createHandlers());
+  } catch (error) {
+    console.error('模块配置失败:', error);
+    throw error;
+  }
+}
+```
+
+### 数据关联
+
+在导入有关联关系的数据时，使用 references 字段建立引用：
+
+```typescript
+// 导入用户数据并关联到部门
+args.entities.push({
+  id: 'user-1',
+  modelName: 'user',
+  values: { name: '张三' },
+  references: [{ fromFieldName: 'departmentId', toObjectId: 'dept-1' }]
+});
+```
+
+### 依赖管理
+
+- **最小依赖**：尽量减少对其他模块的依赖
+- **版本兼容**：确保依赖版本的兼容性
+- **可选功能**：将非核心功能设计为可选
+
+### 性能考虑
+
+- **延迟加载**：大型模块可以考虑按需加载组件
+- **资源清理**：提供清理方法释放占用的资源
+- **批量操作**：对大量数据的操作进行批处理优化
+
+## 下一步
+
+掌握了模块开发后，您可以继续学习：
+
+- [动作处理器](./action-handlers) - 实现自定义业务逻辑处理
+- [自定义渲染器](./renderers) - 在界面特定位置显示自定义内容
+- [自定义视图类型](./view-types) - 创建全新的数据展示方式

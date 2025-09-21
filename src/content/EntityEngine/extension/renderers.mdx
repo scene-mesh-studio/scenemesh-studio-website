@@ -1,0 +1,232 @@
+# 扩展渲染器
+
+当 Entity Engine 需要在特定位置显示自定义内容时，您可以创建自定义渲染器。渲染器是用于在特定插槽（slot）中渲染React组件的可插拔组件，允许您扩展和定制Entity Engine的界面。
+
+## 什么是渲染器
+
+渲染器是在特定位置（插槽）渲染React组件的命名组件。Entity Engine在界面的各个位置提供了插槽，您可以注册渲染器来在这些位置显示自定义内容。
+
+**常见的渲染器场景**：
+- **导航菜单**：在系统导航中添加自定义菜单项
+- **工具栏**：在视图工具栏中添加自定义按钮  
+- **设置面板**：在系统设置中添加配置选项
+- **侧边栏**：在视图侧边栏中显示额外信息
+- **弹窗内容**：在对话框中添加自定义的内容
+
+每个渲染器需要实现 `IEntityNamedRenderer` 接口，指定其名称、插槽和渲染组件。
+
+## 实现渲染器
+
+### 基本结构
+
+所有自定义渲染器都需要实现 `IEntityNamedRenderer` 接口：
+
+```typescript
+import React from 'react';
+import { IEntityNamedRenderer } from '@scenemesh/entity-engine';
+import { Button } from '@mantine/core';
+import { PlusIcon } from 'lucide-react';
+
+// 自定义工具栏按钮组件
+const AddRecordButton: React.FC<any> = (props) => {
+  const handleAdd = () => {
+    // 实现添加记录的逻辑
+    console.log('添加新记录');
+  };
+
+  return (
+    <Button 
+      leftSection={<PlusIcon size={16} />} 
+      onClick={handleAdd}
+      variant="filled"
+    >
+      添加记录
+    </Button>
+  );
+};
+
+// 工具栏渲染器定义
+const viewToolbarRenderer: IEntityNamedRenderer = {
+  name: 'add-record-button',
+  slotName: 'view-toolbar',
+  disabled: false,
+  renderer: (props) => <AddRecordButton {...props} />
+};
+
+export default viewToolbarRenderer;
+```
+
+### 核心要素
+
+**名称标识**：通过 `name` 属性定义渲染器的唯一标识
+**插槽指定**：通过 `slotName` 属性指定渲染位置  
+**状态控制**：通过 `disabled` 属性控制渲染器是否启用
+**组件渲染**：通过 `renderer` 函数提供实际的React组件
+## 实现示例：设置菜单渲染器
+
+让我们创建一个完整的设置菜单渲染器示例：
+
+```typescript
+import React from 'react';
+import { IEntityNamedRenderer } from '@scenemesh/entity-engine';
+import { Menu } from '@mantine/core';
+import { SettingsIcon, UserIcon, LogOutIcon } from 'lucide-react';
+
+// 设置菜单组件
+const SettingsMenu: React.FC<any> = (props) => {
+  const handleUserSettings = () => {
+    console.log('打开用户设置');
+  };
+
+  const handleSystemSettings = () => {
+    console.log('打开系统设置');
+  };
+
+  const handleLogout = () => {
+    console.log('退出登录');
+  };
+
+  return (
+    <>
+      <Menu.Item 
+        leftSection={<UserIcon size={14} />} 
+        onClick={handleUserSettings}
+      >
+        用户设置
+      </Menu.Item>
+      <Menu.Item 
+        leftSection={<SettingsIcon size={14} />} 
+        onClick={handleSystemSettings}
+      >
+        系统设置
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item 
+        leftSection={<LogOutIcon size={14} />} 
+        onClick={handleLogout}
+        color="red"
+      >
+        退出登录
+      </Menu.Item>
+    </>
+  );
+};
+
+// 设置菜单渲染器定义
+const settingsMenuRenderer: IEntityNamedRenderer = {
+  name: 'custom-settings-menu',
+  slotName: 'shell-settings-menu',
+  disabled: false,
+  renderer: (props) => <SettingsMenu {...props} />
+};
+
+export default settingsMenuRenderer;
+```
+
+这个设置菜单渲染器会在系统设置菜单位置显示自定义的菜单项，包括用户设置、系统设置和退出登录等功能。
+
+## 注册渲染器
+
+创建好渲染器后，需要将其注册到 Entity Engine 的组件注册表中：
+
+```typescript
+// 注册自定义渲染器
+engine.componentRegistry.registerRenderer(settingsMenuRenderer);
+engine.componentRegistry.registerRenderer(viewToolbarRenderer);
+```
+
+注册后，系统会自动在相应的插槽位置渲染您的自定义组件。
+
+## 常见插槽类型
+
+Entity Engine 提供了多个预定义的插槽，您可以在这些位置渲染自定义内容：
+
+- **shell-settings-menu**：系统设置菜单位置
+- **view-toolbar**：视图工具栏位置
+- **view-tool**：视图工具区域
+- **shell-settings-target**：设置面板目标位置
+
+您可以选择合适的插槽来渲染您的自定义组件，确保它们出现在适当的位置。
+
+## 获取渲染器
+
+您可以查询已注册的渲染器来了解系统中可用的组件：
+
+```typescript
+// 获取特定名称的渲染器
+const settingsRenderer = engine.componentRegistry.getRenderer('custom-settings-menu');
+if (settingsRenderer) {
+  console.log('自定义设置菜单可用');
+}
+
+// 获取特定插槽的所有渲染器
+const toolbarRenderers = engine.componentRegistry.getRenderersBySlot('view-toolbar');
+console.log(`工具栏渲染器数量: ${toolbarRenderers.length}`);
+```
+
+这些方法可以帮助您在运行时检查可用的渲染器，并了解它们的位置和状态。
+
+## 条件渲染
+
+您可以通过 `disabled` 属性控制渲染器的启用状态：
+
+```typescript
+// 根据条件决定是否启用渲染器
+const conditionalRenderer: IEntityNamedRenderer = {
+  name: 'admin-only-button',
+  slotName: 'view-toolbar',
+  disabled: !userHasAdminRole(), // 只有管理员才显示
+  renderer: (props) => <AdminButton {...props} />
+};
+```
+
+您也可以在组件内部实现条件渲染逻辑：
+
+```typescript
+const ConditionalComponent: React.FC<any> = (props) => {
+  const { userRole, isEditable } = props;
+  
+  // 根据条件决定渲染内容
+  if (userRole !== 'admin') {
+    return null; // 不显示任何内容
+  }
+  
+  return (
+    <Button 
+      disabled={!isEditable}
+      onClick={() => console.log('管理员操作')}
+    >
+      管理员功能
+    </Button>
+  );
+};
+```
+
+## 最佳实践
+
+### 命名规范
+
+**渲染器名称**：使用 kebab-case，描述渲染器的功能（如 `custom-settings-menu`）
+**插槽名称**：使用系统预定义的插槽名称  
+**组件命名**：使用 PascalCase，清晰描述组件功能
+
+### 组件设计
+
+**响应式设计**：确保组件在不同屏幕尺寸下正常显示
+**错误处理**：优雅处理加载失败和异常情况  
+**性能优化**：避免不必要的重新渲染和复杂计算
+**用户体验**：提供直观的交互和清晰的视觉反馈
+
+### 可维护性
+
+**单一职责**：每个渲染器专注于一个特定的显示功能
+**配置驱动**：通过props接收外部配置，提高组件的灵活性
+**组件复用**：将通用逻辑提取为可复用的组件和hooks
+
+## 下一步
+
+掌握了自定义渲染器后，您可以继续学习：
+
+- [自定义视图类型](./view-types) - 创建新的数据展示方式
+- [动作处理器](./action-handlers) - 实现自定义业务逻辑处理
+- [扩展模块](./modules) - 创建完整的功能模块

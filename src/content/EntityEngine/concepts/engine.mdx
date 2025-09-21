@@ -1,0 +1,736 @@
+# 引擎架构
+
+Entity Engine 是整个框架的核心，为您的应用提供统一的数据管理、权限控制和业务逻辑处理。通过一个引擎实例，您就可以管理所有的实体模型、处理用户请求、执行业务逻辑。
+
+您只需要初始化一次引擎，就可以在应用的任何地方使用相同的配置和数据。
+
+## 初始化引擎
+
+在应用中使用 Entity Engine 之前，您需要先初始化一个引擎实例。推荐的做法是创建一个全局的获取函数：
+
+```typescript
+// lib/entity-engine.ts
+import { EntityEngine } from '@scenemesh/entity-engine/server';
+import { PrismaClient } from '@prisma/client';
+
+let engineInstance: EntityEngine | null = null;
+
+export async function getEntityEngine(): Promise<EntityEngine> {
+  if (!engineInstance) {
+    const prisma = new PrismaClient();
+    
+    engineInstance = await EntityEngine.getInstance({
+      prisma,
+      settings: {
+        debug: process.env.NODE_ENV === 'development'
+      }
+    });
+  }
+  
+  return engineInstance;
+}
+```
+
+初始化完成后，您就可以在应用的任何地方获取并使用这个引擎实例。
+
+### 基本数据操作
+
+连接引擎后，您可以使用统一的接口进行数据操作，无需关心底层的数据库实现细节：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+// 查询数据
+const users = await engine.datasource.listObjects({
+  modelName: 'User',
+  pagination: { page: 1, pageSize: 10 }
+});
+
+// 创建数据
+const newUser = await engine.datasource.createObject({
+  modelName: 'User',
+  values: {
+    name: 'John Doe',
+    email: 'john@example.com'
+  }
+});
+
+// 更新数据
+await engine.datasource.updateObject({
+  id: newUser.id,
+  values: { name: 'John Smith' }
+});
+```
+
+所有的数据操作都会自动应用权限检查和业务规则验证。
+
+## 在 API 路由中使用
+
+### Next.js App Router
+
+在 Next.js 的 API 路由中使用引擎处理请求：
+
+```typescript
+// app/api/users/route.ts
+import { getEntityEngine } from '@/lib/entity-engine';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  try {
+    const engine = await getEntityEngine();
+    
+    const users = await engine.datasource.listObjects({
+      modelName: 'User'
+    });
+    
+    return NextResponse.json(users);
+  } catch (error) {
+    return NextResponse.json(
+      { error: '获取用户列表失败' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const engine = await getEntityEngine();
+    const data = await request.json();
+    
+    const newUser = await engine.datasource.createObject({
+      modelName: 'User',
+      values: data
+    });
+    
+    return NextResponse.json(newUser);
+  } catch (error) {
+    return NextResponse.json(
+      { error: '创建用户失败' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### tRPC 集成
+
+在 tRPC 路由中使用引擎：
+
+```typescript
+// server/api/routers/user.ts
+import { z } from 'zod';
+import { createTRPCRouter, publicProcedure } from '../trpc';
+import { getEntityEngine } from '@/lib/entity-engine';
+
+export const userRouter = createTRPCRouter({
+  list: publicProcedure
+    .input(z.object({
+      page: z.number().default(1),
+      pageSize: z.number().default(10)
+    }))
+    .query(async ({ input }) => {
+      const engine = await getEntityEngine();
+      
+      return engine.datasource.listObjects({
+        modelName: 'User',
+        pagination: input
+      });
+    }),
+
+  create: publicProcedure
+    .input(z.object({
+      name: z.string(),
+      email: z.string().email()
+    }))
+    .mutation(async ({ input }) => {
+      const engine = await getEntityEngine();
+      
+      return engine.datasource.createObject({
+        modelName: 'User',
+        values: input
+      });
+    }),
+
+  update: publicProcedure
+    .input(z.object({
+      id: z.string(),
+      data: z.object({
+        name: z.string().optional(),
+        email: z.string().email().optional()
+      })
+    }))
+    .mutation(async ({ input }) => {
+      const engine = await getEntityEngine();
+      
+      return engine.datasource.updateObject({
+        id: input.id,
+        values: input.data
+      });
+    })
+});
+```
+
+## 引擎配置
+
+### 基本配置选项
+
+引擎支持多种配置选项来控制其行为：
+
+```typescript
+const engine = await EntityEngine.getInstance({
+  prisma: new PrismaClient(),
+  settings: {
+    debug: true,                    // 开启调试模式，显示详细日志
+    maxQueryDepth: 10,             // 限制关联查询的最大深度
+    enableQueryCache: true,        // 启用查询结果缓存
+    defaultPageSize: 20            // 默认分页大小
+  }
+});
+```
+
+### 数据库配置
+
+引擎目前支持 PostgreSQL 数据库，通过 Prisma 进行连接：
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  },
+  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error']
+});
+
+const engine = await EntityEngine.getInstance({ prisma });
+```
+
+### 环境特定配置
+
+根据不同环境调整引擎配置：
+
+```typescript
+// lib/entity-engine.ts
+export async function getEntityEngine() {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  return EntityEngine.getInstance({
+    prisma: new PrismaClient(),
+    settings: {
+      debug: isDevelopment,
+      enableQueryCache: isProduction,
+      maxQueryDepth: isDevelopment ? 20 : 10,
+      defaultPageSize: isDevelopment ? 50 : 20
+    }
+  });
+}
+```
+
+## 核心子系统
+
+### 数据源管理
+
+您可以使用数据源工厂来为不同的模型创建数据访问对象：
+
+```typescript
+const engine = await getEntityEngine();
+const dataSource = engine.datasourceFactory.getDataSource();
+
+// 所有数据操作都通过统一接口
+const result = await dataSource.listObjects({
+  modelName: 'Post',
+  filter: { status: 'published' },
+  sort: [{ field: 'createdAt', direction: 'desc' }],
+  pagination: { page: 1, pageSize: 10 }
+});
+
+console.log(`找到 ${result.total} 篇文章`);
+console.log('文章列表:', result.items);
+```
+
+### 模型注册管理
+
+使用模型注册表来管理应用中的所有实体模型：
+
+```typescript
+// 注册新模型
+await engine.metaRegistry.updateOrRegister({
+  name: 'Product',
+  title: '产品',
+  fields: [
+    { name: 'name', title: '产品名称', type: 'string', isRequired: true },
+    { name: 'price', title: '价格', type: 'number', isRequired: true },
+    { name: 'category', title: '分类', type: 'many_to_one', refModel: 'Category' }
+  ]
+});
+
+// 获取已注册的模型
+const productModel = await engine.metaRegistry.getModel('Product');
+console.log('产品模型字段:', productModel.fields);
+
+// 检查模型是否存在
+const hasProduct = await engine.metaRegistry.hasModel('Product');
+```
+
+### 会话与权限管理
+
+通过会话管理器设置用户认证和权限控制：
+
+```typescript
+// 设置会话提供者
+engine.sessionManager.setProvider({
+  async session() {
+    const session = await getServerSession();
+    return {
+      id: session.user.id,
+      userId: session.user.id,
+      roles: session.user.roles,
+      permissions: await getUserPermissions(session.user.id)
+    };
+  }
+});
+
+// 引擎会自动使用会话信息进行权限检查
+const users = await engine.datasource.listObjects({
+  modelName: 'User'  // 会自动检查当前用户是否有读取权限
+});
+```
+
+## 高级查询功能
+
+### 关联查询
+
+引擎支持自动处理模型间的关联关系：
+
+```typescript
+// 查询文章并包含作者和分类信息
+const posts = await engine.datasource.listObjects({
+  modelName: 'Post',
+  include: {
+    author: true,        // 包含作者信息
+    category: true,      // 包含分类信息
+    tags: true          // 包含标签信息
+  }
+});
+
+// 结果会自动包含关联数据
+posts.items.forEach(post => {
+  console.log(`文章: ${post.title}`);
+  console.log(`作者: ${post.author.name}`);
+  console.log(`分类: ${post.category.name}`);
+});
+```
+
+### 复杂过滤条件
+
+支持多种过滤条件组合：
+
+```typescript
+const posts = await engine.datasource.listObjects({
+  modelName: 'Post',
+  filter: {
+    status: 'published',
+    publishedAt: { gte: new Date('2025-01-01') },
+    author: {
+      status: 'active'
+    },
+    OR: [
+      { category: { name: '技术' } },
+      { tags: { some: { name: { in: ['JavaScript', 'TypeScript'] } } } }
+    ]
+  }
+});
+```
+
+### 排序和分页
+
+灵活的排序和分页支持：
+
+```typescript
+const posts = await engine.datasource.listObjects({
+  modelName: 'Post',
+  sort: [
+    { field: 'featured', direction: 'desc' },    // 推荐文章优先
+    { field: 'publishedAt', direction: 'desc' },  // 按发布时间倒序
+    { field: 'viewCount', direction: 'desc' }     // 按浏览量倒序
+  ],
+  pagination: {
+    page: 1,
+    pageSize: 20
+  }
+});
+
+console.log(`第 ${posts.page} 页，共 ${posts.totalPages} 页`);
+console.log(`总计 ${posts.total} 篇文章`);
+```
+
+## 事件系统集成
+
+### 监听数据变化
+
+当数据发生变化时，您可以通过事件系统监听并响应这些变化：
+
+```typescript
+// 监听所有数据创建事件
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  console.log(`创建了新的 ${event.modelName}: ${event.objectId}`);
+  
+  if (event.modelName === 'User') {
+    // 新用户注册后的处理逻辑
+    await sendWelcomeEmail(event.values.email);
+    await createUserProfile(event.objectId);
+  }
+});
+
+// 监听特定模型的更新事件
+engine.eventRegistry.on('entityObject.updated', async (event) => {
+  if (event.modelName === 'Order' && event.changes.status) {
+    // 订单状态变更时的处理逻辑
+    await notifyOrderStatusChange(event.objectId, event.changes.status);
+  }
+});
+```
+
+### 自定义业务事件
+
+在业务逻辑中触发自定义事件：
+
+```typescript
+async function processOrder(orderId: string) {
+  // 处理订单逻辑
+  await updateOrderStatus(orderId, 'processing');
+  
+  // 触发自定义事件
+  await engine.eventRegistry.emit('order.processing', {
+    orderId,
+    timestamp: new Date()
+  });
+}
+
+// 其他模块监听这个事件
+engine.eventRegistry.on('order.processing', async (event) => {
+  await sendProcessingNotification(event.orderId);
+  await updateInventory(event.orderId);
+});
+```
+
+## 模块化扩展
+
+### 注册模块
+
+使用模块系统来组织相关功能：
+
+```typescript
+const blogModule = {
+  info: {
+    name: 'BlogModule',
+    version: '1.0.0',
+    description: '博客管理模块'
+  },
+  
+  async setupConfig(args) {
+    // 注册模型
+    args.models.push(
+      BlogPostModel,
+      BlogCategoryModel,
+      BlogTagModel
+    );
+    
+    // 注册视图
+    args.views.push(
+      BlogPostFormView,
+      BlogPostGridView,
+      BlogCategoryView
+    );
+  },
+  
+  async setupComponents(args) {
+    // 注册自定义组件
+    args.widgets.push({
+      name: 'rich-text-editor',
+      component: RichTextEditor
+    });
+  }
+};
+
+// 注册模块到引擎
+await engine.moduleRegistry.registerModule(blogModule);
+```
+
+### 模块生命周期
+
+模块会按照特定的生命周期进行加载：
+
+```typescript
+const userModule = {
+  info: { name: 'UserModule', version: '1.0.0' },
+  
+  // 1. 配置阶段：注册模型和视图
+  async setupConfig(args) {
+    args.models.push(UserModel, UserProfileModel);
+    args.views.push(UserFormView, UserListView);
+  },
+  
+  // 2. 组件阶段：注册UI组件
+  async setupComponents(args) {
+    args.widgets.push({
+      name: 'avatar-uploader',
+      component: AvatarUploader
+    });
+  },
+  
+  // 3. 数据阶段：初始化默认数据
+  async setupData(args) {
+    args.entities.push({
+      modelName: 'UserRole',
+      data: [
+        { name: 'admin', description: '管理员' },
+        { name: 'user', description: '普通用户' }
+      ]
+    });
+  }
+};
+
+await engine.moduleRegistry.registerModule(userModule);
+```
+
+## 性能优化
+
+### 查询缓存
+
+启用查询缓存来提升性能：
+
+```typescript
+const engine = await EntityEngine.getInstance({
+  prisma,
+  settings: {
+    enableQueryCache: true,
+    cacheMaxAge: 300  // 缓存5分钟
+  }
+});
+
+// 相同的查询会使用缓存结果
+const users1 = await engine.datasource.listObjects({ modelName: 'User' });
+const users2 = await engine.datasource.listObjects({ modelName: 'User' }); // 使用缓存
+```
+
+### 连接池管理
+
+优化数据库连接池配置：
+
+```typescript
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  },
+  engineConfig: {
+    connection_limit: 10,      // 连接池大小
+    pool_timeout: 2,          // 连接超时时间
+    statement_cache_size: 100  // 语句缓存大小
+  }
+});
+```
+
+### 批量操作
+
+使用批量操作来提升性能：
+
+```typescript
+// 批量创建用户
+const users = await Promise.all([
+  engine.datasource.createObject({ modelName: 'User', values: userData1 }),
+  engine.datasource.createObject({ modelName: 'User', values: userData2 }),
+  engine.datasource.createObject({ modelName: 'User', values: userData3 })
+]);
+
+// 或者使用事务
+await engine.datasource.transaction(async (tx) => {
+  await tx.createObject({ modelName: 'User', values: userData1 });
+  await tx.createObject({ modelName: 'User', values: userData2 });
+  await tx.createObject({ modelName: 'User', values: userData3 });
+});
+```
+
+## 错误处理
+
+### 统一错误处理
+
+在应用中处理错误时，可以使用统一的错误处理方式：
+
+```typescript
+try {
+  const user = await engine.datasource.createObject({
+    modelName: 'User',
+    values: { email: 'invalid-email' }
+  });
+} catch (error) {
+  if (error.code === 'VALIDATION_FAILED') {
+    console.error('数据验证失败:', error.details);
+  } else if (error.code === 'PERMISSION_DENIED') {
+    console.error('权限不足:', error.message);
+  } else if (error.code === 'DUPLICATE_KEY') {
+    console.error('数据重复:', error.message);
+  } else {
+    console.error('未知错误:', error);
+  }
+}
+```
+
+### 错误监控
+
+设置错误监控来跟踪引擎运行状态：
+
+```typescript
+// 监听引擎错误事件
+engine.eventRegistry.on('engine.error', (event) => {
+  console.error('引擎错误:', {
+    type: event.errorType,
+    message: event.message,
+    stack: event.stack,
+    timestamp: new Date()
+  });
+  
+  // 发送到错误监控服务
+  sendToErrorMonitoring(event);
+});
+```
+
+## 调试和监控
+
+### 调试模式
+
+在开发环境中启用调试模式：
+
+```typescript
+const engine = await EntityEngine.getInstance({
+  prisma,
+  settings: {
+    debug: true  // 会输出详细的操作日志
+  }
+});
+
+// 调试模式下会看到类似这样的日志：
+// [EntityEngine] 查询模型: User
+// [EntityEngine] 应用权限过滤: model:User:read
+// [EntityEngine] 执行数据库查询: SELECT * FROM users WHERE ...
+// [EntityEngine] 查询结果: 15 条记录
+```
+
+### 性能监控
+
+监控引擎的性能指标：
+
+```typescript
+// 监控查询性能
+engine.eventRegistry.on('datasource.query', (event) => {
+  if (event.duration > 1000) {  // 超过1秒的慢查询
+    console.warn('慢查询检测:', {
+      modelName: event.modelName,
+      duration: event.duration,
+      query: event.query
+    });
+  }
+});
+
+// 监控内存使用
+setInterval(() => {
+  const memUsage = process.memoryUsage();
+  console.log('内存使用:', {
+    rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+    heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB'
+  });
+}, 30000);  // 每30秒检查一次
+```
+
+## 最佳实践
+
+### 单例模式
+
+确保在整个应用中使用同一个引擎实例：
+
+```typescript
+// ✅ 推荐：创建全局单例
+// lib/entity-engine.ts
+let engineInstance: EntityEngine | null = null;
+
+export async function getEntityEngine() {
+  if (!engineInstance) {
+    engineInstance = await EntityEngine.getInstance(config);
+  }
+  return engineInstance;
+}
+
+// ❌ 避免：在多个地方创建实例
+const engine1 = await EntityEngine.getInstance(config);  // 不要这样做
+const engine2 = await EntityEngine.getInstance(config);  // 不要这样做
+```
+
+### 错误边界
+
+在 API 层添加统一的错误处理：
+
+```typescript
+// utils/api-wrapper.ts
+export function withErrorHandling(handler: Function) {
+  return async (req: Request, res: Response) => {
+    try {
+      return await handler(req, res);
+    } catch (error) {
+      console.error('API 错误:', error);
+      
+      if (error.code === 'PERMISSION_DENIED') {
+        return res.status(403).json({ error: '权限不足' });
+      } else if (error.code === 'VALIDATION_FAILED') {
+        return res.status(400).json({ error: '输入数据无效', details: error.details });
+      } else {
+        return res.status(500).json({ error: '服务器内部错误' });
+      }
+    }
+  };
+}
+```
+
+### 配置管理
+
+将引擎配置集中管理：
+
+```typescript
+// config/entity-engine.ts
+export const entityEngineConfig = {
+  development: {
+    debug: true,
+    enableQueryCache: false,
+    maxQueryDepth: 20
+  },
+  production: {
+    debug: false,
+    enableQueryCache: true,
+    maxQueryDepth: 10
+  },
+  test: {
+    debug: false,
+    enableQueryCache: false,
+    maxQueryDepth: 5
+  }
+};
+
+export function getEngineConfig() {
+  const env = process.env.NODE_ENV || 'development';
+  return entityEngineConfig[env];
+}
+```
+
+## 下一步
+
+掌握引擎架构后，您可以：
+
+- 学习[实体模型](./entity-model)来定义数据结构
+- 了解[会话与安全](./session-and-security-basics)来配置权限控制
+- 探索[模块系统](./module)来组织应用功能

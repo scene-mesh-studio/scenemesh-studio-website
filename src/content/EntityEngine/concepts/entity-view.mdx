@@ -1,0 +1,388 @@
+# 实体视图
+
+为您的数据模型创建用户界面，控制数据的显示和交互方式。通过视图配置，您可以为同一个模型创建不同的界面，满足编辑、列表、查看等不同场景的需求。
+
+Entity Engine 支持表单视图（用于单条记录编辑）和网格视图（用于数据列表展示）。系统会根据您的视图配置自动生成对应的用户界面。
+
+## 创建表单视图
+
+为用户数据创建一个编辑表单，指定要显示的字段和布局：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+// 创建用户表单视图
+const userFormView = {
+  name: 'user_form',
+  title: '用户信息',
+  modelName: 'User',            // 关联到用户模型
+  viewType: 'form',             // 表单类型
+  items: [
+    {
+      name: 'name',
+      title: '姓名'
+    },
+    {
+      name: 'email',
+      title: '邮箱地址'
+    },
+    {
+      name: 'age',
+      title: '年龄'
+    }
+  ]
+};
+```
+
+创建表单视图后，系统会根据模型的字段类型自动选择合适的输入组件，并应用相应的验证规则。
+
+## 创建网格视图
+
+为用户数据创建一个列表视图，显示多条记录并支持搜索和筛选：
+
+```typescript
+// 创建用户列表视图
+const userGridView = {
+  name: 'user_grid',
+  title: '用户列表',
+  modelName: 'User',            // 关联到用户模型
+  viewType: 'grid',             // 网格类型
+  items: [
+    {
+      name: 'name',
+      title: '姓名',
+      width: 150              // 设置列宽度
+    },
+    {
+      name: 'email',
+      title: '邮箱地址',
+      width: 200
+    },
+    {
+      name: 'age',
+      title: '年龄',
+      width: 100
+    },
+    {
+      name: 'createdAt',
+      title: '注册时间',
+      width: 150
+    }
+  ]
+};
+```
+
+网格视图会自动支持分页、排序和基于字段类型的筛选功能。用户可以点击列标题进行排序，使用筛选框进行数据筛选。
+
+## 注册和使用视图
+
+将创建的视图注册到 Entity Engine 中，然后在应用中使用：
+
+```typescript
+// 注册表单视图
+await engine.metaRegistry.updateOrRegisterView(userFormView);
+
+// 注册网格视图
+await engine.metaRegistry.updateOrRegisterView(userGridView);
+
+// 在组件中使用表单视图
+function UserEditPage({ userId }) {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_form"         // 使用注册的表单视图
+      mode="edit"
+      objectId={userId}
+    />
+  );
+}
+
+// 在组件中使用网格视图
+function UserListPage() {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_grid"         // 使用注册的网格视图
+      mode="list"
+    />
+  );
+}
+```
+
+注册后，Entity Engine 会根据视图配置自动生成对应的用户界面，包括字段验证、数据绑定和交互逻辑。
+
+## 表单布局控制
+
+控制表单中字段的布局和显示方式：
+
+```typescript
+// 创建产品表单视图，控制字段布局
+const productFormView = {
+  name: 'product_form',
+  title: '产品信息',
+  modelName: 'Product',
+  viewType: 'form',
+  items: [
+    {
+      name: 'name',
+      title: '产品名称',
+      spanCols: 8              // 占用8列，与后面字段在同一行
+    },
+    {
+      name: 'price',
+      title: '价格',
+      spanCols: 4              // 占用4列，与上面字段在同一行
+    },
+    {
+      name: 'description',
+      title: '产品描述',
+      spanCols: 12,            // 占用全部12列，单独一行
+      widget: 'textarea'       // 指定使用多行文本输入框
+    },
+    {
+      name: 'category',
+      title: '产品分类',
+      spanCols: 6
+    },
+    {
+      name: 'status',
+      title: '产品状态',
+      spanCols: 6
+    }
+  ]
+};
+
+// 注册并使用产品表单视图
+await engine.metaRegistry.updateOrRegisterView(productFormView);
+```
+
+通过 `spanCols` 属性控制字段占用的列数（总共12列），实现灵活的布局设计。
+
+## 动态显示控制
+
+根据其他字段的值动态控制字段的显示和必填状态：
+
+```typescript
+// 创建具有条件显示的用户表单
+const conditionalUserForm = {
+  name: 'conditional_user_form',
+  title: '用户注册表单',
+  modelName: 'User',
+  viewType: 'form',
+  items: [
+    {
+      name: 'userType',
+      title: '用户类型'        // 选择用户类型：个人或企业
+    },
+    {
+      name: 'name',
+      title: '姓名',
+      showWhen: "userType === 'personal'"  // 只在个人用户时显示
+    },
+    {
+      name: 'companyName',
+      title: '公司名称',
+      showWhen: "userType === 'business'", // 只在企业用户时显示
+      requiredWhen: "userType === 'business'" // 企业用户必填
+    },
+    {
+      name: 'idNumber',
+      title: '身份证号',
+      showWhen: "userType === 'personal'",
+      requiredWhen: "userType === 'personal'"
+    },
+    {
+      name: 'email',
+      title: '邮箱地址',          // 所有类型都显示
+      isRequired: true
+    }
+  ]
+};
+```
+
+支持的条件控制属性：
+- `showWhen` - 显示条件
+- `hiddenWhen` - 隐藏条件
+- `requiredWhen` - 动态必填条件
+- `readOnlyWhen` - 动态只读条件
+
+## 网格视图高亮功能
+
+为网格视图添加条件高亮，帮助用户快速识别重要信息：
+
+```typescript
+// 创建带有高亮功能的产品列表
+const productGridWithHighlight = {
+  name: 'product_grid_highlight',
+  title: '产品列表',
+  modelName: 'Product',
+  viewType: 'grid',
+  items: [
+    { name: 'name', title: '产品名称', width: 200 },
+    { name: 'price', title: '价格', width: 120 },
+    { name: 'stock', title: '库存', width: 100 },
+    { name: 'status', title: '状态', width: 100 }
+  ],
+  // 定义高亮规则
+  hilites: [
+    {
+      when: "status === 'discontinued'",
+      color: '#ef4444'        // 停产产品显示红色
+    },
+    {
+      when: "stock < 10",
+      color: '#f59e0b'        // 低库存产品显示橙色
+    },
+    {
+      when: "price > 1000",
+      color: '#10b981'        // 高价产品显示绿色
+    }
+  ]
+};
+
+// 注册高亮视图
+await engine.metaRegistry.updateOrRegisterView(productGridWithHighlight);
+```
+
+高亮规则会自动应用到每一行数据，帮助用户快速识别不同状态的记录。例如，停产产品会以红色背景显示，低库存产品会以橙色背景显示。
+
+## 多种视图模式
+
+同一个视图可以在不同模式下使用，提供不同的交互体验：
+
+```typescript
+// 创建新用户（创建模式）
+function CreateUserPage() {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_form"
+      mode="create"            // 创建模式，显示空表单
+    />
+  );
+}
+
+// 编辑用户（编辑模式）
+function EditUserPage({ userId }) {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_form"
+      mode="edit"              // 编辑模式，加载现有数据
+      objectId={userId}
+    />
+  );
+}
+
+// 查看用户（只读模式）
+function ViewUserPage({ userId }) {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_form"
+      mode="view"              // 查看模式，所有字段只读
+      objectId={userId}
+    />
+  );
+}
+
+// 用户列表（列表模式）
+function UserListPage() {
+  return (
+    <EntityView
+      modelName="User"
+      viewName="user_grid"
+      mode="list"              // 列表模式，显示所有记录
+    />
+  );
+}
+```
+
+不同模式下，Entity Engine 会自动调整用户界面的行为，如是否显示保存按钮、字段是否可编辑等。
+
+## 视图组合使用
+
+为同一个模型创建多个视图，满足不同场景需求：
+
+```typescript
+// 简化的创建表单
+const userCreateForm = {
+  name: 'user_create_simple',
+  title: '快速创建用户',
+  modelName: 'User',
+  viewType: 'form',
+  items: [
+    { name: 'name', title: '姓名' },
+    { name: 'email', title: '邮箱地址' }
+  ]
+};
+
+// 详细的编辑表单
+const userDetailForm = {
+  name: 'user_detail_form',
+  title: '用户详细信息',
+  modelName: 'User',
+  viewType: 'form',
+  items: [
+    { name: 'name', title: '姓名', spanCols: 6 },
+    { name: 'email', title: '邮箱地址', spanCols: 6 },
+    { name: 'phone', title: '电话号码', spanCols: 6 },
+    { name: 'age', title: '年龄', spanCols: 6 },
+    { name: 'address', title: '联系地址', spanCols: 12, widget: 'textarea' },
+    { name: 'bio', title: '个人简介', spanCols: 12, widget: 'textarea' }
+  ]
+};
+
+// 管理员列表视图
+const userAdminGrid = {
+  name: 'user_admin_grid',
+  title: '用户管理',
+  modelName: 'User',
+  viewType: 'grid',
+  items: [
+    { name: 'name', title: '姓名', width: 150 },
+    { name: 'email', title: '邮箱', width: 200 },
+    { name: 'phone', title: '电话', width: 130 },
+    { name: 'status', title: '状态', width: 100 },
+    { name: 'createdAt', title: '注册时间', width: 150 }
+  ],
+  hilites: [
+    { when: "status === 'inactive'", color: '#ef4444' }
+  ]
+};
+
+// 注册所有视图
+await engine.metaRegistry.updateOrRegisterView(userCreateForm);
+await engine.metaRegistry.updateOrRegisterView(userDetailForm);
+await engine.metaRegistry.updateOrRegisterView(userAdminGrid);
+```
+
+这样您就有了三个不同的视图：简化创建表单、详细编辑表单和管理员列表，每个都针对特定的使用场景优化。
+
+## 最佳实践
+
+### 视图设计原则
+
+**针对用户任务**：为不同的用户任务创建不同的视图。创建时只显示必要字段，编辑时显示详细信息。
+
+**合理布局**：相关字段组合在一起，使用合适的列宽和间距，保持视觉上的整齐。
+
+**清晰标识**：使用有意义的视图名称和标题，让用户能够快速理解当前界面的作用。
+
+### 性能考虑
+
+**字段数量**：网格视图中不要显示过多字段，优先显示用户最关心的信息。
+
+**条件表达式**：保持条件显示和高亮规则的简单，避免复杂的计算。
+
+```typescript
+// ✅ 推荐：简单条件
+showWhen: "status === 'active'"
+
+// ❌ 避免：复杂计算
+showWhen: "calculateComplexBusinessLogic(status, type, date) > threshold"
+```
+
+现在您已经掌握了如何创建和使用实体视图。接下来可以学习如何使用模块系统来组织和管理这些视图。

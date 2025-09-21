@@ -1,0 +1,203 @@
+# 扩展字段类型
+
+当 Entity Engine 内置的字段类型无法满足您的特定需求时，您可以创建自定义字段类型。自定义字段类型让您能够定义专门的数据验证规则、输入界面和查询支持，为特定的业务场景提供量身定制的解决方案。
+
+## 什么是字段类型
+
+字段类型定义了数据的结构、验证方式和显示格式。Entity Engine 内置了多种字段类型，如字符串、数字、日期、枚举等。当这些类型无法满足特殊需求时，您可以创建自定义字段类型。
+
+例如，邮箱字段类型会自动验证邮箱格式，电话号码字段类型会检查号码有效性，身份证字段类型会验证身份证号码格式。
+
+每个字段类型必须实现以下核心能力：
+- **数据验证**：通过 Zod schema 定义验证规则
+- **默认值设置**：为新记录提供合理的默认值
+- **查询支持**：定义支持的查询操作符
+- **UI组件选择**：指定最适合的输入控件
+
+## 实现字段类型
+
+### 基本结构
+
+所有自定义字段类型都需要实现 `IModelFieldTyper` 接口：
+
+```typescript
+class EmailFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '邮箱地址',
+      type: 'email',
+      widgetType: 'textfield',
+      defaultValue: '',
+      description: '邮箱地址字段'
+    });
+  }
+}
+```
+
+### 核心配置
+
+创建字段类型时，您需要通过构造函数配置基本信息，然后实现三个核心方法来定义字段的行为：
+
+**数据验证**：通过 `getDefaultSchema` 方法使用 Zod schema 定义验证规则  
+**查询支持**：通过 `getQueryItemMeta` 方法指定支持的查询操作符  
+**界面组件**：通过构造函数的 `widgetType` 参数选择合适的输入控件
+
+## 实现示例：邮箱字段类型
+
+让我们通过一个完整的邮箱字段类型来了解如何创建自定义字段类型：
+
+```typescript
+import { z } from 'zod';
+import { BaseFieldTyper, QueryOperator } from '@scenemesh/entity-engine';
+
+class EmailFieldTyper extends BaseFieldTyper {
+  constructor() {
+    super({
+      title: '邮箱地址',
+      type: 'email',
+      widgetType: 'textfield',
+      defaultValue: '',
+      description: '邮箱地址字段'
+    });
+  }
+
+  getDefaultSchema(field) {
+    const emailSchema = z.string().email('请输入有效的邮箱地址');
+    return field.isRequired ? emailSchema : emailSchema.optional();
+  }
+
+  getQueryItemMeta(field) {
+    return {
+      field,
+      operators: [
+        QueryOperator.EQ,
+        QueryOperator.CONTAINS,
+        QueryOperator.ENDS_WITH
+      ],
+      options: []
+    };
+  }
+}
+```
+
+这个邮箱字段类型提供了邮箱格式验证、文本输入界面，并支持精确匹配、包含查询和域名后缀查询。
+
+## 注册字段类型
+
+创建好字段类型后，需要将其注册到 Entity Engine 中才能使用：
+
+```typescript
+// 注册自定义字段类型
+engine.fieldTyperRegistry.registerFieldTyper(new EmailFieldTyper());
+```
+
+注册后，您就可以在模型定义中使用这个字段类型了。系统会自动应用您定义的验证规则、查询支持和UI组件。
+
+## 在模型中使用
+
+注册字段类型后，您可以在模型定义中直接使用：
+
+```typescript
+{
+  name: 'userEmail',
+  title: '用户邮箱',
+  type: 'email',
+  required: true
+}
+```
+
+Entity Engine 会自动应用邮箱字段类型的所有功能，包括格式验证、查询支持和合适的输入界面。
+
+## 查询操作符支持
+
+通过 `getQueryItemMeta` 方法，您可以定义字段支持的查询方式：
+
+- **EQ**：精确匹配特定值
+- **CONTAINS**：包含指定文本
+- **STARTS_WITH** / **ENDS_WITH**：开头/结尾匹配
+- **IS_NULL** / **IS_NOT_NULL**：空值检查
+- **IN** / **NOT_IN**：多值匹配
+- **GT** / **LT**：大于/小于比较（数字、日期）
+- **BETWEEN**：范围查询
+
+不同的字段类型应该支持最合适的查询操作符。例如，邮箱字段适合精确匹配和域名后缀查询，数字字段适合范围比较。
+
+## 界面组件选择
+
+Entity Engine 提供了多种内置的UI组件，您可以通过构造函数的 `widgetType` 参数为字段类型选择最合适的输入界面：
+
+- **textfield**：单行文本输入框
+- **textarea**：多行文本区域
+- **number**：数字输入框
+- **switch**：开关切换
+- **select**：下拉选择
+- **date**：日期选择器
+- **file**：文件上传
+- **json**：JSON编辑器
+
+选择合适的组件能够显著提升用户体验。例如，邮箱字段使用文本输入框，日期字段使用日期选择器。
+
+## 高级配置
+
+### 动态默认值
+
+您可以重写 `getDefaultValue` 方法来提供更智能的默认值：
+
+```typescript
+getDefaultValue(field) {
+  // 根据字段配置返回不同的默认值
+  if (field.typeOptions?.domain) {
+    return `user@${field.typeOptions.domain}`;
+  }
+  return '';
+}
+```
+
+### 条件验证
+
+通过检查字段的 `typeOptions` 配置，您可以实现条件验证：
+
+```typescript
+getDefaultSchema(field) {
+  let schema = z.string().email();
+  
+  if (field.typeOptions?.domains) {
+    const allowedDomains = field.typeOptions.domains;
+    schema = schema.refine(
+      (email) => allowedDomains.some(domain => email.endsWith(`@${domain}`)),
+      { message: '邮箱域名不在允许列表中' }
+    );
+  }
+  
+  return field.isRequired ? schema : schema.optional();
+}
+```
+
+## 最佳实践
+
+### 何时创建自定义字段类型
+
+- **特定业务需求**：内置字段类型无法满足验证或格式化需求
+- **用户体验优化**：需要专门的输入组件和交互方式
+- **数据一致性**：需要确保同类数据在整个应用中保持统一格式
+
+### 设计原则
+
+- **单一职责**：每个字段类型专注于处理一种特定的数据类型
+- **可配置性**：通过选项参数支持不同使用场景，避免创建重复的字段类型
+- **向后兼容**：升级时确保现有数据仍能正确处理
+- **错误友好**：提供清晰具体的验证错误信息
+
+### 性能考虑
+
+- **验证效率**：保持验证逻辑简单高效，避免复杂计算
+- **序列化优化**：确保数据转换过程高效，特别是处理大量数据时
+- **缓存机制**：对复杂验证规则考虑实现适当的缓存
+
+## 下一步
+
+掌握了自定义字段类型后，您可以继续学习：
+
+- [自定义视图类型](./view-types) - 创建新的数据展示方式
+- [动作处理器](./action-handlers) - 实现自定义业务逻辑处理
+- [自定义渲染器](./renderers) - 在界面特定位置显示自定义内容

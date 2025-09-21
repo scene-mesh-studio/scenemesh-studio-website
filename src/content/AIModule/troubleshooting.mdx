@@ -1,0 +1,322 @@
+# 常见问题排除
+
+本页面帮助您解决使用AI Module时可能遇到的常见问题。
+
+## 安装和配置问题
+
+### AI按钮没有出现在表单中
+
+**问题描述：** 在Entity Engine表单页面找不到"智能填表"按钮
+
+**可能原因：**
+1. AI模块未正确注册
+2. 环境变量配置错误
+3. API密钥无效
+
+**解决方案：**
+
+1. **检查服务端模块注册**
+   ```typescript
+   // 确认 app/api/ee/[[...slug]]/route.ts 中包含
+   import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+   
+   const init = new EnginePrimitiveInitializer({ 
+     models, 
+     views, 
+     modules: [new EntityAIModule()] // 确保这行存在
+   });
+   ```
+
+2. **检查客户端模块注册**
+   ```typescript
+   // 确认Provider配置中包含
+   modules: [new EntityAIModule()]
+   ```
+
+3. **验证环境变量**
+   ```bash
+   # 检查 .env.local 文件
+   EEAI_QWEN_API_KEY=your-key-here
+   # 或
+   EEAI_DEEPSEEK_API_KEY=your-key-here
+   ```
+
+4. **重启开发服务器**
+   ```bash
+   # 停止服务器后重新启动
+   npm run dev
+   ```
+
+### 环境变量不生效
+
+**问题描述：** 配置了环境变量但AI功能仍然不可用
+
+**解决方案：**
+
+1. **检查文件位置**
+   - 确认`.env.local`文件在项目根目录
+   - 文件名拼写正确（注意是`.env.local`不是`.env`）
+
+2. **检查变量名**
+   ```bash
+   # 正确的变量名（注意前缀是EEAI_）
+   EEAI_QWEN_API_KEY=sk-xxx
+   EEAI_DEEPSEEK_API_KEY=sk-xxx
+   
+   # 错误示例
+   QWEN_API_KEY=sk-xxx          # ❌ 缺少EEAI_前缀
+   EEAI_OPENAI_API_KEY=sk-xxx   # ❌ 不支持OpenAI
+   ```
+
+3. **重启应用**
+   - 修改环境变量后必须重启开发服务器
+   - 确保没有缓存影响
+
+## AI对话问题
+
+### AI没有响应
+
+**问题描述：** 点击"智能填表"按钮后AI不响应或响应异常
+
+**排查步骤：**
+
+1. **检查浏览器控制台**
+   - 按F12打开开发工具
+   - 查看Console面板是否有错误信息
+   - 查看Network面板的API请求状态
+
+2. **验证API密钥**
+   ```bash
+   # 检查密钥是否有效
+   # 通义千问密钥通常以 sk- 开头
+   # DeepSeek密钥通常以 sk- 开头
+   ```
+
+3. **检查网络连接**
+   - 确认可以访问AI服务商的API
+   - 检查防火墙或代理设置
+
+4. **查看API额度**
+   - 登录服务商控制台查看剩余额度
+   - 确认API密钥权限正确
+
+### AI响应内容不准确
+
+**问题描述：** AI可以响应但不能正确操作表单
+
+**解决方案：**
+
+1. **使用更清晰的指令**
+   ```
+   ✅ 好的指令：
+   "帮我填写姓名为张三，年龄为25岁"
+   "检查表单填写是否正确"
+   
+   ❌ 模糊的指令：
+   "随便填点什么"
+   "你看着办"
+   ```
+
+2. **检查字段权限**
+   - 确认要操作的字段是可编辑的
+   - 验证字段没有被禁用或隐藏
+
+3. **分步骤操作**
+   - 对于复杂表单，分步骤给出指令
+   - 先询问字段信息，再进行填写
+
+## 性能问题
+
+### AI响应速度慢
+
+**问题描述：** AI响应时间过长
+
+**优化方案：**
+
+1. **选择合适的模型**
+   ```bash
+   # 对于简单任务，使用快速模型
+   EEAI_MODEL_PROVIDER=qwen
+   EEAI_TEXT_MODELS=qwen-turbo  # 更快的响应速度
+   ```
+
+2. **优化网络环境**
+   - 检查网络连接稳定性
+   - 考虑使用CDN或代理加速
+
+3. **减少不必要的对话轮次**
+   - 一次性提供完整信息
+   - 避免过多的确认对话
+
+### 页面卡顿或崩溃
+
+**问题描述：** 使用AI功能时页面性能下降
+
+**解决方案：**
+
+1. **检查浏览器内存**
+   - 关闭不必要的标签页
+   - 重启浏览器
+
+2. **清除浏览器缓存**
+   - 清除浏览器缓存和Cookie
+   - 硬刷新页面（Ctrl+F5）
+
+3. **检查并发请求**
+   - 避免同时打开多个AI对话
+   - 等待当前请求完成后再发起新请求
+
+## 集成问题
+
+### 与Entity Engine版本不兼容
+
+**问题描述：** AI Module与当前Entity Engine版本不兼容
+
+**解决方案：**
+
+1. **检查版本兼容性**
+   ```bash
+   # 查看依赖版本
+   npm list @scenemesh/entity-engine
+   npm list @scenemesh/entity-engine-aimodule
+   ```
+
+2. **更新到兼容版本**
+   ```bash
+   # 更新Entity Engine
+   npm update @scenemesh/entity-engine
+   
+   # 更新AI Module
+   npm update @scenemesh/entity-engine-aimodule
+   ```
+
+3. **查看变更日志**
+   - 检查两个包的CHANGELOG
+   - 确认API变更和兼容性
+
+### 模块冲突
+
+**问题描述：** AI Module与其他Entity Engine模块冲突
+
+**排查方法：**
+
+1. **逐个禁用其他模块**
+   - 临时移除其他模块测试AI功能
+   - 确定具体冲突的模块
+
+2. **检查模块加载顺序**
+   ```typescript
+   // 尝试调整模块顺序
+   modules: [
+     new EntityAIModule(),  // AI模块放在前面
+     new OtherModule()
+   ]
+   ```
+
+## 错误代码说明
+
+### 常见错误码
+
+| 错误码 | 含义 | 解决方案 |
+|--------|------|----------|
+| 401 | API密钥无效 | 检查密钥是否正确 |
+| 429 | 请求频率过高 | 降低请求频率或升级套餐 |
+| 500 | 服务器内部错误 | 稍后重试或联系客服 |
+| 503 | 服务不可用 | 检查服务商状态或切换服务商 |
+
+### 网络错误
+
+**CORS错误**
+- 确认API端点配置正确
+- 检查服务端CORS设置
+
+**超时错误**
+- 增加请求超时时间
+- 检查网络稳定性
+
+**连接被拒绝**
+- 确认防火墙设置
+- 验证API地址正确
+
+## 调试工具
+
+### 启用调试模式
+
+```bash
+# 在 .env.local 中添加
+AI_DEBUG=true
+
+# 重启应用查看详细日志
+npm run dev
+```
+
+### 浏览器调试
+
+1. **查看网络请求**
+   - F12 → Network面板
+   - 筛选AI相关请求
+   - 查看请求和响应内容
+
+2. **查看控制台日志**
+   - F12 → Console面板
+   - 查看错误信息和警告
+
+3. **检查本地存储**
+   - F12 → Application面板
+   - 查看LocalStorage和SessionStorage
+
+### API测试
+
+使用curl命令测试API连接：
+
+```bash
+# 测试通义千问API
+curl -X POST "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions" \
+  -H "Authorization: Bearer $EEAI_QWEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen-turbo",
+    "messages": [{"role": "user", "content": "hello"}]
+  }'
+
+# 测试DeepSeek API
+curl -X POST "https://api.deepseek.com/chat/completions" \
+  -H "Authorization: Bearer $EEAI_DEEPSEEK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "hello"}]
+  }'
+```
+
+## 获取技术支持
+
+如果上述方法都无法解决您的问题，可以通过以下方式获取技术支持：
+
+### 社区支持
+
+- GitHub Issues: [entity-engine-aimodule/issues](https://github.com/scenemesh/entity-engine-aimodule/issues)
+- 邮件支持: contact@scenemesh.com
+
+### 提交问题时请包含
+
+1. **环境信息**
+   - 操作系统版本
+   - Node.js版本
+   - 浏览器版本
+   - Entity Engine版本
+   - AI Module版本
+
+2. **重现步骤**
+   - 详细的操作步骤
+   - 预期结果和实际结果
+   - 错误截图或录屏
+
+3. **配置信息**
+   - 环境变量配置（隐藏敏感信息）
+   - 相关代码片段
+   - 错误日志
+
+### 紧急问题
+
+对于影响生产环境的紧急问题，请发送邮件至 contact@scenemesh.com，并在主题中标注"紧急"。

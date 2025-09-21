@@ -1,0 +1,49 @@
+# Entity Engine 快速开始
+
+## 什么是 Entity Engine？
+
+Entity Engine 是一个元数据驱动的企业级数据建模框架，帮助您快速构建现代化业务应用。
+
+## 核心特性
+
+### 🚀 元数据驱动
+基于元数据配置自动生成数据模型和API
+
+### 📊 可视化建模
+直观的图形界面，拖拽式数据模型设计
+
+### 🔄 实时同步
+数据模型变更实时反映到应用
+
+### 🛡️ 类型安全
+完整的TypeScript支持，编译时类型检查
+
+## 安装
+
+```bash
+npm install @scenemesh/entity-engine
+```
+
+## 基础用法
+
+```typescript
+import { EntityEngine, createModel } from '@scenemesh/entity-engine'
+
+// 定义用户模型
+const User = createModel('User', {
+  name: { type: 'string', required: true },
+  email: { type: 'email', unique: true },
+  age: { type: 'number', min: 0 }
+})
+
+// 初始化引擎
+const engine = new EntityEngine({
+  models: [User]
+})
+```
+
+## 下一步
+
+- [了解核心概念](./core-concepts)
+- [学习数据建模](./data-modeling)
+- [查看API参考](./api-reference)

@@ -1,0 +1,553 @@
+# 事件与动作
+
+Entity Engine 的事件与动作系统让您可以构建响应式和自动化的应用。当数据发生变化时，事件会自动触发相关的业务逻辑；而动作则让您可以封装可重用的业务操作。
+
+事件用于"通知发生了什么"，动作用于"执行具体操作"。两者结合使用，可以构建出强大而灵活的业务流程。
+
+## 快速开始
+
+### 监听数据变化
+
+Entity Engine 会在数据发生变化时自动触发事件。您只需要监听这些事件并添加自己的业务逻辑：
+
+```typescript
+import { getEntityEngine } from './lib/entity-engine';
+
+const engine = await getEntityEngine();
+
+// 监听用户创建事件
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  if (event.modelName === 'User') {
+    console.log(`新用户注册: ${event.values.name}`);
+    
+    // 发送欢迎邮件
+    await sendWelcomeEmail(event.values.email);
+    
+    // 创建用户配置
+    await createUserProfile(event.objectId);
+  }
+});
+```
+
+这样设置后，每当有新用户注册时，系统会自动发送欢迎邮件并创建用户配置。
+
+### 创建自定义动作
+
+动作是可重用的业务操作，可以在不同地方调用：
+
+```typescript
+// 注册发布文章动作
+engine.actionRegistry.registerAction('blog.publish', async (context) => {
+  const { postId } = context.input;
+  
+  // 更新文章状态
+  await engine.datasource.updateObject({
+    id: postId,
+    values: { 
+      status: 'published',
+      publishedAt: new Date()
+    }
+  });
+  
+  return { success: true, postId };
+});
+
+// 在任何地方调用动作
+const result = await engine.actionRegistry.executeAction('blog.publish', {
+  input: { postId: 'post-123' }
+});
+```
+
+## 内置事件
+
+### 数据生命周期事件
+
+Entity Engine 在数据操作时会自动触发这些事件：
+
+```typescript
+// 监听所有数据创建事件
+engine.eventRegistry.on('entityObject.created', (event) => {
+  console.log(`创建了新的 ${event.modelName}: ${event.objectId}`);
+});
+
+// 监听数据更新事件
+engine.eventRegistry.on('entityObject.updated', (event) => {
+  console.log(`更新了 ${event.modelName}: ${event.objectId}`);
+  console.log('变更内容:', event.changes);
+});
+
+// 监听数据删除事件
+engine.eventRegistry.on('entityObject.deleted', (event) => {
+  console.log(`删除了 ${event.modelName}: ${event.objectId}`);
+});
+```
+
+### 配置变更事件
+
+当系统配置发生变化时也会触发事件：
+
+```typescript
+// 监听模型配置变更
+engine.eventRegistry.on('config.updated', (event) => {
+  if (event.key.startsWith('model:')) {
+    console.log(`模型配置已更新: ${event.key}`);
+    // 重新加载相关缓存
+    refreshModelCache(event.key);
+  }
+});
+```
+
+## 业务场景应用
+
+### 订单处理流程
+
+使用事件和动作可以轻松构建复杂的业务流程：
+
+```typescript
+// 1. 监听订单创建
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  if (event.modelName === 'Order') {
+    // 自动处理新订单
+    await engine.actionRegistry.executeAction('order.process', {
+      input: { orderId: event.objectId }
+    });
+  }
+});
+
+// 2. 注册订单处理动作
+engine.actionRegistry.registerAction('order.process', async (context) => {
+  const { orderId } = context.input;
+  
+  // 检查库存
+  const inventoryOk = await checkInventory(orderId);
+  if (!inventoryOk) {
+    throw new Error('库存不足');
+  }
+  
+  // 处理支付
+  const paymentResult = await processPayment(orderId);
+  if (!paymentResult.success) {
+    throw new Error('支付失败');
+  }
+  
+  // 更新订单状态
+  await engine.datasource.updateObject({
+    id: orderId,
+    values: { status: 'paid' }
+  });
+  
+  return { success: true, orderId };
+});
+```
+
+### 用户行为跟踪
+
+跟踪用户行为并触发相应的营销活动：
+
+```typescript
+// 跟踪用户活动
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  if (event.modelName === 'UserActivity') {
+    const activity = event.values;
+    
+    // 如果用户连续7天活跃，发送奖励
+    if (activity.type === 'login') {
+      const consecutiveDays = await getConsecutiveLoginDays(activity.userId);
+      
+      if (consecutiveDays === 7) {
+        await engine.actionRegistry.executeAction('user.sendReward', {
+          input: { 
+            userId: activity.userId,
+            reason: '连续登录7天'
+          }
+        });
+      }
+    }
+  }
+});
+```
+
+## 触发自定义事件
+
+### 业务事件通知
+
+您可以在业务逻辑中触发自定义事件来通知其他模块：
+
+```typescript
+// 在业务逻辑中触发事件
+async function completeOrder(orderId: string) {
+  // 完成订单处理
+  await updateOrderStatus(orderId, 'completed');
+  
+  // 触发订单完成事件
+  await engine.eventRegistry.emit('order.completed', {
+    orderId,
+    completedAt: new Date(),
+    metadata: { source: 'manual' }
+  });
+}
+
+// 其他模块监听这个事件
+engine.eventRegistry.on('order.completed', async (event) => {
+  // 发送完成通知
+  await sendOrderCompletionEmail(event.orderId);
+  
+  // 更新用户积分
+  await updateUserPoints(event.orderId);
+  
+  // 生成发票
+  await generateInvoice(event.orderId);
+});
+```
+
+### 跨模块通信
+
+事件系统特别适合模块间的解耦通信：
+
+```typescript
+// 支付模块触发事件
+await engine.eventRegistry.emit('payment.success', {
+  orderId: '123',
+  amount: 299.99,
+  paymentMethod: 'credit_card'
+});
+
+// 库存模块监听并处理
+engine.eventRegistry.on('payment.success', async (event) => {
+  await reduceInventory(event.orderId);
+});
+
+// 通知模块监听并处理
+engine.eventRegistry.on('payment.success', async (event) => {
+  await sendPaymentConfirmation(event.orderId);
+});
+```
+
+## 动作的高级用法
+
+### 带权限的动作
+
+动作可以包含权限检查，确保只有授权用户才能执行：
+
+```typescript
+engine.actionRegistry.registerAction('blog.delete', async (context) => {
+  const { postId } = context.input;
+  const { user } = context;
+  
+  // 检查用户权限
+  const hasPermission = await engine.permissionManager.checkModelPermission(
+    'Post', 'delete', { user }
+  );
+  
+  if (!hasPermission) {
+    throw new Error('权限不足');
+  }
+  
+  // 执行删除
+  await engine.datasource.deleteObject({ id: postId });
+  
+  return { success: true, deletedId: postId };
+}, {
+  description: '删除博客文章',
+  permissions: ['blog:delete']
+});
+```
+
+### 参数验证
+
+使用 Zod 验证动作的输入参数：
+
+```typescript
+import { z } from 'zod';
+
+engine.actionRegistry.registerAction('user.updateProfile', async (context) => {
+  const { userId, profile } = context.input;
+  
+  await engine.datasource.updateObject({
+    id: userId,
+    values: profile
+  });
+  
+  return { success: true, userId };
+}, {
+  description: '更新用户资料',
+  inputSchema: z.object({
+    userId: z.string(),
+    profile: z.object({
+      name: z.string().min(1, '姓名不能为空'),
+      email: z.string().email('邮箱格式无效'),
+      age: z.number().min(0, '年龄不能为负数').optional()
+    })
+  })
+});
+```
+
+## 事件与动作的协作
+
+### 事件触发动作链
+
+一个事件可以触发多个动作，形成完整的业务流程：
+
+```typescript
+// 监听用户注册事件
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  if (event.modelName === 'User') {
+    const userId = event.objectId;
+    
+    // 触发一系列后续动作
+    await Promise.all([
+      engine.actionRegistry.executeAction('user.sendWelcome', {
+        input: { userId }
+      }),
+      engine.actionRegistry.executeAction('user.createProfile', {
+        input: { userId, email: event.values.email }
+      }),
+      engine.actionRegistry.executeAction('analytics.trackSignup', {
+        input: { userId, source: event.values.signupSource }
+      })
+    ]);
+  }
+});
+```
+
+### 动作触发事件
+
+动作执行完成后也可以触发事件：
+
+```typescript
+engine.actionRegistry.registerAction('order.ship', async (context) => {
+  const { orderId } = context.input;
+  
+  // 执行发货逻辑
+  const trackingNumber = await shipOrder(orderId);
+  
+  // 更新订单状态
+  await engine.datasource.updateObject({
+    id: orderId,
+    values: { 
+      status: 'shipped',
+      trackingNumber,
+      shippedAt: new Date()
+    }
+  });
+  
+  // 触发发货事件
+  await engine.eventRegistry.emit('order.shipped', {
+    orderId,
+    trackingNumber,
+    shippedAt: new Date()
+  });
+  
+  return { success: true, trackingNumber };
+});
+```
+
+## 错误处理
+
+### 事件监听器错误
+
+事件监听器中的错误不会影响其他监听器：
+
+```typescript
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  try {
+    await sendNotification(event);
+  } catch (error) {
+    console.error('发送通知失败:', error);
+    
+    // 记录失败，但不阻止其他处理
+    await logError('notification_failed', {
+      event: event.type,
+      objectId: event.objectId,
+      error: error.message
+    });
+  }
+});
+```
+
+### 动作执行错误
+
+动作执行失败时应该返回标准化的错误响应：
+
+```typescript
+engine.actionRegistry.registerAction('payment.process', async (context) => {
+  try {
+    const result = await processPayment(context.input);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('支付处理失败:', error);
+    
+    return {
+      success: false,
+      error: '支付处理失败',
+      details: error.message,
+      retryable: error.code === 'NETWORK_ERROR'
+    };
+  }
+});
+```
+
+## 性能优化
+
+### 异步处理
+
+对于耗时的操作，使用后台处理避免阻塞主流程：
+
+```typescript
+engine.eventRegistry.on('entityObject.created', async (event) => {
+  if (event.modelName === 'User') {
+    // 快速响应的操作
+    await createUserSession(event.objectId);
+    
+    // 耗时操作放到后台处理
+    setImmediate(async () => {
+      try {
+        await generateUserReport(event.objectId);
+        await syncToExternalSystem(event.objectId);
+      } catch (error) {
+        console.error('后台处理失败:', error);
+      }
+    });
+  }
+});
+```
+
+### 条件过滤
+
+在事件监听器开头添加条件检查，避免不必要的处理：
+
+```typescript
+engine.eventRegistry.on('entityObject.updated', async (event) => {
+  // 只处理状态变更
+  if (!event.changes.status) {
+    return;
+  }
+  
+  // 只处理订单状态变更
+  if (event.modelName !== 'Order') {
+    return;
+  }
+  
+  // 执行状态变更处理逻辑
+  await handleOrderStatusChange(event);
+});
+```
+
+## 最佳实践
+
+### 事件命名规范
+
+使用清晰的命名约定来组织事件：
+
+```typescript
+// ✅ 推荐：使用分层命名
+'user.registered'        // 用户相关事件
+'user.profileUpdated'    
+'order.created'         // 订单相关事件
+'order.statusChanged'   
+'payment.success'       // 支付相关事件
+'payment.failed'        
+
+// ❌ 避免：模糊的命名
+'userEvent'
+'orderThing'
+'somethingHappened'
+```
+
+### 动作设计原则
+
+动作应该是原子的、可重用的操作：
+
+```typescript
+// ✅ 推荐：原子操作
+'user.sendEmail'         // 发送邮件
+'order.updateStatus'     // 更新订单状态
+'inventory.reduce'       // 减少库存
+
+// ❌ 避免：复合操作
+'user.registerAndSendEmailAndCreateProfile'  // 太复杂
+```
+
+### 解耦设计
+
+使用事件实现模块间的松耦合：
+
+```typescript
+// ✅ 推荐：通过事件解耦
+// 用户模块只负责用户注册
+async function registerUser(userData) {
+  const user = await createUser(userData);
+  await engine.eventRegistry.emit('user.registered', { userId: user.id });
+  return user;
+}
+
+// 邮件模块独立处理
+engine.eventRegistry.on('user.registered', async (event) => {
+  await sendWelcomeEmail(event.userId);
+});
+
+// ❌ 避免：直接依赖
+async function registerUser(userData) {
+  const user = await createUser(userData);
+  await sendWelcomeEmail(user.id);  // 直接依赖邮件模块
+  return user;
+}
+```
+
+## 调试和监控
+
+### 事件日志
+
+记录事件的触发和处理情况：
+
+```typescript
+engine.eventRegistry.on('*', (event) => {
+  console.log('事件触发:', {
+    type: event.type,
+    timestamp: new Date(),
+    data: event
+  });
+});
+```
+
+### 动作执行监控
+
+监控动作的执行时间和成功率：
+
+```typescript
+const originalExecuteAction = engine.actionRegistry.executeAction;
+
+engine.actionRegistry.executeAction = async function(actionName, context) {
+  const startTime = Date.now();
+  
+  try {
+    const result = await originalExecuteAction.call(this, actionName, context);
+    
+    // 记录成功执行
+    console.log('动作执行成功:', {
+      action: actionName,
+      duration: Date.now() - startTime,
+      success: true
+    });
+    
+    return result;
+  } catch (error) {
+    // 记录执行失败
+    console.error('动作执行失败:', {
+      action: actionName,
+      duration: Date.now() - startTime,
+      error: error.message
+    });
+    
+    throw error;
+  }
+};
+```
+
+## 下一步
+
+掌握事件与动作系统后，您可以：
+
+- 学习[模块系统](./module)来组织相关的事件和动作
+- 了解[注册表系统](./registry-system)来管理事件和动作的注册
+- 探索[引擎架构](./engine)来理解事件和动作在整体架构中的作用

@@ -1,0 +1,249 @@
+# 扩展动作处理器
+
+当 Entity Engine 内置的动作无法满足特定业务需求时，您可以创建自定义动作处理器。动作处理器让您能够实现复杂的业务逻辑、外部系统集成和自定义操作流程。
+
+## 什么是动作处理器
+
+动作处理器是用于处理特定业务操作的组件。它们可以响应用户操作、系统事件或定时任务，执行相应的业务逻辑。
+
+**常见的动作处理器场景**：
+- **邮件通知**：发送系统通知和提醒邮件
+- **数据导出**：将实体数据导出为各种格式  
+- **外部集成**：与第三方API和服务集成
+- **业务流程**：实现复杂的业务规则和工作流
+- **数据处理**：批量处理和转换数据
+
+每个动作处理器需要实现 `IEntityActionHandler` 接口，定义支持的动作名称和处理逻辑。
+
+## 实现动作处理器
+
+### 基本结构
+
+所有自定义动作处理器都需要实现 `IEntityActionHandler` 接口：
+
+```typescript
+import { 
+  IEntityActionHandler, 
+  EntityAction, 
+  EntityActionResult, 
+  IEntityEnginePrimitive 
+} from '@scenemesh/entity-engine';
+
+class EmailActionHandler implements IEntityActionHandler {
+  actionNames = ['send-email', 'email-notification'];
+
+  async handle(
+    action: EntityAction,
+    context: { engine: IEntityEnginePrimitive }
+  ): Promise<EntityActionResult> {
+    try {
+      // 验证参数
+      if (!action.parameter.to || !action.parameter.subject) {
+        return {
+          success: false,
+          message: '收件人和主题为必填项',
+          payload: { type: 'error' }
+        };
+      }
+
+      // 执行邮件发送逻辑
+      const result = await this.sendEmail(action.parameter);
+
+      return {
+        success: true,
+        message: '邮件发送成功',
+        payload: {
+          type: 'email-sent',
+          data: {
+            messageId: result.messageId,
+            recipients: result.accepted
+          }
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `邮件发送失败: ${error.message}`,
+        payload: { type: 'error', data: error }
+      };
+    }
+  }
+
+  private async sendEmail(params: any) {
+    // 实现邮件发送逻辑
+    return {
+      messageId: 'msg_' + Date.now(),
+      accepted: [params.to]
+    };
+  }
+}
+```
+
+### 核心要素
+
+**动作名称**：通过 `actionNames` 数组定义处理器支持的动作名称
+**处理方法**：通过 `handle` 方法实现具体的业务逻辑  
+**类型安全**：使用TypeScript接口确保正确的参数和返回类型
+**错误处理**：返回统一的 `EntityActionResult` 类型，包含成功状态和消息
+
+## 实现示例：数据导出处理器
+
+让我们创建一个数据导出动作处理器，展示核心实现模式：
+
+```typescript
+class DataExportHandler implements IEntityActionHandler {
+  actionNames = ['export-data', 'export-csv', 'export-json'];
+
+  async handle(action: EntityAction, context): Promise<EntityActionResult> {
+    try {
+      // 验证参数和权限
+      if (!action.modelName) {
+        return { success: false, message: '模型名称为必填项' };
+      }
+
+      // 查询数据
+      const records = await context.engine.dataService.list({
+        modelName: action.modelName,
+        ...action.parameter.query
+      });
+
+      // 格式化并导出数据
+      const exportData = this.formatData(records, action.parameter.format);
+      
+      return {
+        success: true,
+        message: `成功导出 ${records.length} 条记录`,
+        payload: { type: 'export-completed', data: exportData }
+      };
+    } catch (error) {
+      return { success: false, message: `导出失败: ${error.message}` };
+    }
+  }
+}
+```
+
+这个处理器支持多种数据导出格式，并提供了完整的错误处理机制。
+
+## 注册动作处理器
+
+创建好动作处理器后，需要将其注册到 Entity Engine 的动作注册表中：
+
+```typescript
+// 注册自定义动作处理器
+engine.actionRegistry.registerActionHandler(new EmailActionHandler());
+engine.actionRegistry.registerActionHandler(new DataExportHandler());
+```
+
+注册后，系统会自动识别并路由到相应的动作处理器。
+
+## 执行动作
+
+注册后，您可以通过动作注册表执行自定义动作：
+
+```typescript
+// 执行数据导出动作
+const exportAction: EntityAction = {
+  name: 'export-data',
+  modelName: 'Product',
+  parameter: {
+    format: 'csv',
+    query: { limit: 100, filter: { status: 'active' } }
+  }
+};
+
+const handler = engine.actionRegistry.getActionHandler('export-data');
+if (handler) {
+  const result = await handler.handle(exportAction, { engine });
+  console.log(result.success ? '导出成功' : result.message);
+}
+```
+
+## 获取动作处理器
+
+您可以查询已注册的动作处理器来了解系统中可用的操作：
+
+```typescript
+// 获取特定的动作处理器
+const exportHandler = engine.actionRegistry.getActionHandler('export-data');
+if (exportHandler) {
+  console.log('数据导出功能可用');
+}
+```
+
+这些方法可以帮助您在运行时检查可用的动作，并动态决定执行哪些操作。
+
+## 常见使用模式
+
+### 条件执行
+
+根据不同的动作名称执行不同的逻辑：
+
+```typescript
+class NotificationHandler implements IEntityActionHandler {
+  actionNames = ['send-notification', 'send-email', 'send-sms'];
+
+  async handle(action: EntityAction, context: any): Promise<EntityActionResult> {
+    switch (action.name) {
+      case 'send-email':
+        return this.handleEmail(action, context);
+      case 'send-sms':
+        return this.handleSms(action, context);
+      default:
+        return { success: false, message: `不支持的动作: ${action.name}` };
+    }
+  }
+}
+```
+
+### 异步处理
+
+对于耗时较长的操作，可以返回任务ID并在后台处理：
+
+```typescript
+class AsyncHandler implements IEntityActionHandler {
+  actionNames = ['process-large-dataset'];
+
+  async handle(action: EntityAction, context: any): Promise<EntityActionResult> {
+    const taskId = `task_${Date.now()}`;
+    
+    // 启动后台处理
+    this.processInBackground(taskId, action.parameter);
+    
+    return {
+      success: true,
+      message: '任务已启动',
+      payload: { type: 'task-started', data: { taskId } }
+    };
+  }
+}
+```
+
+## 最佳实践
+
+### 命名规范
+
+**类名**：使用 PascalCase，以 Handler 结尾（如 `EmailNotificationHandler`）
+**动作名称**：使用 kebab-case（如 `send-email`）  
+**描述性**：动作名称应该清晰描述其功能
+
+### 错误处理
+
+**统一格式**：始终返回 `EntityActionResult` 类型
+**错误信息**：提供清晰的错误描述和上下文  
+**异常捕获**：妥善处理所有可能的异常情况
+**日志记录**：记录关键操作和错误信息
+
+### 性能考虑
+
+**异步处理**：对于耗时操作，考虑使用异步模式
+**参数验证**：在处理开始时验证输入参数  
+**资源管理**：及时释放不需要的资源和连接
+**重试机制**：对于网络请求等可能失败的操作，实现适当的重试逻辑
+
+## 下一步
+
+掌握了自定义动作处理器后，您可以继续学习：
+
+- [自定义渲染器](./renderers) - 在界面特定位置显示自定义内容
+- [自定义视图类型](./view-types) - 创建新的数据展示方式
+- [扩展模块](./modules) - 创建完整的功能模块
