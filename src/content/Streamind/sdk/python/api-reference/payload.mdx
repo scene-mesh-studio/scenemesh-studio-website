@@ -1,0 +1,404 @@
+# Payload 载荷
+
+Payload 类用于管理 Signal 和 Directive 中携带的数据。它提供了读写不同类型数据的方法。
+
+## 获取 Payload 对象
+
+Payload 不能直接实例化，通过 Signal 或 Directive 的 `get_payload()` 方法获取：
+
+```python
+# 从 Signal 获取
+signal = Signal("sensor.data")
+payload = signal.get_payload()
+
+# 从 Directive 获取
+def on_directive(directive):
+    payload = directive.get_payload()
+```
+
+## 写入方法
+
+### set_number
+
+```python
+payload.set_number(key: str, value: float) -> None
+```
+
+设置数字类型的值（整数或浮点数）。
+
+**参数**：
+- `key` (str) - 键名
+- `value` (float) - 数值
+
+**示例**：
+```python
+payload.set_number("temperature", 25.5)
+payload.set_number("count", 100)
+payload.set_number("percentage", 95.8)
+```
+
+---
+
+### set_string
+
+```python
+payload.set_string(key: str, value: str) -> None
+```
+
+设置字符串类型的值。
+
+**参数**：
+- `key` (str) - 键名
+- `value` (str) - 字符串值
+
+**示例**：
+```python
+payload.set_string("status", "active")
+payload.set_string("message", "Hello, StreamInd")
+payload.set_string("device_id", "sensor-001")
+```
+
+---
+
+### set_boolean
+
+```python
+payload.set_boolean(key: str, value: bool) -> None
+```
+
+设置布尔类型的值。
+
+**参数**：
+- `key` (str) - 键名
+- `value` (bool) - 布尔值
+
+**示例**：
+```python
+payload.set_boolean("enabled", True)
+payload.set_boolean("alarm", False)
+payload.set_boolean("is_online", True)
+```
+
+---
+
+## 读取方法
+
+### get_number
+
+```python
+value = payload.get_number(key: str) -> float
+```
+
+获取数字类型的值。
+
+**参数**：
+- `key` (str) - 键名
+
+**返回**：
+- `float` - 数值
+
+**异常**：
+- 如果键不存在或类型不匹配，可能抛出异常
+
+**示例**：
+```python
+temperature = payload.get_number("temperature")
+count = int(payload.get_number("count"))  # 转换为整数
+```
+
+---
+
+### get_string
+
+```python
+value = payload.get_string(key: str) -> str
+```
+
+获取字符串类型的值。
+
+**参数**：
+- `key` (str) - 键名
+
+**返回**：
+- `str` - 字符串值
+
+**示例**：
+```python
+status = payload.get_string("status")
+message = payload.get_string("message")
+```
+
+---
+
+### get_boolean
+
+```python
+value = payload.get_boolean(key: str) -> bool
+```
+
+获取布尔类型的值。
+
+**参数**：
+- `key` (str) - 键名
+
+**返回**：
+- `bool` - 布尔值
+
+**示例**：
+```python
+enabled = payload.get_boolean("enabled")
+is_online = payload.get_boolean("is_online")
+```
+
+---
+
+### has_key
+
+```python
+exists = payload.has_key(key: str) -> bool
+```
+
+检查指定的键是否存在。
+
+**参数**：
+- `key` (str) - 键名
+
+**返回**：
+- `bool` - 如果键存在返回 True，否则返回 False
+
+**示例**：
+```python
+if payload.has_key("temperature"):
+    temp = payload.get_number("temperature")
+else:
+    print("温度数据不存在")
+```
+
+---
+
+## 完整示例
+
+### 写入数据到 Signal
+
+```python
+from streamind_sdk import Signal
+
+# 创建信号
+signal = Signal("sensor.multi_data")
+payload = signal.get_payload()
+
+# 写入不同类型的数据
+payload.set_number("temperature", 25.5)
+payload.set_number("humidity", 60.0)
+payload.set_string("location", "room_01")
+payload.set_string("sensor_id", "TH-001")
+payload.set_boolean("is_calibrated", True)
+payload.set_boolean("alarm", False)
+
+# 发送信号
+await sdk.send_signal("terminal-1", signal)
+```
+
+### 读取 Directive 数据
+
+```python
+def on_directive(directive):
+    payload = directive.get_payload()
+
+    # 安全读取数据
+    if payload.has_key("action"):
+        action = payload.get_string("action")
+        print(f"动作: {action}")
+
+    if payload.has_key("value"):
+        value = payload.get_number("value")
+        print(f"值: {value}")
+
+    if payload.has_key("enabled"):
+        enabled = payload.get_boolean("enabled")
+        print(f"启用: {enabled}")
+
+sdk.set_directive_callback("terminal-1", on_directive)
+```
+
+### 数据验证
+
+```python
+def validate_and_read_payload(payload):
+    """验证并读取 payload 数据"""
+    required_keys = ["temperature", "humidity", "location"]
+
+    # 检查必需字段
+    for key in required_keys:
+        if not payload.has_key(key):
+            raise ValueError(f"缺少必需字段: {key}")
+
+    # 读取数据
+    temperature = payload.get_number("temperature")
+    humidity = payload.get_number("humidity")
+    location = payload.get_string("location")
+
+    # 数据范围验证
+    if not -50 <= temperature <= 150:
+        raise ValueError(f"温度超出范围: {temperature}")
+
+    if not 0 <= humidity <= 100:
+        raise ValueError(f"湿度超出范围: {humidity}")
+
+    return {
+        "temperature": temperature,
+        "humidity": humidity,
+        "location": location
+    }
+
+# 使用
+try:
+    data = validate_and_read_payload(payload)
+    print(f"有效数据: {data}")
+except ValueError as e:
+    print(f"数据验证失败: {e}")
+```
+
+## 数据类型对应
+
+Python 类型与 Payload 方法的对应关系：
+
+| Python 类型 | Payload 方法 | 示例 |
+|------------|-------------|------|
+| `int`, `float` | `set_number()` / `get_number()` | `25`, `3.14` |
+| `str` | `set_string()` / `get_string()` | `"hello"` |
+| `bool` | `set_boolean()` / `get_boolean()` | `True`, `False` |
+
+## 常见使用模式
+
+### 传感器数据
+
+```python
+payload = signal.get_payload()
+payload.set_number("temperature", 25.5)
+payload.set_number("humidity", 60.0)
+payload.set_number("pressure", 1013.25)
+payload.set_string("unit", "metric")
+payload.set_boolean("calibrated", True)
+```
+
+### 设备状态
+
+```python
+payload = signal.get_payload()
+payload.set_string("status", "online")
+payload.set_number("battery_level", 85)
+payload.set_boolean("charging", True)
+payload.set_string("firmware_version", "1.2.3")
+payload.set_number("uptime_seconds", 86400)
+```
+
+### 控制指令
+
+```python
+# 读取控制指令
+payload = directive.get_payload()
+action = payload.get_string("action")      # "set_power"
+value = payload.get_boolean("value")       # True
+priority = payload.get_number("priority")  # 5
+```
+
+### JSON 风格的数据结构
+
+虽然 Payload 不支持嵌套对象，但可以使用命名约定模拟结构：
+
+```python
+# 使用点分隔表示层级
+payload.set_string("device.id", "sensor-001")
+payload.set_string("device.type", "temperature")
+payload.set_number("data.temperature", 25.5)
+payload.set_number("data.humidity", 60.0)
+payload.set_string("metadata.location", "room_01")
+payload.set_string("metadata.timestamp", "2024-01-01T00:00:00Z")
+```
+
+## 错误处理
+
+```python
+def safe_get_number(payload, key, default=0.0):
+    """安全获取数字，失败时返回默认值"""
+    try:
+        if payload.has_key(key):
+            return payload.get_number(key)
+        return default
+    except Exception as e:
+        print(f"读取 {key} 失败: {e}")
+        return default
+
+def safe_get_string(payload, key, default=""):
+    """安全获取字符串，失败时返回默认值"""
+    try:
+        if payload.has_key(key):
+            return payload.get_string(key)
+        return default
+    except Exception as e:
+        print(f"读取 {key} 失败: {e}")
+        return default
+
+# 使用
+temperature = safe_get_number(payload, "temperature", 0.0)
+location = safe_get_string(payload, "location", "unknown")
+```
+
+## 性能建议
+
+1. **批量操作** - 一次性设置所有数据，避免多次调用
+2. **数据大小** - 避免单个 payload 携带过多数据
+3. **类型一致** - 同一个键始终使用相同的数据类型
+4. **键名简洁** - 使用简短但清晰的键名
+
+## 最佳实践
+
+1. **检查存在性** - 读取前使用 `has_key()` 检查
+2. **类型安全** - 确保读取的类型与写入的类型一致
+3. **默认值** - 提供合理的默认值处理缺失数据
+4. **文档化** - 在代码中注释 payload 的数据结构
+5. **验证数据** - 对关键数据进行范围和有效性验证
+
+## 示例：完整的数据封装
+
+```python
+class SensorData:
+    """传感器数据封装"""
+
+    def __init__(self, temperature: float, humidity: float, location: str):
+        self.temperature = temperature
+        self.humidity = humidity
+        self.location = location
+
+    def to_payload(self, payload):
+        """转换为 Payload"""
+        payload.set_number("temperature", self.temperature)
+        payload.set_number("humidity", self.humidity)
+        payload.set_string("location", self.location)
+
+    @staticmethod
+    def from_payload(payload):
+        """从 Payload 创建"""
+        temperature = payload.get_number("temperature")
+        humidity = payload.get_number("humidity")
+        location = payload.get_string("location")
+        return SensorData(temperature, humidity, location)
+
+# 使用
+# 发送数据
+data = SensorData(25.5, 60.0, "room_01")
+signal = Signal("sensor.data")
+data.to_payload(signal.get_payload())
+await sdk.send_signal("terminal-1", signal)
+
+# 接收数据
+def on_directive(directive):
+    data = SensorData.from_payload(directive.get_payload())
+    print(f"温度: {data.temperature}, 湿度: {data.humidity}")
+```
+
+## 相关 API
+
+- [Signal](/Streamind/sdk/python/api-reference/signal) - 信号类
+- [Directive](/Streamind/sdk/python/api-reference/directive) - 指令类

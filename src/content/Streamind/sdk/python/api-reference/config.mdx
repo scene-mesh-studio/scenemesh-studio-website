@@ -1,0 +1,293 @@
+# Config 配置
+
+Config 类用于配置终端连接到 StreamInd 平台所需的参数。
+
+## 导入
+
+```python
+from streamind_sdk import Config
+```
+
+## 构造函数
+
+```python
+config = Config(
+    device_id: str,
+    device_type: str,
+    endpoint: str,
+    tenant_id: str,
+    product_id: str,
+    product_key: str
+)
+```
+
+**参数**：
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `device_id` | str | ✅ | 设备的唯一标识符 |
+| `device_type` | str | ✅ | 设备类型（如 "sensor", "actuator"） |
+| `endpoint` | str | ✅ | WebSocket 服务端点 URL |
+| `tenant_id` | str | ✅ | 租户ID（从平台获取） |
+| `product_id` | str | ✅ | 产品ID（从平台获取） |
+| `product_key` | str | ✅ | 产品密钥（从平台获取） |
+
+**示例**：
+```python
+config = Config(
+    device_id="device-001",
+    device_type="sensor",
+    endpoint="wss://your-platform.com/signals",
+    tenant_id="your-tenant-id",
+    product_id="your-product-id",
+    product_key="your-secret-key"
+)
+```
+
+## 可选属性
+
+创建 Config 对象后，可以设置以下可选属性：
+
+### heartbeat_interval_ms
+
+```python
+config.heartbeat_interval_ms = 30000  # 默认: 30000 (30秒)
+```
+
+心跳间隔时间（毫秒）。SDK 会定期发送心跳以保持连接活跃。
+
+**类型**：`int`
+**默认值**：`30000` (30秒)
+**范围**：`5000 - 300000` (5秒 - 5分钟)
+
+---
+
+### connection_timeout_ms
+
+```python
+config.connection_timeout_ms = 10000  # 默认: 10000 (10秒)
+```
+
+连接超时时间（毫秒）。如果在此时间内无法建立连接，将抛出异常。
+
+**类型**：`int`
+**默认值**：`10000` (10秒)
+**范围**：`3000 - 60000` (3秒 - 60秒)
+
+---
+
+### max_reconnect_attempts
+
+```python
+config.max_reconnect_attempts = 10  # 默认: 10
+```
+
+最大重连尝试次数。连接断开后，SDK 会自动重连，此参数限制重连次数。
+
+**类型**：`int`
+**默认值**：`10`
+**范围**：`0 - 100` (0表示不重连)
+
+---
+
+## 完整示例
+
+### 基础配置
+
+```python
+from streamind_sdk import Config
+
+config = Config(
+    device_id="sensor-001",
+    device_type="temperature_sensor",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id="tenant-12345",
+    product_id="product-67890",
+    product_key="sk_1234567890abcdef"
+)
+```
+
+### 自定义配置
+
+```python
+from streamind_sdk import Config
+
+config = Config(
+    device_id="sensor-001",
+    device_type="temperature_sensor",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id="tenant-12345",
+    product_id="product-67890",
+    product_key="sk_1234567890abcdef"
+)
+
+# 自定义心跳间隔为60秒
+config.heartbeat_interval_ms = 60000
+
+# 自定义连接超时为5秒
+config.connection_timeout_ms = 5000
+
+# 自定义最大重连次数为5次
+config.max_reconnect_attempts = 5
+```
+
+### 多终端配置
+
+```python
+# 为不同的终端创建不同的配置
+config_sensor1 = Config(
+    device_id="sensor-001",
+    device_type="temperature",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id="tenant-12345",
+    product_id="product-sensors",
+    product_key="sk_sensors_key"
+)
+
+config_sensor2 = Config(
+    device_id="sensor-002",
+    device_type="humidity",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id="tenant-12345",
+    product_id="product-sensors",
+    product_key="sk_sensors_key"
+)
+
+# 不同产品的配置
+config_actuator = Config(
+    device_id="actuator-001",
+    device_type="motor",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id="tenant-12345",
+    product_id="product-actuators",  # 不同的产品ID
+    product_key="sk_actuators_key"   # 不同的密钥
+)
+```
+
+## 环境变量配置
+
+可以使用环境变量管理敏感配置：
+
+```python
+import os
+from streamind_sdk import Config
+
+config = Config(
+    device_id=os.getenv("DEVICE_ID", "device-001"),
+    device_type=os.getenv("DEVICE_TYPE", "sensor"),
+    endpoint=os.getenv("STREAMIND_ENDPOINT", "wss://api.streamind.com/signals"),
+    tenant_id=os.getenv("STREAMIND_TENANT_ID"),
+    product_id=os.getenv("STREAMIND_PRODUCT_ID"),
+    product_key=os.getenv("STREAMIND_PRODUCT_KEY")
+)
+```
+
+**.env 文件**：
+```bash
+DEVICE_ID=sensor-001
+DEVICE_TYPE=temperature_sensor
+STREAMIND_ENDPOINT=wss://api.streamind.com/signals
+STREAMIND_TENANT_ID=tenant-12345
+STREAMIND_PRODUCT_ID=product-67890
+STREAMIND_PRODUCT_KEY=sk_1234567890abcdef
+```
+
+**使用 python-dotenv**：
+```python
+from dotenv import load_dotenv
+import os
+from streamind_sdk import Config
+
+load_dotenv()  # 加载 .env 文件
+
+config = Config(
+    device_id=os.getenv("DEVICE_ID"),
+    device_type=os.getenv("DEVICE_TYPE"),
+    endpoint=os.getenv("STREAMIND_ENDPOINT"),
+    tenant_id=os.getenv("STREAMIND_TENANT_ID"),
+    product_id=os.getenv("STREAMIND_PRODUCT_ID"),
+    product_key=os.getenv("STREAMIND_PRODUCT_KEY")
+)
+```
+
+## 配置验证
+
+在注册终端前验证配置：
+
+```python
+def validate_config(config: Config) -> bool:
+    """验证配置是否完整"""
+    required_fields = [
+        config.device_id,
+        config.device_type,
+        config.endpoint,
+        config.tenant_id,
+        config.product_id,
+        config.product_key
+    ]
+
+    if not all(required_fields):
+        print("错误：配置缺少必需字段")
+        return False
+
+    if not config.endpoint.startswith("wss://"):
+        print("错误：endpoint 必须使用 wss:// 协议")
+        return False
+
+    return True
+
+# 使用
+config = Config(...)
+if validate_config(config):
+    sdk.register_terminal("terminal-1", config)
+else:
+    print("配置无效")
+```
+
+## 最佳实践
+
+1. **安全存储** - 不要将 `product_key` 硬编码在代码中，使用环境变量或配置文件
+2. **唯一 device_id** - 确保每个设备使用唯一的 `device_id`
+3. **HTTPS 端点** - 生产环境使用 `wss://`（WebSocket Secure）而不是 `ws://`
+4. **合理超时** - 根据网络环境调整 `connection_timeout_ms`
+5. **重连策略** - 根据应用重要性调整 `max_reconnect_attempts`
+
+## 常见配置场景
+
+### 开发环境
+
+```python
+config = Config(
+    device_id="dev-sensor-001",
+    device_type="sensor",
+    endpoint="wss://dev.streamind.com/signals",
+    tenant_id="dev-tenant",
+    product_id="dev-product",
+    product_key="dev-key"
+)
+config.connection_timeout_ms = 15000  # 开发环境网络可能较慢
+```
+
+### 生产环境
+
+```python
+config = Config(
+    device_id="prod-sensor-001",
+    device_type="sensor",
+    endpoint="wss://api.streamind.com/signals",
+    tenant_id=os.getenv("PROD_TENANT_ID"),
+    product_id=os.getenv("PROD_PRODUCT_ID"),
+    product_key=os.getenv("PROD_PRODUCT_KEY")
+)
+config.heartbeat_interval_ms = 30000
+config.max_reconnect_attempts = 20  # 生产环境增加重连次数
+```
+
+### 弱网环境
+
+```python
+config = Config(...)
+config.connection_timeout_ms = 30000      # 增加超时时间
+config.heartbeat_interval_ms = 60000     # 降低心跳频率
+config.max_reconnect_attempts = 50       # 增加重连次数
+```

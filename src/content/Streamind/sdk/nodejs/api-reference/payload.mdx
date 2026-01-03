@@ -1,0 +1,431 @@
+# Payload 载荷
+
+Payload 类用于管理 Signal 和 Directive 中携带的数据。它提供了读写不同类型数据的方法。
+
+## 获取 Payload 对象
+
+Payload 不能直接实例化，通过 Signal 或 Directive 的 `getPayload()` 方法获取：
+
+```typescript
+// 从 Signal 获取
+const signal = new Signal("sensor.data");
+const payload = signal.getPayload();
+
+// 从 Directive 获取
+function onDirective(directive: Directive) {
+    const payload = directive.getPayload();
+}
+```
+
+## 写入方法
+
+### setNumber
+
+```typescript
+payload.setNumber(key: string, value: number): void
+```
+
+设置数字类型的值（整数或浮点数）。
+
+**参数**：
+- `key` (string) - 键名
+- `value` (number) - 数值
+
+**示例**：
+```typescript
+payload.setNumber("temperature", 25.5);
+payload.setNumber("count", 100);
+payload.setNumber("percentage", 95.8);
+```
+
+---
+
+### setString
+
+```typescript
+payload.setString(key: string, value: string): void
+```
+
+设置字符串类型的值。
+
+**参数**：
+- `key` (string) - 键名
+- `value` (string) - 字符串值
+
+**示例**：
+```typescript
+payload.setString("status", "active");
+payload.setString("message", "Hello, StreamInd");
+payload.setString("device_id", "sensor-001");
+```
+
+---
+
+### setBoolean
+
+```typescript
+payload.setBoolean(key: string, value: boolean): void
+```
+
+设置布尔类型的值。
+
+**参数**：
+- `key` (string) - 键名
+- `value` (boolean) - 布尔值
+
+**示例**：
+```typescript
+payload.setBoolean("enabled", true);
+payload.setBoolean("alarm", false);
+payload.setBoolean("is_online", true);
+```
+
+---
+
+## 读取方法
+
+### getNumber
+
+```typescript
+const value = payload.getNumber(key: string): number
+```
+
+获取数字类型的值。
+
+**参数**：
+- `key` (string) - 键名
+
+**返回**：
+- `number` - 数值
+
+**异常**：
+- 如果键不存在或类型不匹配，可能抛出异常
+
+**示例**：
+```typescript
+const temperature = payload.getNumber("temperature");
+const count = Math.floor(payload.getNumber("count"));  // 转换为整数
+```
+
+---
+
+### getString
+
+```typescript
+const value = payload.getString(key: string): string
+```
+
+获取字符串类型的值。
+
+**参数**：
+- `key` (string) - 键名
+
+**返回**：
+- `string` - 字符串值
+
+**示例**：
+```typescript
+const status = payload.getString("status");
+const message = payload.getString("message");
+```
+
+---
+
+### getBoolean
+
+```typescript
+const value = payload.getBoolean(key: string): boolean
+```
+
+获取布尔类型的值。
+
+**参数**：
+- `key` (string) - 键名
+
+**返回**：
+- `boolean` - 布尔值
+
+**示例**：
+```typescript
+const enabled = payload.getBoolean("enabled");
+const isOnline = payload.getBoolean("is_online");
+```
+
+---
+
+### hasKey
+
+```typescript
+const exists = payload.hasKey(key: string): boolean
+```
+
+检查指定的键是否存在。
+
+**参数**：
+- `key` (string) - 键名
+
+**返回**：
+- `boolean` - 如果键存在返回 true，否则返回 false
+
+**示例**：
+```typescript
+if (payload.hasKey("temperature")) {
+    const temp = payload.getNumber("temperature");
+} else {
+    console.log("温度数据不存在");
+}
+```
+
+---
+
+## 完整示例
+
+### 写入数据到 Signal
+
+```typescript
+import { Signal } from 'streamind-sdk';
+
+// 创建信号
+const signal = new Signal("sensor.multi_data");
+const payload = signal.getPayload();
+
+// 写入不同类型的数据
+payload.setNumber("temperature", 25.5);
+payload.setNumber("humidity", 60.0);
+payload.setString("location", "room_01");
+payload.setString("sensor_id", "TH-001");
+payload.setBoolean("is_calibrated", true);
+payload.setBoolean("alarm", false);
+
+// 发送信号
+await sdk.sendSignal("terminal-1", signal);
+```
+
+### 读取 Directive 数据
+
+```typescript
+function onDirective(directive: Directive) {
+    const payload = directive.getPayload();
+
+    // 安全读取数据
+    if (payload.hasKey("action")) {
+        const action = payload.getString("action");
+        console.log(`动作: ${action}`);
+    }
+
+    if (payload.hasKey("value")) {
+        const value = payload.getNumber("value");
+        console.log(`值: ${value}`);
+    }
+
+    if (payload.hasKey("enabled")) {
+        const enabled = payload.getBoolean("enabled");
+        console.log(`启用: ${enabled}`);
+    }
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+### 数据验证
+
+```typescript
+interface SensorData {
+    temperature: number;
+    humidity: number;
+    location: string;
+}
+
+function validateAndReadPayload(payload: Payload): SensorData {
+    // 验证并读取 payload 数据
+    const requiredKeys = ["temperature", "humidity", "location"];
+
+    // 检查必需字段
+    for (const key of requiredKeys) {
+        if (!payload.hasKey(key)) {
+            throw new Error(`缺少必需字段: ${key}`);
+        }
+    }
+
+    // 读取数据
+    const temperature = payload.getNumber("temperature");
+    const humidity = payload.getNumber("humidity");
+    const location = payload.getString("location");
+
+    // 数据范围验证
+    if (temperature < -50 || temperature > 150) {
+        throw new Error(`温度超出范围: ${temperature}`);
+    }
+
+    if (humidity < 0 || humidity > 100) {
+        throw new Error(`湿度超出范围: ${humidity}`);
+    }
+
+    return {
+        temperature,
+        humidity,
+        location
+    };
+}
+
+// 使用
+try {
+    const data = validateAndReadPayload(payload);
+    console.log(`有效数据:`, data);
+} catch (error) {
+    console.error(`数据验证失败: ${error.message}`);
+}
+```
+
+## 数据类型对应
+
+TypeScript/JavaScript 类型与 Payload 方法的对应关系：
+
+| JavaScript 类型 | Payload 方法 | 示例 |
+|----------------|-------------|------|
+| `number` | `setNumber()` / `getNumber()` | `25`, `3.14` |
+| `string` | `setString()` / `getString()` | `"hello"` |
+| `boolean` | `setBoolean()` / `getBoolean()` | `true`, `false` |
+
+## 常见使用模式
+
+### 传感器数据
+
+```typescript
+const payload = signal.getPayload();
+payload.setNumber("temperature", 25.5);
+payload.setNumber("humidity", 60.0);
+payload.setNumber("pressure", 1013.25);
+payload.setString("unit", "metric");
+payload.setBoolean("calibrated", true);
+```
+
+### 设备状态
+
+```typescript
+const payload = signal.getPayload();
+payload.setString("status", "online");
+payload.setNumber("battery_level", 85);
+payload.setBoolean("charging", true);
+payload.setString("firmware_version", "1.2.3");
+payload.setNumber("uptime_seconds", 86400);
+```
+
+### 控制指令
+
+```typescript
+// 读取控制指令
+const payload = directive.getPayload();
+const action = payload.getString("action");      // "set_power"
+const value = payload.getBoolean("value");       // true
+const priority = payload.getNumber("priority");  // 5
+```
+
+### JSON 风格的数据结构
+
+虽然 Payload 不支持嵌套对象，但可以使用命名约定模拟结构：
+
+```typescript
+// 使用点分隔表示层级
+payload.setString("device.id", "sensor-001");
+payload.setString("device.type", "temperature");
+payload.setNumber("data.temperature", 25.5);
+payload.setNumber("data.humidity", 60.0);
+payload.setString("metadata.location", "room_01");
+payload.setString("metadata.timestamp", "2024-01-01T00:00:00Z");
+```
+
+## 错误处理
+
+```typescript
+function safeGetNumber(payload: Payload, key: string, defaultValue: number = 0.0): number {
+    // 安全获取数字，失败时返回默认值
+    try {
+        if (payload.hasKey(key)) {
+            return payload.getNumber(key);
+        }
+        return defaultValue;
+    } catch (error) {
+        console.error(`读取 ${key} 失败: ${error}`);
+        return defaultValue;
+    }
+}
+
+function safeGetString(payload: Payload, key: string, defaultValue: string = ""): string {
+    // 安全获取字符串，失败时返回默认值
+    try {
+        if (payload.hasKey(key)) {
+            return payload.getString(key);
+        }
+        return defaultValue;
+    } catch (error) {
+        console.error(`读取 ${key} 失败: ${error}`);
+        return defaultValue;
+    }
+}
+
+// 使用
+const temperature = safeGetNumber(payload, "temperature", 0.0);
+const location = safeGetString(payload, "location", "unknown");
+```
+
+## 性能建议
+
+1. **批量操作** - 一次性设置所有数据，避免多次调用
+2. **数据大小** - 避免单个 payload 携带过多数据
+3. **类型一致** - 同一个键始终使用相同的数据类型
+4. **键名简洁** - 使用简短但清晰的键名
+
+## 最佳实践
+
+1. **检查存在性** - 读取前使用 `hasKey()` 检查
+2. **类型安全** - 确保读取的类型与写入的类型一致
+3. **默认值** - 提供合理的默认值处理缺失数据
+4. **文档化** - 在代码中注释 payload 的数据结构
+5. **验证数据** - 对关键数据进行范围和有效性验证
+
+## 示例：完整的数据封装
+
+```typescript
+class SensorData {
+    // 传感器数据封装
+    constructor(
+        public temperature: number,
+        public humidity: number,
+        public location: string
+    ) {}
+
+    toPayload(payload: Payload): void {
+        // 转换为 Payload
+        payload.setNumber("temperature", this.temperature);
+        payload.setNumber("humidity", this.humidity);
+        payload.setString("location", this.location);
+    }
+
+    static fromPayload(payload: Payload): SensorData {
+        // 从 Payload 创建
+        const temperature = payload.getNumber("temperature");
+        const humidity = payload.getNumber("humidity");
+        const location = payload.getString("location");
+        return new SensorData(temperature, humidity, location);
+    }
+}
+
+// 使用
+// 发送数据
+const data = new SensorData(25.5, 60.0, "room_01");
+const signal = new Signal("sensor.data");
+data.toPayload(signal.getPayload());
+await sdk.sendSignal("terminal-1", signal);
+
+// 接收数据
+function onDirective(directive: Directive) {
+    const data = SensorData.fromPayload(directive.getPayload());
+    console.log(`温度: ${data.temperature}, 湿度: ${data.humidity}`);
+}
+```
+
+## 相关 API
+
+- [Signal](/Streamind/sdk/nodejs/api-reference/signal) - 信号类
+- [Directive](/Streamind/sdk/nodejs/api-reference/directive) - 指令类

@@ -1428,7 +1428,7 @@ export default function StreamindPage(): React.JSX.Element {
               marginBottom: '40px'
             }}
           >
-            立即开始构建实时认知流应用，每月100信号免费
+            立即开始构建实时认知流应用，每日100免费事件
           </p>
 
           <div

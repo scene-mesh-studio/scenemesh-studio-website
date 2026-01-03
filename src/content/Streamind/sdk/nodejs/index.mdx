@@ -1,0 +1,130 @@
+# Node.js SDK 概览
+
+StreamInd Node.js SDK 是基于 TypeScript 的高性能 SDK，用于连接 StreamInd 平台。
+
+## 特性
+
+- ⚡️ **TypeScript 支持** - 完整的类型定义，更好的开发体验
+- 🚀 **Promise/async-await** - 现代 JavaScript 异步模式
+- 🎯 **多终端管理** - 同时管理多个设备连接
+- 🎤 **音频支持** - OPUS 格式音频流传输
+- 🔄 **自动重连** - 网络异常自动恢复
+- 📦 **零依赖** - 仅依赖 ws 库
+
+## 系统要求
+
+- **Node.js 版本**：14.0.0 或更高
+- **操作系统**：Linux, macOS, Windows
+- **TypeScript**：4.5+ (可选，用于 TypeScript 项目)
+
+## 安装
+
+### 1. 下载包文件
+
+访问 [GitHub Releases](https://github.com/scenemesh-dev/streamind-sdk-nodejs/releases) 下载 `.tgz` 包：
+
+```
+streamind-sdk-1.0.0.tgz
+```
+
+### 2. 安装
+
+```bash
+npm install streamind-sdk-1.0.0.tgz
+```
+
+或使用 yarn：
+
+```bash
+yarn add streamind-sdk-1.0.0.tgz
+```
+
+### 3. 验证安装
+
+```javascript
+const { SDK } = require('@streamind/sdk');
+// 或 TypeScript/ES6
+import { SDK } from '@streamind/sdk';
+```
+
+## 快速示例
+
+### JavaScript
+
+```javascript
+const { SDK, Config, Signal } = require('@streamind/sdk');
+
+async function main() {
+  // 创建配置
+  const config = new Config(
+    'device-001',                        // deviceId
+    'sensor',                            // deviceType
+    'wss://your-platform.com/signals',  // endpoint
+    'your-tenant-id',                    // tenantId
+    'your-product-id',                   // productId
+    'your-secret-key'                    // productKey
+  );
+
+  // 创建SDK并注册终端
+  const sdk = new SDK();
+  sdk.registerTerminal('terminal-1', config);
+
+  // 设置回调
+  sdk.setDirectiveCallback('terminal-1', (directive) => {
+    console.log('收到指令:', directive.name);
+  });
+
+  // 连接
+  await sdk.connect('terminal-1');
+
+  // 发送信号
+  const signal = new Signal('sensor.data');
+  signal.getPayload().setNumber('value', 25.5);
+  await sdk.sendSignal('terminal-1', signal);
+}
+
+main();
+```
+
+### TypeScript
+
+```typescript
+import { SDK, Config, Signal } from '@streamind/sdk';
+
+async function main(): Promise<void> {
+  const config = new Config(
+    'device-001',
+    'sensor',
+    'wss://your-platform.com/signals',
+    'your-tenant-id',
+    'your-product-id',
+    'your-secret-key'
+  );
+
+  const sdk = new SDK();
+  sdk.registerTerminal('terminal-1', config);
+
+  sdk.setDirectiveCallback('terminal-1', (directive) => {
+    console.log('收到指令:', directive.name);
+  });
+
+  await sdk.connect('terminal-1');
+
+  const signal = new Signal('sensor.data');
+  signal.getPayload().setNumber('temperature', 25.5);
+  await sdk.sendSignal('terminal-1', signal);
+}
+
+main();
+```
+
+## 下一步
+
+- [快速开始](/Streamind/sdk/nodejs/quick-start) - 5分钟完成第一个应用
+- [API 参考](/Streamind/sdk/nodejs/api-reference) - 完整的 API 文档
+- [示例代码](/Streamind/sdk/nodejs/examples) - 常见场景示例
+
+## 获取帮助
+
+- GitHub Issues: [streamind-sdk-nodejs/issues](https://github.com/scenemesh-dev/streamind-sdk-nodejs/issues)
+- 文档问题或建议：请提交 Issue

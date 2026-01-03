@@ -1,0 +1,255 @@
+# 快速开始
+
+5分钟快速集成 StreamInd Python SDK 到你的项目。
+
+## 前置要求
+
+- ✅ **Python 3.8+** - 支持 3.8, 3.9, 3.10, 3.11, 3.12
+- ✅ **pip** - Python 包管理工具
+- ✅ **asyncio 基础** - 了解 Python 异步编程
+- ✅ **StreamInd 平台账号** - 获取租户ID和产品认证信息
+
+### 获取平台认证信息
+
+在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息：
+
+1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
+2. **product_id**（产品ID）- 设备所属产品的标识
+3. **product_key**（产品密钥）- 产品的访问密钥
+
+登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
+
+## 安装 SDK
+
+### 步骤 1：下载 Wheel 包
+
+访问 [GitHub Releases](https://github.com/scenemesh-dev/streamind-sdk-python/releases) 下载对应你系统和 Python 版本的 wheel 包。
+
+**文件命名格式**：
+```
+streamind_sdk-{version}-cp{python_version}-{platform}.whl
+```
+
+**示例**：
+- `streamind_sdk-1.0.0-cp39-cp39-linux_x86_64.whl` - Linux, Python 3.9
+- `streamind_sdk-1.0.0-cp310-cp310-macosx_11_0_arm64.whl` - macOS M1, Python 3.10
+- `streamind_sdk-1.0.0-cp311-cp311-win_amd64.whl` - Windows, Python 3.11
+
+### 步骤 2：安装
+
+```bash
+pip install streamind_sdk-1.0.0-*.whl
+```
+
+### 步骤 3：验证安装
+
+```python
+import streamind_sdk
+print(streamind_sdk.__version__)  # 应输出：1.0.0
+```
+
+## 第一个应用
+
+### 完整示例
+
+创建 `main.py`：
+
+```python
+import asyncio
+from streamind_sdk import SDK, Config, Signal
+
+async def main():
+    # 1. 创建配置
+    config = Config(
+        device_id="device-001",           # 设备唯一ID
+        device_type="sensor",             # 设备类型
+        endpoint="wss://your-platform.com/signals",  # WebSocket端点
+        tenant_id="your-tenant-id",       # 替换为你的租户ID
+        product_id="your-product-id",     # 替换为你的产品ID
+        product_key="your-secret-key"     # 替换为你的产品密钥
+    )
+
+    # 2. 创建SDK实例
+    sdk = SDK()
+
+    # 3. 注册终端
+    sdk.register_terminal("terminal-1", config)
+
+    # 4. 设置指令回调
+    def on_directive(directive):
+        print(f"收到指令: {directive.name}")
+        print(f"指令参数: {directive.get_payload()}")
+
+    sdk.set_directive_callback("terminal-1", on_directive)
+
+    # 5. 设置连接状态回调（可选）
+    def on_connection(status, message):
+        print(f"连接状态: {status}, 消息: {message}")
+
+    sdk.set_connection_callback("terminal-1", on_connection)
+
+    # 6. 连接到平台
+    await sdk.connect("terminal-1")
+    print("已连接到StreamInd平台")
+
+    # 7. 发送信号
+    signal = Signal("sensor.data")
+    signal.get_payload().set_number("temperature", 25.5)
+    signal.get_payload().set_string("unit", "celsius")
+    await sdk.send_signal("terminal-1", signal)
+    print("信号已发送")
+
+    # 保持连接
+    await asyncio.sleep(60)
+
+    # 8. 断开连接
+    await sdk.disconnect("terminal-1")
+    print("已断开连接")
+
+# 运行
+asyncio.run(main())
+```
+
+### 运行应用
+
+```bash
+python main.py
+```
+
+**预期输出**：
+```
+已连接到StreamInd平台
+信号已发送
+收到指令: your.directive.name
+指令参数: {...}
+已断开连接
+```
+
+## 代码解析
+
+### 1. 创建配置
+
+```python
+config = Config(
+    device_id="device-001",      # 必需：设备唯一标识
+    device_type="sensor",        # 必需：设备类型
+    endpoint="wss://...",        # 必需：WebSocket服务端点
+    tenant_id="...",             # 必需：租户ID
+    product_id="...",            # 必需：产品ID
+    product_key="..."            # 必需：产品密钥
+)
+```
+
+### 2. 注册和连接
+
+```python
+sdk = SDK()
+sdk.register_terminal("terminal-1", config)  # 注册终端
+await sdk.connect("terminal-1")              # 异步连接
+```
+
+### 3. 发送信号
+
+```python
+signal = Signal("sensor.data")                    # 创建信号
+signal.get_payload().set_number("temp", 25.5)    # 添加数字数据
+signal.get_payload().set_string("unit", "C")     # 添加字符串数据
+await sdk.send_signal("terminal-1", signal)      # 发送
+```
+
+### 4. 接收指令
+
+```python
+def on_directive(directive):
+    print(f"指令名称: {directive.name}")
+    payload = directive.get_payload()
+    # 读取数据
+    value = payload.get_number("param_name")
+
+sdk.set_directive_callback("terminal-1", on_directive)
+```
+
+## 常见场景
+
+### 发送音频数据
+
+```python
+# 读取OPUS音频文件
+with open("audio.opus", "rb") as f:
+    audio_data = f.read()
+
+# 发送音频
+await sdk.send_audio_data("terminal-1", audio_data)
+```
+
+### 多终端管理
+
+```python
+# 注册多个终端
+config1 = Config(...)
+config2 = Config(...)
+
+sdk.register_terminal("terminal-1", config1)
+sdk.register_terminal("terminal-2", config2)
+
+# 批量连接
+await sdk.connect_all()
+
+# 向不同终端发送信号
+await sdk.send_signal("terminal-1", signal1)
+await sdk.send_signal("terminal-2", signal2)
+```
+
+### 配置可选参数
+
+```python
+config = Config(...)
+
+# 设置心跳间隔（默认30秒）
+config.heartbeat_interval_ms = 30000
+
+# 设置连接超时（默认10秒）
+config.connection_timeout_ms = 10000
+
+# 设置最大重连次数（默认10次）
+config.max_reconnect_attempts = 10
+```
+
+## 错误处理
+
+```python
+try:
+    await sdk.connect("terminal-1")
+except Exception as e:
+    print(f"连接失败: {e}")
+
+try:
+    await sdk.send_signal("terminal-1", signal)
+except Exception as e:
+    print(f"发送信号失败: {e}")
+```
+
+## 下一步
+
+- [API 参考](/Streamind/sdk/python/api-reference) - 查看完整 API 文档
+- [示例代码](/Streamind/sdk/python/examples) - 更多使用场景
+- [常见问题](#) - 解决常见问题
+
+## 故障排查
+
+### 无法连接
+
+1. 检查 `endpoint` 是否正确
+2. 检查 `tenant_id`、`product_id`、`product_key` 是否正确
+3. 检查网络连接
+
+### 安装失败
+
+1. 确认 Python 版本匹配
+2. 确认操作系统匹配
+3. 使用 `pip install --upgrade pip` 更新 pip
+
+### Import 错误
+
+1. 确认安装成功：`pip list | grep streamind`
+2. 检查虚拟环境是否正确激活

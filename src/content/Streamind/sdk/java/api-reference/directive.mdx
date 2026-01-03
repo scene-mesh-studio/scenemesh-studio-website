@@ -1,0 +1,320 @@
+# Directive 指令
+
+Directive 类表示从 StreamInd 平台接收到的指令。平台通过指令向设备下发控制命令或请求。
+
+## 接收指令
+
+通过回调函数接收指令：
+
+```java
+sdk.setDirectiveCallback("terminal-1", new DirectiveCallback() {
+    @Override
+    public void onDirective(Directive directive) {
+        System.out.println("收到指令: " + directive.getName());
+    }
+});
+
+// 使用 Lambda (Java 8+)
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    System.out.println("收到指令: " + directive.getName());
+});
+```
+
+## 属性
+
+### getName
+
+```java
+public String getName()
+```
+
+获取指令的名称。
+
+**返回**：`String` - 指令名称
+
+**示例**：
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    System.out.println("指令名称: " + directive.getName());
+    // 输出: 指令名称: device.control
+});
+```
+
+## 方法
+
+### getPayload
+
+```java
+public Payload getPayload()
+```
+
+获取指令的载荷对象，用于读取指令参数。
+
+**返回**：`Payload` - 载荷对象
+
+**示例**：
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    Payload payload = directive.getPayload();
+    String action = payload.getString("action");
+    double value = payload.getNumber("value");
+});
+```
+
+## 完整示例
+
+### 处理设备控制指令
+
+```java
+import com.streamind.sdk.*;
+import com.streamind.sdk.callbacks.*;
+
+public class DirectiveExample {
+    public static void main(String[] args) {
+        SDK sdk = new SDK();
+        Config config = new Config.Builder()...build();
+
+        sdk.registerTerminal("terminal-1", config);
+
+        // 设置指令回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            System.out.println("\n收到指令: " + directive.getName());
+
+            if ("device.control".equals(directive.getName())) {
+                handleControl(directive);
+            } else if ("device.query".equals(directive.getName())) {
+                handleQuery(directive, sdk);
+            } else {
+                System.out.println("未知指令类型: " + directive.getName());
+            }
+        });
+
+        try {
+            sdk.connect("terminal-1");
+            Thread.sleep(3600000);  // 保持运行
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void handleControl(Directive directive) {
+        Payload payload = directive.getPayload();
+        String action = payload.getString("action");
+        double value = payload.getNumber("value");
+
+        System.out.println("执行动作: " + action + ", 参数: " + value);
+
+        // 执行控制逻辑
+        if ("set_temperature".equals(action)) {
+            setTemperature(value);
+        } else if ("set_power".equals(action)) {
+            setPower(value > 0);
+        }
+    }
+
+    private static void handleQuery(Directive directive, SDK sdk) {
+        Payload payload = directive.getPayload();
+        String queryType = payload.getString("type");
+
+        System.out.println("查询类型: " + queryType);
+
+        // 响应查询
+        if ("status".equals(queryType)) {
+            sendStatusSignal(sdk);
+        }
+    }
+}
+```
+
+### 指令响应确认
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    // 处理指令并发送确认
+    System.out.println("收到指令: " + directive.getName());
+
+    try {
+        // 执行指令
+        Payload payload = directive.getPayload();
+        String action = payload.getString("action");
+        executeAction(action);
+
+        // 发送成功确认
+        Signal ackSignal = new Signal("directive.ack");
+        Payload ackPayload = ackSignal.getPayload();
+        ackPayload.setString("directive_name", directive.getName());
+        ackPayload.setBoolean("success", true);
+        sdk.sendSignal("terminal-1", ackSignal);
+
+    } catch (Exception e) {
+        // 发送失败确认
+        Signal ackSignal = new Signal("directive.ack");
+        Payload ackPayload = ackSignal.getPayload();
+        ackPayload.setString("directive_name", directive.getName());
+        ackPayload.setBoolean("success", false);
+        ackPayload.setString("error", e.getMessage());
+        try {
+            sdk.sendSignal("terminal-1", ackSignal);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+});
+```
+
+## 常见指令类型
+
+### 设备控制
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    if ("device.control".equals(directive.getName())) {
+        Payload payload = directive.getPayload();
+        String command = payload.getString("command");
+
+        if ("power_on".equals(command)) {
+            device.powerOn();
+        } else if ("power_off".equals(command)) {
+            device.powerOff();
+        } else if ("restart".equals(command)) {
+            device.restart();
+        }
+    }
+});
+```
+
+### 参数配置
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    if ("device.config".equals(directive.getName())) {
+        Payload payload = directive.getPayload();
+
+        // 读取配置参数
+        double interval = payload.getNumber("report_interval");
+        double threshold = payload.getNumber("threshold");
+        boolean enabled = payload.getBoolean("enabled");
+
+        // 更新设备配置
+        device.updateConfig(interval, threshold, enabled);
+    }
+});
+```
+
+### 数据查询
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    if ("device.query".equals(directive.getName())) {
+        Payload payload = directive.getPayload();
+        String queryType = payload.getString("type");
+
+        try {
+            // 根据查询类型返回数据
+            if ("status".equals(queryType)) {
+                Signal statusSignal = new Signal("device.status");
+                statusSignal.getPayload().setString("state", "running");
+                sdk.sendSignal("terminal-1", statusSignal);
+
+            } else if ("metrics".equals(queryType)) {
+                Signal metricsSignal = new Signal("device.metrics");
+                metricsSignal.getPayload().setNumber("cpu", 45.2);
+                metricsSignal.getPayload().setNumber("memory", 68.5);
+                sdk.sendSignal("terminal-1", metricsSignal);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+});
+```
+
+## 指令路由
+
+使用 Map 实现指令路由：
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+
+public class DirectiveRouter {
+    private Map<String, Consumer<Directive>> handlers = new HashMap<>();
+
+    public DirectiveRouter() {
+        // 注册处理器
+        handlers.put("device.control", this::handleControl);
+        handlers.put("device.config", this::handleConfig);
+        handlers.put("device.query", this::handleQuery);
+    }
+
+    public void route(Directive directive) {
+        Consumer<Directive> handler = handlers.get(directive.getName());
+
+        if (handler != null) {
+            handler.accept(directive);
+        } else {
+            System.out.println("未知指令: " + directive.getName());
+        }
+    }
+
+    private void handleControl(Directive directive) {
+        Payload payload = directive.getPayload();
+        // 处理控制指令...
+    }
+
+    private void handleConfig(Directive directive) {
+        Payload payload = directive.getPayload();
+        // 处理配置指令...
+    }
+
+    private void handleQuery(Directive directive) {
+        Payload payload = directive.getPayload();
+        // 处理查询指令...
+    }
+}
+
+// 使用
+DirectiveRouter router = new DirectiveRouter();
+sdk.setDirectiveCallback("terminal-1", router::route);
+```
+
+## 错误处理
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    try {
+        System.out.println("处理指令: " + directive.getName());
+
+        Payload payload = directive.getPayload();
+
+        // 参数验证
+        if (!payload.hasKey("action")) {
+            throw new IllegalArgumentException("缺少 action 参数");
+        }
+
+        String action = payload.getString("action");
+
+        // 执行操作
+        executeAction(action);
+
+    } catch (IllegalArgumentException e) {
+        System.err.println("参数错误: " + e.getMessage());
+    } catch (Exception e) {
+        System.err.println("处理指令失败: " + e.getMessage());
+    }
+});
+```
+
+## 最佳实践
+
+1. **非阻塞处理** - 回调中避免长时间阻塞操作
+2. **错误处理** - 捕获异常防止程序崩溃
+3. **确认机制** - 发送确认信号告知平台执行结果
+4. **参数验证** - 验证指令参数完整性和有效性
+5. **日志记录** - 记录接收和处理的指令
+
+## 相关 API
+
+- [Payload](/Streamind/sdk/java/api-reference/payload) - 载荷数据操作
+- [SDK.setDirectiveCallback()](/Streamind/sdk/java/api-reference/sdk-class#setdirectivecallback) - 设置指令回调

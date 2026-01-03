@@ -1,0 +1,305 @@
+# Config 配置
+
+Config 类用于配置终端连接到 StreamInd 平台所需的参数。
+
+## 导入
+
+```java
+import com.streamind.sdk.Config;
+```
+
+## 构造函数（Builder 模式）
+
+```java
+Config config = new Config.Builder()
+    .deviceId(String deviceId)
+    .deviceType(String deviceType)
+    .endpoint(String endpoint)
+    .tenantId(String tenantId)
+    .productId(String productId)
+    .productKey(String productKey)
+    .build();
+```
+
+**必需参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `deviceId` | String | 设备的唯一标识符 |
+| `deviceType` | String | 设备类型（如 "sensor", "actuator"） |
+| `endpoint` | String | WebSocket 服务端点 URL |
+| `tenantId` | String | 租户ID（从平台获取） |
+| `productId` | String | 产品ID（从平台获取） |
+| `productKey` | String | 产品密钥（从平台获取） |
+
+**示例**：
+```java
+Config config = new Config.Builder()
+    .deviceId("device-001")
+    .deviceType("sensor")
+    .endpoint("wss://your-platform.com/signals")
+    .tenantId("your-tenant-id")
+    .productId("your-product-id")
+    .productKey("your-secret-key")
+    .build();
+```
+
+## 可选配置方法
+
+创建 Config 对象时，可以链式调用以下可选方法：
+
+### heartbeatIntervalMs
+
+```java
+.heartbeatIntervalMs(int intervalMs)  // 默认: 30000 (30秒)
+```
+
+心跳间隔时间（毫秒）。SDK 会定期发送心跳以保持连接活跃。
+
+**类型**：`int`
+**默认值**：`30000` (30秒)
+**范围**：`5000 - 300000` (5秒 - 5分钟)
+
+---
+
+### connectionTimeoutMs
+
+```java
+.connectionTimeoutMs(int timeoutMs)  // 默认: 10000 (10秒)
+```
+
+连接超时时间（毫秒）。如果在此时间内无法建立连接，将抛出异常。
+
+**类型**：`int`
+**默认值**：`10000` (10秒)
+**范围**：`3000 - 60000` (3秒 - 60秒)
+
+---
+
+### maxReconnectAttempts
+
+```java
+.maxReconnectAttempts(int attempts)  // 默认: 10
+```
+
+最大重连尝试次数。连接断开后，SDK 会自动重连，此参数限制重连次数。
+
+**类型**：`int`
+**默认值**：`10`
+**范围**：`0 - 100` (0表示不重连)
+
+---
+
+## 完整示例
+
+### 基础配置
+
+```java
+import com.streamind.sdk.Config;
+
+Config config = new Config.Builder()
+    .deviceId("sensor-001")
+    .deviceType("temperature_sensor")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("tenant-12345")
+    .productId("product-67890")
+    .productKey("sk_1234567890abcdef")
+    .build();
+```
+
+### 自定义配置
+
+```java
+Config config = new Config.Builder()
+    .deviceId("sensor-001")
+    .deviceType("temperature_sensor")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("tenant-12345")
+    .productId("product-67890")
+    .productKey("sk_1234567890abcdef")
+    .heartbeatIntervalMs(60000)        // 自定义心跳间隔为60秒
+    .connectionTimeoutMs(5000)         // 自定义连接超时为5秒
+    .maxReconnectAttempts(5)           // 自定义最大重连次数为5次
+    .build();
+```
+
+### 多终端配置
+
+```java
+// 为不同的终端创建不同的配置
+Config configSensor1 = new Config.Builder()
+    .deviceId("sensor-001")
+    .deviceType("temperature")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("tenant-12345")
+    .productId("product-sensors")
+    .productKey("sk_sensors_key")
+    .build();
+
+Config configSensor2 = new Config.Builder()
+    .deviceId("sensor-002")
+    .deviceType("humidity")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("tenant-12345")
+    .productId("product-sensors")
+    .productKey("sk_sensors_key")
+    .build();
+
+// 不同产品的配置
+Config configActuator = new Config.Builder()
+    .deviceId("actuator-001")
+    .deviceType("motor")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("tenant-12345")
+    .productId("product-actuators")     // 不同的产品ID
+    .productKey("sk_actuators_key")     // 不同的密钥
+    .build();
+```
+
+## 使用配置文件
+
+从属性文件加载配置：
+
+```java
+import java.util.Properties;
+import java.io.FileInputStream;
+import java.io.IOException;
+
+public class ConfigLoader {
+    public static Config loadFromProperties(String filePath) throws IOException {
+        Properties props = new Properties();
+        props.load(new FileInputStream(filePath));
+
+        return new Config.Builder()
+            .deviceId(props.getProperty("device.id"))
+            .deviceType(props.getProperty("device.type"))
+            .endpoint(props.getProperty("streamind.endpoint"))
+            .tenantId(props.getProperty("streamind.tenant.id"))
+            .productId(props.getProperty("streamind.product.id"))
+            .productKey(props.getProperty("streamind.product.key"))
+            .heartbeatIntervalMs(
+                Integer.parseInt(props.getProperty("streamind.heartbeat.interval.ms", "30000"))
+            )
+            .build();
+    }
+}
+
+// 使用
+Config config = ConfigLoader.loadFromProperties("config.properties");
+```
+
+**config.properties**：
+```properties
+device.id=sensor-001
+device.type=temperature_sensor
+streamind.endpoint=wss://api.streamind.com/signals
+streamind.tenant.id=tenant-12345
+streamind.product.id=product-67890
+streamind.product.key=sk_1234567890abcdef
+streamind.heartbeat.interval.ms=30000
+```
+
+## 配置验证
+
+验证配置是否完整：
+
+```java
+public class ConfigValidator {
+    public static boolean validate(Config config) {
+        if (config.getDeviceId() == null || config.getDeviceId().isEmpty()) {
+            System.err.println("错误：deviceId 不能为空");
+            return false;
+        }
+
+        if (config.getDeviceType() == null || config.getDeviceType().isEmpty()) {
+            System.err.println("错误：deviceType 不能为空");
+            return false;
+        }
+
+        if (config.getEndpoint() == null || !config.getEndpoint().startsWith("wss://")) {
+            System.err.println("错误：endpoint 必须使用 wss:// 协议");
+            return false;
+        }
+
+        if (config.getTenantId() == null || config.getTenantId().isEmpty()) {
+            System.err.println("错误：tenantId 不能为空");
+            return false;
+        }
+
+        if (config.getProductId() == null || config.getProductId().isEmpty()) {
+            System.err.println("错误：productId 不能为空");
+            return false;
+        }
+
+        if (config.getProductKey() == null || config.getProductKey().isEmpty()) {
+            System.err.println("错误：productKey 不能为空");
+            return false;
+        }
+
+        return true;
+    }
+}
+
+// 使用
+Config config = new Config.Builder()...build();
+if (ConfigValidator.validate(config)) {
+    sdk.registerTerminal("terminal-1", config);
+} else {
+    System.err.println("配置无效");
+}
+```
+
+## 最佳实践
+
+1. **安全存储** - 不要将 `productKey` 硬编码在代码中，使用配置文件或环境变量
+2. **唯一 deviceId** - 确保每个设备使用唯一的 `deviceId`
+3. **HTTPS 端点** - 生产环境使用 `wss://`（WebSocket Secure）而不是 `ws://`
+4. **合理超时** - 根据网络环境调整 `connectionTimeoutMs`
+5. **重连策略** - 根据应用重要性调整 `maxReconnectAttempts`
+
+## 常见配置场景
+
+### 开发环境
+
+```java
+Config config = new Config.Builder()
+    .deviceId("dev-sensor-001")
+    .deviceType("sensor")
+    .endpoint("wss://dev.streamind.com/signals")
+    .tenantId("dev-tenant")
+    .productId("dev-product")
+    .productKey("dev-key")
+    .connectionTimeoutMs(15000)  // 开发环境网络可能较慢
+    .build();
+```
+
+### 生产环境
+
+```java
+Config config = new Config.Builder()
+    .deviceId("prod-sensor-001")
+    .deviceType("sensor")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId(System.getenv("PROD_TENANT_ID"))
+    .productId(System.getenv("PROD_PRODUCT_ID"))
+    .productKey(System.getenv("PROD_PRODUCT_KEY"))
+    .heartbeatIntervalMs(30000)
+    .maxReconnectAttempts(20)  // 生产环境增加重连次数
+    .build();
+```
+
+### 弱网环境
+
+```java
+Config config = new Config.Builder()
+    .deviceId("sensor-001")
+    .deviceType("sensor")
+    .endpoint("wss://api.streamind.com/signals")
+    .tenantId("...")
+    .productId("...")
+    .productKey("...")
+    .connectionTimeoutMs(30000)      // 增加超时时间
+    .heartbeatIntervalMs(60000)      // 降低心跳频率
+    .maxReconnectAttempts(50)        // 增加重连次数
+    .build();
+```

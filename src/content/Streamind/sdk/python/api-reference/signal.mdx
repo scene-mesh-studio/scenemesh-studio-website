@@ -1,0 +1,178 @@
+# Signal 信号
+
+Signal 类用于创建和发送信号到 StreamInd 平台。信号是设备向平台上报的事件、数据或状态。
+
+## 导入
+
+```python
+from streamind_sdk import Signal
+```
+
+## 构造函数
+
+```python
+signal = Signal(signal_type: str)
+```
+
+**参数**：
+- `signal_type` (str) - 信号类型，使用点分隔的命名空间（如 "sensor.temperature"）
+
+**示例**：
+```python
+signal = Signal("sensor.temperature")
+signal = Signal("device.status")
+signal = Signal("audio.stream")
+```
+
+## 属性
+
+### name
+
+```python
+signal.name  # 只读
+```
+
+获取信号的类型名称。
+
+**类型**：`str`
+
+**示例**：
+```python
+signal = Signal("sensor.data")
+print(signal.name)  # 输出: "sensor.data"
+```
+
+## 方法
+
+### get_payload
+
+```python
+payload = signal.get_payload() -> Payload
+```
+
+获取信号的载荷对象，用于添加数据。
+
+**返回**：
+- `Payload` - 载荷对象
+
+**示例**：
+```python
+signal = Signal("sensor.data")
+payload = signal.get_payload()
+payload.set_number("temperature", 25.5)
+payload.set_string("unit", "celsius")
+```
+
+## 完整示例
+
+### 发送传感器数据
+
+```python
+from streamind_sdk import SDK, Signal
+
+async def send_sensor_data(sdk, terminal_id):
+    # 创建信号
+    signal = Signal("sensor.temperature")
+
+    # 添加数据
+    payload = signal.get_payload()
+    payload.set_number("value", 25.5)
+    payload.set_string("unit", "celsius")
+    payload.set_string("location", "room_01")
+
+    # 发送
+    await sdk.send_signal(terminal_id, signal)
+```
+
+### 发送设备状态
+
+```python
+signal = Signal("device.status")
+payload = signal.get_payload()
+payload.set_string("status", "online")
+payload.set_number("battery", 85)
+payload.set_boolean("charging", True)
+await sdk.send_signal("terminal-1", signal)
+```
+
+### 发送复杂数据
+
+```python
+signal = Signal("sensor.multi_data")
+payload = signal.get_payload()
+
+# 数字数据
+payload.set_number("temperature", 25.5)
+payload.set_number("humidity", 60.0)
+payload.set_number("pressure", 1013.25)
+
+# 字符串数据
+payload.set_string("location", "lab_01")
+payload.set_string("sensor_id", "TH-001")
+
+# 布尔数据
+payload.set_boolean("is_calibrated", True)
+payload.set_boolean("alarm", False)
+
+await sdk.send_signal("terminal-1", signal)
+```
+
+## 信号类型命名规范
+
+建议使用清晰的命名空间结构：
+
+```python
+# 传感器数据
+Signal("sensor.temperature")
+Signal("sensor.humidity")
+Signal("sensor.pressure")
+
+# 设备状态
+Signal("device.status")
+Signal("device.error")
+Signal("device.heartbeat")
+
+# 音频相关
+Signal("audio.start")
+Signal("audio.stop")
+Signal("audio.chunk")
+
+# 控制指令响应
+Signal("control.ack")
+Signal("control.result")
+```
+
+## 最佳实践
+
+1. **清晰命名** - 使用有意义的信号类型名称
+2. **统一格式** - 在项目中保持命名格式一致
+3. **数据验证** - 发送前验证数据完整性
+4. **错误处理** - 捕获发送失败的异常
+
+## 示例：数据验证
+
+```python
+def create_validated_signal(temperature: float) -> Signal:
+    """创建经过验证的温度信号"""
+    if not -50 <= temperature <= 150:
+        raise ValueError(f"温度值超出范围: {temperature}")
+
+    signal = Signal("sensor.temperature")
+    payload = signal.get_payload()
+    payload.set_number("value", temperature)
+    payload.set_string("unit", "celsius")
+
+    return signal
+
+# 使用
+try:
+    signal = create_validated_signal(25.5)
+    await sdk.send_signal("terminal-1", signal)
+except ValueError as e:
+    print(f"数据验证失败: {e}")
+```
+
+## 相关 API
+
+- [Payload](/Streamind/sdk/python/api-reference/payload) - 载荷数据操作
+- [SDK.send_signal()](/Streamind/sdk/python/api-reference/sdk-class#send_signal) - 发送信号

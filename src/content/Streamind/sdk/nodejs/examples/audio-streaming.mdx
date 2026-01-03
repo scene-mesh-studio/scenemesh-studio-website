@@ -1,0 +1,493 @@
+# 音频流传输
+
+使用 StreamInd Node.js SDK 发送 OPUS 格式的音频流数据。
+
+## 发送音频文件
+
+### 完整示例
+
+```typescript
+import { SDK, Config } from 'streamind-sdk';
+import * as fs from 'fs';
+
+async function sendAudioFile(sdk: SDK, terminalId: string, audioFilePath: string) {
+    // 读取并发送音频文件
+    try {
+        // 读取 OPUS 音频文件
+        const audioData = fs.readFileSync(audioFilePath);
+
+        console.log(`读取音频文件: ${audioFilePath}`);
+        console.log(`文件大小: ${audioData.length} 字节`);
+
+        // 发送音频数据
+        await sdk.sendAudioData(terminalId, audioData);
+        console.log("音频发送成功");
+
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.error(`错误：文件不存在 - ${audioFilePath}`);
+        } else {
+            console.error(`发送音频失败: ${error}`);
+        }
+    }
+}
+
+async function main() {
+    // 创建配置
+    const config = new Config({
+        deviceId: "audio-device-001",
+        deviceType: "audio_client",
+        endpoint: "wss://your-platform.com/signals",
+        tenantId: "your-tenant-id",
+        productId: "your-product-id",
+        productKey: "your-secret-key"
+    });
+
+    // 创建 SDK
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    // 连接
+    await sdk.connect("terminal-1");
+    console.log("已连接到平台");
+
+    // 发送音频文件
+    await sendAudioFile(sdk, "terminal-1", "audio.opus");
+
+    // 保持连接
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // 断开连接
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 流式音频发送
+
+分块发送大音频文件：
+
+```typescript
+import { SDK, Config } from 'streamind-sdk';
+import * as fs from 'fs';
+
+async function sendAudioStream(
+    sdk: SDK,
+    terminalId: string,
+    audioFilePath: string,
+    chunkSize: number = 4096
+) {
+    // 流式发送音频数据
+    try {
+        const fileStream = fs.createReadStream(audioFilePath, {
+            highWaterMark: chunkSize
+        });
+
+        let chunkIndex = 0;
+
+        for await (const chunk of fileStream) {
+            // 发送音频块
+            await sdk.sendAudioData(terminalId, chunk);
+            chunkIndex++;
+            console.log(`发送音频块 ${chunkIndex}: ${chunk.length} 字节`);
+
+            // 控制发送速率（可选）
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        console.log(`音频流发送完成，共 ${chunkIndex} 块`);
+
+    } catch (error) {
+        console.error(`流式发送失败: ${error}`);
+    }
+}
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    await sdk.connect("terminal-1");
+
+    // 流式发送
+    await sendAudioStream(sdk, "terminal-1", "large_audio.opus", 8192);
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 麦克风实时采集
+
+使用 node-record-lpcm16 实时采集并发送音频：
+
+```typescript
+import { SDK, Config } from 'streamind-sdk';
+import * as recorder from 'node-record-lpcm16';
+import { OpusEncoder } from '@discordjs/opus';
+
+// 音频配置
+const RATE = 16000;          // 采样率
+const CHANNELS = 1;          // 单声道
+const FRAME_SIZE = 960;      // 每帧样本数 (60ms @ 16kHz)
+
+async function streamMicrophoneAudio(sdk: SDK, terminalId: string, duration: number = 10000) {
+    // 实时采集麦克风音频并发送
+    console.log(`开始录音 ${duration / 1000} 秒...`);
+
+    // 创建 OPUS 编码器
+    const encoder = new OpusEncoder(RATE, CHANNELS);
+
+    // 创建录音流
+    const recording = recorder.record({
+        sampleRate: RATE,
+        channels: CHANNELS,
+        audioType: 'raw',
+        silence: '0'
+    });
+
+    const audioStream = recording.stream();
+
+    // 处理音频数据
+    let buffer = Buffer.alloc(0);
+    const bytesPerFrame = FRAME_SIZE * 2;  // 16-bit samples
+
+    audioStream.on('data', async (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk]);
+
+        // 当有足够的数据时进行编码和发送
+        while (buffer.length >= bytesPerFrame) {
+            const frame = buffer.slice(0, bytesPerFrame);
+            buffer = buffer.slice(bytesPerFrame);
+
+            // OPUS 编码
+            const opusData = encoder.encode(frame);
+
+            // 发送到平台
+            try {
+                await sdk.sendAudioData(terminalId, opusData);
+            } catch (error) {
+                console.error(`发送音频失败: ${error}`);
+            }
+        }
+    });
+
+    audioStream.on('error', (error: Error) => {
+        console.error(`录音错误: ${error}`);
+    });
+
+    // 指定时间后停止录音
+    await new Promise(resolve => setTimeout(resolve, duration));
+
+    recording.stop();
+    console.log("录音结束");
+}
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    await sdk.connect("terminal-1");
+    console.log("已连接，准备录音...");
+
+    // 录音并发送 10 秒
+    await streamMicrophoneAudio(sdk, "terminal-1", 10000);
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 使用 Web Audio API (浏览器环境)
+
+在浏览器中采集音频：
+
+```typescript
+import { SDK, Config } from 'streamind-sdk';
+
+class AudioRecorder {
+    private sdk: SDK;
+    private terminalId: string;
+    private mediaRecorder: MediaRecorder | null = null;
+    private audioChunks: Blob[] = [];
+
+    constructor(sdk: SDK, terminalId: string) {
+        this.sdk = sdk;
+        this.terminalId = terminalId;
+    }
+
+    async startRecording() {
+        // 开始录音
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus'
+            });
+
+            this.mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+
+                    // 转换为 ArrayBuffer 并发送
+                    const arrayBuffer = await event.data.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+
+                    await this.sdk.sendAudioData(this.terminalId, uint8Array);
+                }
+            };
+
+            this.mediaRecorder.start(100);  // 每 100ms 触发一次 dataavailable
+            console.log("录音已开始");
+
+        } catch (error) {
+            console.error(`无法访问麦克风: ${error}`);
+        }
+    }
+
+    stopRecording() {
+        // 停止录音
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+            this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            console.log("录音已停止");
+        }
+    }
+}
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    await sdk.connect("terminal-1");
+
+    // 创建录音器
+    const recorder = new AudioRecorder(sdk, "terminal-1");
+
+    // 开始录音
+    await recorder.startRecording();
+
+    // 录音 10 秒
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    // 停止录音
+    recorder.stopRecording();
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 接收音频指令
+
+接收平台发送的音频控制指令：
+
+```typescript
+import { SDK, Config, Directive } from 'streamind-sdk';
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    // 音频状态
+    let isRecording = false;
+
+    // 指令回调
+    function onDirective(directive: Directive) {
+        if (directive.name === "audio.control") {
+            const payload = directive.getPayload();
+            const action = payload.getString("action");
+
+            if (action === "start_recording") {
+                console.log("开始录音");
+                isRecording = true;
+                // 启动录音逻辑...
+            } else if (action === "stop_recording") {
+                console.log("停止录音");
+                isRecording = false;
+                // 停止录音逻辑...
+            }
+        }
+    }
+
+    sdk.setDirectiveCallback("terminal-1", onDirective);
+
+    await sdk.connect("terminal-1");
+    console.log("等待音频控制指令...");
+
+    // 保持连接
+    await new Promise(resolve => setTimeout(resolve, 3600000));
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 音频文件转换
+
+将其他格式转换为 OPUS：
+
+```typescript
+import * as ffmpeg from 'fluent-ffmpeg';
+import * as fs from 'fs';
+
+function convertToOpus(inputFile: string, outputFile: string): Promise<void> {
+    // 将音频文件转换为 OPUS 格式
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputFile)
+            .audioCodec('libopus')
+            .audioChannels(1)
+            .audioFrequency(16000)
+            .output(outputFile)
+            .on('end', () => {
+                console.log(`转换完成: ${outputFile}`);
+                resolve();
+            })
+            .on('error', (error) => {
+                console.error(`转换失败: ${error}`);
+                reject(error);
+            })
+            .run();
+    });
+}
+
+// 使用
+async function main() {
+    await convertToOpus("input.mp3", "output.opus");
+    console.log("音频转换完成");
+}
+
+main().catch(console.error);
+```
+
+## 完整的录音应用
+
+结合信号和音频的完整示例：
+
+```typescript
+import { SDK, Config, Signal, Directive } from 'streamind-sdk';
+
+class AudioRecorderApp {
+    private sdk: SDK;
+    private terminalId: string;
+    private isRecording: boolean = false;
+
+    constructor(sdk: SDK, terminalId: string) {
+        this.sdk = sdk;
+        this.terminalId = terminalId;
+    }
+
+    async startRecording() {
+        // 开始录音
+        this.isRecording = true;
+
+        // 发送录音开始信号
+        const signal = new Signal("audio.status");
+        signal.getPayload().setString("status", "recording");
+        await this.sdk.sendSignal(this.terminalId, signal);
+
+        console.log("录音已开始");
+    }
+
+    async stopRecording() {
+        // 停止录音
+        this.isRecording = false;
+
+        // 发送录音结束信号
+        const signal = new Signal("audio.status");
+        signal.getPayload().setString("status", "stopped");
+        await this.sdk.sendSignal(this.terminalId, signal);
+
+        console.log("录音已停止");
+    }
+
+    async sendAudioChunk(audioData: Buffer) {
+        // 发送音频块
+        if (this.isRecording) {
+            await this.sdk.sendAudioData(this.terminalId, audioData);
+        }
+    }
+}
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    const recorder = new AudioRecorderApp(sdk, "terminal-1");
+
+    // 指令回调
+    async function onDirective(directive: Directive) {
+        if (directive.name === "audio.control") {
+            const payload = directive.getPayload();
+            const action = payload.getString("action");
+
+            if (action === "start") {
+                await recorder.startRecording();
+            } else if (action === "stop") {
+                await recorder.stopRecording();
+            }
+        }
+    }
+
+    sdk.setDirectiveCallback("terminal-1", onDirective);
+
+    await sdk.connect("terminal-1");
+    console.log("音频系统已就绪");
+
+    // 保持运行
+    await new Promise(resolve => setTimeout(resolve, 3600000));
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 依赖安装
+
+```bash
+# 基础音频处理 (Node.js)
+npm install node-record-lpcm16
+
+# OPUS 编码
+npm install @discordjs/opus
+
+# 音频格式转换
+npm install fluent-ffmpeg
+npm install @types/fluent-ffmpeg --save-dev
+
+# 环境变量
+npm install dotenv
+```
+
+## 注意事项
+
+1. **音频格式**：StreamInd 平台要求 OPUS 格式
+2. **采样率**：推荐使用 16kHz
+3. **声道**：推荐使用单声道
+4. **分块大小**：根据网络情况调整，一般 4KB-8KB
+5. **错误处理**：音频发送失败时应有重试机制
+
+## 下一步
+
+- [多终端管理](/Streamind/sdk/nodejs/examples/multi-terminal) - 管理多个设备
+- [错误处理](/Streamind/sdk/nodejs/examples/error-handling) - 完善错误处理

@@ -1,0 +1,131 @@
+# Config 配置
+
+Config 类用于配置终端连接到 StreamInd 平台所需的参数。
+
+## 导入
+
+```javascript
+const { Config } = require('@streamind/sdk');
+// 或 TypeScript/ES6
+import { Config } from '@streamind/sdk';
+```
+
+## 构造函数
+
+```javascript
+const config = new Config(deviceId, deviceType, endpoint, tenantId, productId, productKey)
+```
+
+**参数**：
+
+| 参数 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `deviceId` | string | ✅ | 设备的唯一标识符 |
+| `deviceType` | string | ✅ | 设备类型 |
+| `endpoint` | string | ✅ | WebSocket 服务端点 URL |
+| `tenantId` | string | ✅ | 租户ID |
+| `productId` | string | ✅ | 产品ID |
+| `productKey` | string | ✅ | 产品密钥 |
+
+**示例**：
+```javascript
+const config = new Config(
+  'device-001',
+  'sensor',
+  'wss://your-platform.com/signals',
+  'your-tenant-id',
+  'your-product-id',
+  'your-secret-key'
+);
+```
+
+## 可选属性
+
+### heartbeatIntervalMs
+
+```javascript
+config.heartbeatIntervalMs = 30000;  // 默认: 30000 (30秒)
+```
+
+心跳间隔时间（毫秒）。
+
+**类型**：`number`  
+**默认值**：`30000`  
+**范围**：`5000 - 300000`
+
+### connectionTimeoutMs
+
+```javascript
+config.connectionTimeoutMs = 10000;  // 默认: 10000 (10秒)
+```
+
+连接超时时间（毫秒）。
+
+**类型**：`number`  
+**默认值**：`10000`  
+**范围**：`3000 - 60000`
+
+### maxReconnectAttempts
+
+```javascript
+config.maxReconnectAttempts = 10;  // 默认: 10
+```
+
+最大重连尝试次数。
+
+**类型**：`number`  
+**默认值**：`10`  
+**范围**：`0 - 100`
+
+## 完整示例
+
+```javascript
+const { Config } = require('@streamind/sdk');
+
+const config = new Config(
+  'sensor-001',
+  'temperature_sensor',
+  'wss://api.streamind.com/signals',
+  'tenant-12345',
+  'product-67890',
+  'sk_1234567890abcdef'
+);
+
+// 自定义配置
+config.heartbeatIntervalMs = 60000;
+config.connectionTimeoutMs = 5000;
+config.maxReconnectAttempts = 5;
+```
+
+## TypeScript 示例
+
+```typescript
+import { Config } from '@streamind/sdk';
+
+const config: Config = new Config(
+  'sensor-001',
+  'temperature_sensor',
+  'wss://api.streamind.com/signals',
+  'tenant-12345',
+  'product-67890',
+  'sk_1234567890abcdef'
+);
+
+config.heartbeatIntervalMs = 60000;
+```
+
+## 环境变量配置
+
+```javascript
+require('dotenv').config();
+const { Config } = require('@streamind/sdk');
+
+const config = new Config(
+  process.env.DEVICE_ID,
+  process.env.DEVICE_TYPE,
+  process.env.STREAMIND_ENDPOINT,
+  process.env.STREAMIND_TENANT_ID,
+  process.env.STREAMIND_PRODUCT_ID,
+  process.env.STREAMIND_PRODUCT_KEY
+);
+```

@@ -1,0 +1,187 @@
+# Signal 信号
+
+Signal 类用于创建和发送信号到 StreamInd 平台。信号是设备向平台上报的事件、数据或状态。
+
+## 导入
+
+```java
+import com.streamind.sdk.Signal;
+```
+
+## 构造函数
+
+```java
+Signal signal = new Signal(String signalType)
+```
+
+**参数**：
+- `signalType` (String) - 信号类型，使用点分隔的命名空间（如 "sensor.temperature"）
+
+**示例**：
+```java
+Signal signal = new Signal("sensor.temperature");
+Signal statusSignal = new Signal("device.status");
+Signal audioSignal = new Signal("audio.stream");
+```
+
+## 属性
+
+### getName
+
+```java
+public String getName()
+```
+
+获取信号的类型名称。
+
+**返回**：`String` - 信号类型名称
+
+**示例**：
+```java
+Signal signal = new Signal("sensor.data");
+System.out.println(signal.getName());  // 输出: "sensor.data"
+```
+
+## 方法
+
+### getPayload
+
+```java
+public Payload getPayload()
+```
+
+获取信号的载荷对象，用于添加数据。
+
+**返回**：`Payload` - 载荷对象
+
+**示例**：
+```java
+Signal signal = new Signal("sensor.data");
+Payload payload = signal.getPayload();
+payload.setNumber("temperature", 25.5);
+payload.setString("unit", "celsius");
+```
+
+## 完整示例
+
+### 发送传感器数据
+
+```java
+import com.streamind.sdk.SDK;
+import com.streamind.sdk.Signal;
+import com.streamind.sdk.Payload;
+
+public class SensorExample {
+    public static void sendSensorData(SDK sdk, String terminalId) throws Exception {
+        // 创建信号
+        Signal signal = new Signal("sensor.temperature");
+
+        // 添加数据
+        Payload payload = signal.getPayload();
+        payload.setNumber("value", 25.5);
+        payload.setString("unit", "celsius");
+        payload.setString("location", "room_01");
+
+        // 发送
+        sdk.sendSignal(terminalId, signal);
+    }
+}
+```
+
+### 发送设备状态
+
+```java
+Signal signal = new Signal("device.status");
+Payload payload = signal.getPayload();
+payload.setString("status", "online");
+payload.setNumber("battery", 85);
+payload.setBoolean("charging", true);
+sdk.sendSignal("terminal-1", signal);
+```
+
+### 发送复杂数据
+
+```java
+Signal signal = new Signal("sensor.multi_data");
+Payload payload = signal.getPayload();
+
+// 数字数据
+payload.setNumber("temperature", 25.5);
+payload.setNumber("humidity", 60.0);
+payload.setNumber("pressure", 1013.25);
+
+// 字符串数据
+payload.setString("location", "lab_01");
+payload.setString("sensor_id", "TH-001");
+
+// 布尔数据
+payload.setBoolean("is_calibrated", true);
+payload.setBoolean("alarm", false);
+
+sdk.sendSignal("terminal-1", signal);
+```
+
+## 信号类型命名规范
+
+建议使用清晰的命名空间结构：
+
+```java
+// 传感器数据
+new Signal("sensor.temperature");
+new Signal("sensor.humidity");
+new Signal("sensor.pressure");
+
+// 设备状态
+new Signal("device.status");
+new Signal("device.error");
+new Signal("device.heartbeat");
+
+// 音频相关
+new Signal("audio.start");
+new Signal("audio.stop");
+new Signal("audio.chunk");
+
+// 控制指令响应
+new Signal("control.ack");
+new Signal("control.result");
+```
+
+## 最佳实践
+
+1. **清晰命名** - 使用有意义的信号类型名称
+2. **统一格式** - 在项目中保持命名格式一致
+3. **数据验证** - 发送前验证数据完整性
+4. **错误处理** - 捕获发送失败的异常
+
+## 示例：数据验证
+
+```java
+public class SignalValidator {
+    public static Signal createValidatedSignal(double temperature) throws Exception {
+        // 创建经过验证的温度信号
+        if (temperature < -50 || temperature > 150) {
+            throw new IllegalArgumentException("温度值超出范围: " + temperature);
+        }
+
+        Signal signal = new Signal("sensor.temperature");
+        Payload payload = signal.getPayload();
+        payload.setNumber("value", temperature);
+        payload.setString("unit", "celsius");
+
+        return signal;
+    }
+}
+
+// 使用
+try {
+    Signal signal = SignalValidator.createValidatedSignal(25.5);
+    sdk.sendSignal("terminal-1", signal);
+} catch (IllegalArgumentException e) {
+    System.err.println("数据验证失败: " + e.getMessage());
+}
+```
+
+## 相关 API
+
+- [Payload](/Streamind/sdk/java/api-reference/payload) - 载荷数据操作
+- [SDK.sendSignal()](/Streamind/sdk/java/api-reference/sdk-class#sendsignal) - 发送信号

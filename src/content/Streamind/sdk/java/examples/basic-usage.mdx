@@ -1,0 +1,356 @@
+# 基础使用
+
+最基本的 StreamInd Java SDK 使用示例，展示连接、发送信号和接收指令。
+
+## 完整示例
+
+```java
+import com.streamind.sdk.*;
+import com.streamind.sdk.callbacks.*;
+
+public class BasicUsageExample {
+    public static void main(String[] args) {
+        // 1. 创建配置
+        Config config = new Config.Builder()
+            .deviceId("device-001")
+            .deviceType("sensor")
+            .endpoint("wss://your-platform.com/signals")
+            .tenantId("your-tenant-id")
+            .productId("your-product-id")
+            .productKey("your-secret-key")
+            .build();
+
+        // 2. 创建 SDK 实例
+        SDK sdk = new SDK();
+
+        // 3. 注册终端
+        sdk.registerTerminal("terminal-1", config);
+
+        // 4. 设置指令回调
+        sdk.setDirectiveCallback("terminal-1", new DirectiveCallback() {
+            @Override
+            public void onDirective(Directive directive) {
+                System.out.println("\n收到指令: " + directive.getName());
+                Payload payload = directive.getPayload();
+
+                // 处理不同类型的指令
+                if ("device.control".equals(directive.getName())) {
+                    String action = payload.getString("action");
+                    System.out.println("执行动作: " + action);
+                }
+            }
+        });
+
+        // 5. 设置连接状态回调
+        sdk.setConnectionCallback("terminal-1", new ConnectionCallback() {
+            @Override
+            public void onConnectionChange(String status, String message) {
+                System.out.println("连接状态: " + status);
+                if (message != null && !message.isEmpty()) {
+                    System.out.println("消息: " + message);
+                }
+            }
+        });
+
+        try {
+            // 6. 连接到平台
+            System.out.println("正在连接...");
+            sdk.connect("terminal-1");
+            System.out.println("已连接到 StreamInd 平台");
+
+            // 7. 发送信号
+            Signal signal = new Signal("sensor.data");
+            Payload payload = signal.getPayload();
+            payload.setNumber("temperature", 25.5);
+            payload.setNumber("humidity", 60.0);
+            payload.setString("location", "lab_01");
+
+            sdk.sendSignal("terminal-1", signal);
+            System.out.println("信号已发送");
+
+            // 8. 保持连接一段时间
+            System.out.println("保持连接 60 秒...");
+            Thread.sleep(60000);
+
+            // 9. 断开连接
+            System.out.println("正在断开连接...");
+            sdk.disconnect("terminal-1");
+            System.out.println("已断开连接");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 使用 Lambda 表达式 (Java 8+)
+
+```java
+import com.streamind.sdk.*;
+
+public class BasicUsageLambda {
+    public static void main(String[] args) {
+        Config config = new Config.Builder()
+            .deviceId("device-001")
+            .deviceType("sensor")
+            .endpoint("wss://your-platform.com/signals")
+            .tenantId("your-tenant-id")
+            .productId("your-product-id")
+            .productKey("your-secret-key")
+            .build();
+
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        // 使用 Lambda 设置回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            System.out.println("\n收到指令: " + directive.getName());
+            if ("device.control".equals(directive.getName())) {
+                String action = directive.getPayload().getString("action");
+                System.out.println("执行动作: " + action);
+            }
+        });
+
+        sdk.setConnectionCallback("terminal-1", (status, message) -> {
+            System.out.println("连接状态: " + status);
+        });
+
+        try {
+            sdk.connect("terminal-1");
+            System.out.println("已连接到 StreamInd 平台");
+
+            Signal signal = new Signal("sensor.data");
+            signal.getPayload().setNumber("temperature", 25.5);
+            signal.getPayload().setNumber("humidity", 60.0);
+            sdk.sendSignal("terminal-1", signal);
+            System.out.println("信号已发送");
+
+            Thread.sleep(60000);
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 运行示例
+
+### Maven 项目
+
+```bash
+mvn compile exec:java -Dexec.mainClass="BasicUsageExample"
+```
+
+### Gradle 项目
+
+```bash
+gradle run
+```
+
+### 直接编译运行
+
+```bash
+javac -cp streamind-sdk-1.0.0.jar BasicUsageExample.java
+java -cp .:streamind-sdk-1.0.0.jar BasicUsageExample
+```
+
+## 预期输出
+
+```
+正在连接...
+连接状态: connected
+消息: Connection established
+已连接到 StreamInd 平台
+信号已发送
+保持连接 60 秒...
+
+收到指令: device.control
+执行动作: check_status
+
+正在断开连接...
+连接状态: disconnected
+消息: Connection closed
+已断开连接
+```
+
+## 代码说明
+
+### 配置创建
+
+```java
+Config config = new Config.Builder()
+    .deviceId("device-001")      // 设备唯一 ID
+    .deviceType("sensor")        // 设备类型
+    .endpoint("wss://...")       // WebSocket 端点
+    .tenantId("...")             // 租户 ID
+    .productId("...")            // 产品 ID
+    .productKey("...")           // 产品密钥
+    .build();
+```
+
+### 回调设置
+
+```java
+// 指令回调：接收平台下发的指令
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    System.out.println("收到指令: " + directive.getName());
+});
+
+// 连接状态回调：监控连接状态变化
+sdk.setConnectionCallback("terminal-1", (status, message) -> {
+    System.out.println("状态: " + status + ", 消息: " + message);
+});
+```
+
+### 发送信号
+
+```java
+Signal signal = new Signal("sensor.data");           // 创建信号
+Payload payload = signal.getPayload();               // 获取载荷
+payload.setNumber("temperature", 25.5);              // 添加数据
+sdk.sendSignal("terminal-1", signal);                // 发送
+```
+
+## 简化版本
+
+如果不需要回调，可以使用更简洁的版本：
+
+```java
+public class MinimalExample {
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        try {
+            // 连接
+            sdk.connect("terminal-1");
+
+            // 发送信号
+            Signal signal = new Signal("sensor.data");
+            signal.getPayload().setNumber("value", 25.5);
+            sdk.sendSignal("terminal-1", signal);
+
+            // 保持连接
+            Thread.sleep(60000);
+
+            // 断开
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 使用配置文件
+
+从 properties 文件加载配置：
+
+```java
+import java.io.FileInputStream;
+import java.util.Properties;
+
+public class ConfigFileExample {
+    public static void main(String[] args) {
+        try {
+            // 加载配置文件
+            Properties props = new Properties();
+            props.load(new FileInputStream("config.properties"));
+
+            Config config = new Config.Builder()
+                .deviceId(props.getProperty("device.id", "device-001"))
+                .deviceType(props.getProperty("device.type", "sensor"))
+                .endpoint(props.getProperty("streamind.endpoint"))
+                .tenantId(props.getProperty("streamind.tenant.id"))
+                .productId(props.getProperty("streamind.product.id"))
+                .productKey(props.getProperty("streamind.product.key"))
+                .build();
+
+            SDK sdk = new SDK();
+            sdk.registerTerminal("terminal-1", config);
+
+            sdk.connect("terminal-1");
+
+            // ... 发送信号等操作 ...
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+**创建 config.properties 文件**：
+
+```properties
+device.id=sensor-001
+device.type=temperature_sensor
+streamind.endpoint=wss://api.streamind.com/signals
+streamind.tenant.id=your-tenant-id
+streamind.product.id=your-product-id
+streamind.product.key=your-secret-key
+```
+
+## 定时发送数据
+
+使用 ScheduledExecutorService 定时发送传感器数据：
+
+```java
+import java.util.concurrent.*;
+
+public class PeriodicDataExample {
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        try {
+            sdk.connect("terminal-1");
+            System.out.println("已连接，开始定时发送数据...");
+
+            // 创建定时任务
+            ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+            AtomicInteger counter = new AtomicInteger(0);
+
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    int count = counter.getAndIncrement();
+                    Signal signal = new Signal("sensor.data");
+                    Payload payload = signal.getPayload();
+                    payload.setNumber("temperature", 20.0 + (count % 10));
+                    payload.setNumber("counter", count);
+
+                    sdk.sendSignal("terminal-1", signal);
+                    System.out.println("[" + count + "] 数据已发送");
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }, 0, 5, TimeUnit.SECONDS);  // 每5秒发送一次
+
+            // 运行1分钟后停止
+            Thread.sleep(60000);
+            scheduler.shutdown();
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 下一步
+
+- [音频流传输](/Streamind/sdk/java/examples/audio-streaming) - 发送音频数据
+- [多终端管理](/Streamind/sdk/java/examples/multi-terminal) - 管理多个设备连接
+- [错误处理](/Streamind/sdk/java/examples/error-handling) - 完善的错误处理

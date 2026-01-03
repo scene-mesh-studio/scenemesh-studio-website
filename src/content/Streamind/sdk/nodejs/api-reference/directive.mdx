@@ -1,0 +1,332 @@
+# Directive 指令
+
+Directive 类表示从 StreamInd 平台接收到的指令。平台通过指令向设备下发控制命令或请求。
+
+## 接收指令
+
+通过回调函数接收指令：
+
+```typescript
+function onDirective(directive: Directive) {
+    console.log(`收到指令: ${directive.name}`);
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+## 属性
+
+### name
+
+```typescript
+directive.name  // 只读
+```
+
+获取指令的名称。
+
+**类型**：`string`
+
+**示例**：
+```typescript
+function onDirective(directive: Directive) {
+    console.log(`指令名称: ${directive.name}`);
+    // 输出: 指令名称: device.control
+}
+```
+
+## 方法
+
+### getPayload
+
+```typescript
+const payload = directive.getPayload(): Payload
+```
+
+获取指令的载荷对象，用于读取指令参数。
+
+**返回**：
+- `Payload` - 载荷对象
+
+**示例**：
+```typescript
+function onDirective(directive: Directive) {
+    const payload = directive.getPayload();
+    const action = payload.getString("action");
+    const value = payload.getNumber("value");
+}
+```
+
+## 完整示例
+
+### 处理设备控制指令
+
+```typescript
+import { SDK, Config, Signal, Directive } from 'streamind-sdk';
+
+async function main() {
+    const sdk = new SDK();
+    const config = new Config({
+        // ... 配置参数
+    });
+
+    sdk.registerTerminal("terminal-1", config);
+
+    // 设置指令回调
+    function onDirective(directive: Directive) {
+        console.log(`\n收到指令: ${directive.name}`);
+
+        if (directive.name === "device.control") {
+            handleControl(directive);
+        } else if (directive.name === "device.query") {
+            handleQuery(directive);
+        } else {
+            console.log(`未知指令类型: ${directive.name}`);
+        }
+    }
+
+    function handleControl(directive: Directive) {
+        const payload = directive.getPayload();
+        const action = payload.getString("action");
+        const value = payload.getNumber("value");
+
+        console.log(`执行动作: ${action}, 参数: ${value}`);
+
+        // 执行控制逻辑
+        if (action === "set_temperature") {
+            setTemperature(value);
+        } else if (action === "set_power") {
+            setPower(value > 0);
+        }
+    }
+
+    function handleQuery(directive: Directive) {
+        const payload = directive.getPayload();
+        const queryType = payload.getString("type");
+
+        console.log(`查询类型: ${queryType}`);
+
+        // 响应查询
+        if (queryType === "status") {
+            sendStatusSignal(sdk);
+        }
+    }
+
+    sdk.setDirectiveCallback("terminal-1", onDirective);
+
+    await sdk.connect("terminal-1");
+
+    // 保持运行
+    await new Promise(resolve => setTimeout(resolve, 3600000));
+}
+
+main();
+```
+
+### 异步处理指令
+
+```typescript
+async function onDirective(directive: Directive) {
+    // 异步回调函数
+    console.log(`收到指令: ${directive.name}`);
+
+    const payload = directive.getPayload();
+    const action = payload.getString("action");
+
+    // 执行异步操作
+    if (action === "capture_image") {
+        await captureAndUploadImage();
+    } else if (action === "run_diagnosis") {
+        const result = await runDiagnosis();
+        await sendResult(result);
+    }
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+### 指令响应确认
+
+```typescript
+async function onDirective(directive: Directive) {
+    // 处理指令并发送确认
+    console.log(`收到指令: ${directive.name}`);
+
+    try {
+        // 执行指令
+        const payload = directive.getPayload();
+        const action = payload.getString("action");
+        await executeAction(action);
+
+        // 发送成功确认
+        const ackSignal = new Signal("directive.ack");
+        const ackPayload = ackSignal.getPayload();
+        ackPayload.setString("directive_name", directive.name);
+        ackPayload.setBoolean("success", true);
+        await sdk.sendSignal("terminal-1", ackSignal);
+
+    } catch (error) {
+        // 发送失败确认
+        const ackSignal = new Signal("directive.ack");
+        const ackPayload = ackSignal.getPayload();
+        ackPayload.setString("directive_name", directive.name);
+        ackPayload.setBoolean("success", false);
+        ackPayload.setString("error", error.message);
+        await sdk.sendSignal("terminal-1", ackSignal);
+    }
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+## 常见指令类型
+
+### 设备控制
+
+```typescript
+function onDirective(directive: Directive) {
+    if (directive.name === "device.control") {
+        const payload = directive.getPayload();
+        const command = payload.getString("command");
+
+        if (command === "power_on") {
+            device.powerOn();
+        } else if (command === "power_off") {
+            device.powerOff();
+        } else if (command === "restart") {
+            device.restart();
+        }
+    }
+}
+```
+
+### 参数配置
+
+```typescript
+function onDirective(directive: Directive) {
+    if (directive.name === "device.config") {
+        const payload = directive.getPayload();
+
+        // 读取配置参数
+        const interval = payload.getNumber("report_interval");
+        const threshold = payload.getNumber("threshold");
+        const enabled = payload.getBoolean("enabled");
+
+        // 更新设备配置
+        device.updateConfig({
+            reportInterval: interval,
+            threshold: threshold,
+            enabled: enabled
+        });
+    }
+}
+```
+
+### 数据查询
+
+```typescript
+async function onDirective(directive: Directive) {
+    if (directive.name === "device.query") {
+        const payload = directive.getPayload();
+        const queryType = payload.getString("type");
+
+        // 根据查询类型返回数据
+        if (queryType === "status") {
+            const statusSignal = new Signal("device.status");
+            statusSignal.getPayload().setString("state", "running");
+            await sdk.sendSignal("terminal-1", statusSignal);
+
+        } else if (queryType === "metrics") {
+            const metricsSignal = new Signal("device.metrics");
+            metricsSignal.getPayload().setNumber("cpu", 45.2);
+            metricsSignal.getPayload().setNumber("memory", 68.5);
+            await sdk.sendSignal("terminal-1", metricsSignal);
+        }
+    }
+}
+```
+
+## 指令路由
+
+使用对象实现指令路由：
+
+```typescript
+// 定义指令处理器
+async function handleControl(directive: Directive) {
+    const payload = directive.getPayload();
+    // 处理控制指令...
+}
+
+async function handleConfig(directive: Directive) {
+    const payload = directive.getPayload();
+    // 处理配置指令...
+}
+
+async function handleQuery(directive: Directive) {
+    const payload = directive.getPayload();
+    // 处理查询指令...
+}
+
+// 指令路由表
+const DIRECTIVE_HANDLERS: { [key: string]: (d: Directive) => Promise<void> } = {
+    "device.control": handleControl,
+    "device.config": handleConfig,
+    "device.query": handleQuery
+};
+
+// 统一回调
+async function onDirective(directive: Directive) {
+    const handler = DIRECTIVE_HANDLERS[directive.name];
+
+    if (handler) {
+        await handler(directive);
+    } else {
+        console.log(`未知指令: ${directive.name}`);
+    }
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+## 错误处理
+
+```typescript
+async function onDirective(directive: Directive) {
+    try {
+        console.log(`处理指令: ${directive.name}`);
+
+        const payload = directive.getPayload();
+
+        // 参数验证
+        if (!payload.hasKey("action")) {
+            throw new Error("缺少 action 参数");
+        }
+
+        const action = payload.getString("action");
+
+        // 执行操作
+        await executeAction(action);
+
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error(`参数错误: ${error.message}`);
+        } else {
+            console.error(`处理指令失败: ${error}`);
+        }
+    }
+}
+
+sdk.setDirectiveCallback("terminal-1", onDirective);
+```
+
+## 最佳实践
+
+1. **非阻塞处理** - 使用异步回调避免阻塞
+2. **错误处理** - 捕获异常防止程序崩溃
+3. **确认机制** - 发送确认信号告知平台执行结果
+4. **参数验证** - 验证指令参数完整性和有效性
+5. **日志记录** - 记录接收和处理的指令
+
+## 相关 API
+
+- [Payload](/Streamind/sdk/nodejs/api-reference/payload) - 载荷数据操作
+- [SDK.setDirectiveCallback()](/Streamind/sdk/nodejs/api-reference/sdk-class#setdirectivecallback) - 设置指令回调

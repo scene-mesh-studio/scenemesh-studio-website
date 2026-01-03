@@ -1,0 +1,92 @@
+# Python SDK 概览
+
+StreamInd Python SDK 是基于 asyncio 的高性能异步 SDK，用于连接 StreamInd 平台。
+
+## 特性
+
+- ⚡️ **异步架构** - 基于 asyncio，支持高并发
+- 🔐 **二进制封装** - 核心代码编译为 .so/.pyd 文件
+- 🎯 **多终端管理** - 同时管理多个设备连接
+- 🎤 **音频支持** - OPUS 格式音频流传输
+- 🔄 **自动重连** - 网络异常自动恢复
+- 📊 **类型友好** - 清晰的 API 设计
+
+## 系统要求
+
+- **Python 版本**：3.8, 3.9, 3.10, 3.11, 3.12
+- **操作系统**：Linux, macOS, Windows
+- **依赖**：asyncio（Python 标准库）
+
+## 安装
+
+### 1. 下载 Wheel 包
+
+访问 [GitHub Releases](https://github.com/scenemesh-dev/streamind-sdk-python/releases) 下载对应系统和 Python 版本的 wheel 包：
+
+```
+streamind_sdk-1.0.0-cp38-cp38-linux_x86_64.whl       # Linux Python 3.8
+streamind_sdk-1.0.0-cp39-cp39-macosx_11_0_arm64.whl  # macOS Python 3.9
+streamind_sdk-1.0.0-cp310-cp310-win_amd64.whl        # Windows Python 3.10
+...
+```
+
+### 2. 安装
+
+```bash
+pip install streamind_sdk-1.0.0-*.whl
+```
+
+### 3. 验证安装
+
+```python
+import streamind_sdk
+print(streamind_sdk.__version__)  # 输出：1.0.0
+```
+
+## 快速示例
+
+```python
+import asyncio
+from streamind_sdk import SDK, Config, Signal
+
+async def main():
+    # 创建配置
+    config = Config(
+        device_id="device-001",
+        device_type="sensor",
+        endpoint="wss://your-platform.com/signals",
+        tenant_id="your-tenant-id",
+        product_id="your-product-id",
+        product_key="your-secret-key"
+    )
+
+    # 创建SDK
+    sdk = SDK()
+    sdk.register_terminal("terminal-1", config)
+
+    # 设置回调
+    def on_directive(directive):
+        print(f"收到指令: {directive.name}")
+
+    sdk.set_directive_callback("terminal-1", on_directive)
+
+    # 连接并发送信号
+    await sdk.connect("terminal-1")
+
+    signal = Signal("sensor.data")
+    signal.get_payload().set_number("temperature", 25.5)
+    await sdk.send_signal("terminal-1", signal)
+
+asyncio.run(main())
+```
+
+## 下一步
+
+- [快速开始](/Streamind/sdk/python/quick-start) - 5分钟完成第一个应用
+- [API 参考](/Streamind/sdk/python/api-reference) - 完整的 API 文档
+- [示例代码](/Streamind/sdk/python/examples) - 常见场景示例
+
+## 获取帮助
+
+- GitHub Issues: [streamind-sdk-python/issues](https://github.com/scenemesh-dev/streamind-sdk-python/issues)
+- 文档问题或建议：请提交 Issue

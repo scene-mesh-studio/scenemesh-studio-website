@@ -1,0 +1,320 @@
+# 基础使用
+
+最基本的 StreamInd Node.js SDK 使用示例，展示连接、发送信号和接收指令。
+
+## 完整示例
+
+```typescript
+import { SDK, Config, Signal } from 'streamind-sdk';
+
+async function main() {
+    // 1. 创建配置
+    const config = new Config({
+        deviceId: "device-001",
+        deviceType: "sensor",
+        endpoint: "wss://your-platform.com/signals",
+        tenantId: "your-tenant-id",
+        productId: "your-product-id",
+        productKey: "your-secret-key"
+    });
+
+    // 2. 创建 SDK 实例
+    const sdk = new SDK();
+
+    // 3. 注册终端
+    sdk.registerTerminal("terminal-1", config);
+
+    // 4. 设置指令回调
+    function onDirective(directive) {
+        console.log(`\n收到指令: ${directive.name}`);
+        const payload = directive.getPayload();
+
+        // 处理不同类型的指令
+        if (directive.name === "device.control") {
+            const action = payload.getString("action");
+            console.log(`执行动作: ${action}`);
+        }
+    }
+
+    // 5. 设置连接状态回调
+    function onConnection(status, message) {
+        console.log(`连接状态: ${status}`);
+        if (message) {
+            console.log(`消息: ${message}`);
+        }
+    }
+
+    sdk.setDirectiveCallback("terminal-1", onDirective);
+    sdk.setConnectionCallback("terminal-1", onConnection);
+
+    // 6. 连接到平台
+    console.log("正在连接...");
+    await sdk.connect("terminal-1");
+    console.log("已连接到 StreamInd 平台");
+
+    // 7. 发送信号
+    const signal = new Signal("sensor.data");
+    const payload = signal.getPayload();
+    payload.setNumber("temperature", 25.5);
+    payload.setNumber("humidity", 60.0);
+    payload.setString("location", "lab_01");
+
+    await sdk.sendSignal("terminal-1", signal);
+    console.log("信号已发送");
+
+    // 8. 保持连接一段时间
+    console.log("保持连接 60 秒...");
+    await new Promise(resolve => setTimeout(resolve, 60000));
+
+    // 9. 断开连接
+    console.log("正在断开连接...");
+    await sdk.disconnect("terminal-1");
+    console.log("已断开连接");
+}
+
+// 运行程序
+main().catch(console.error);
+```
+
+## 运行示例
+
+### TypeScript
+
+1. 保存代码为 `basic_usage.ts`
+2. 替换配置信息（tenantId, productId, productKey）
+3. 运行：
+
+```bash
+ts-node basic_usage.ts
+```
+
+### JavaScript
+
+```javascript
+const { SDK, Config, Signal } = require('streamind-sdk');
+
+async function main() {
+    const config = new Config({
+        deviceId: "device-001",
+        deviceType: "sensor",
+        endpoint: "wss://your-platform.com/signals",
+        tenantId: "your-tenant-id",
+        productId: "your-product-id",
+        productKey: "your-secret-key"
+    });
+
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    // ... 其他代码相同
+}
+
+main().catch(console.error);
+```
+
+运行：
+```bash
+node basic_usage.js
+```
+
+## 预期输出
+
+```
+正在连接...
+连接状态: connected
+消息: Connection established
+已连接到 StreamInd 平台
+信号已发送
+保持连接 60 秒...
+
+收到指令: device.control
+执行动作: check_status
+
+正在断开连接...
+连接状态: disconnected
+消息: Connection closed
+已断开连接
+```
+
+## 代码说明
+
+### 配置创建
+
+```typescript
+const config = new Config({
+    deviceId: "device-001",      // 设备唯一 ID
+    deviceType: "sensor",        // 设备类型
+    endpoint: "wss://...",       // WebSocket 端点
+    tenantId: "...",             // 租户 ID
+    productId: "...",            // 产品 ID
+    productKey: "..."            // 产品密钥
+});
+```
+
+### 回调设置
+
+```typescript
+// 指令回调：接收平台下发的指令
+function onDirective(directive) {
+    console.log(`收到指令: ${directive.name}`);
+}
+
+// 连接状态回调：监控连接状态变化
+function onConnection(status, message) {
+    console.log(`状态: ${status}, 消息: ${message}`);
+}
+```
+
+### 发送信号
+
+```typescript
+const signal = new Signal("sensor.data");           // 创建信号
+const payload = signal.getPayload();                // 获取载荷
+payload.setNumber("temperature", 25.5);             // 添加数据
+await sdk.sendSignal("terminal-1", signal);         // 发送
+```
+
+## 简化版本
+
+如果不需要回调，可以使用更简洁的版本：
+
+```typescript
+import { SDK, Config, Signal } from 'streamind-sdk';
+
+async function main() {
+    // 配置和注册
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    // 连接
+    await sdk.connect("terminal-1");
+
+    // 发送信号
+    const signal = new Signal("sensor.data");
+    signal.getPayload().setNumber("value", 25.5);
+    await sdk.sendSignal("terminal-1", signal);
+
+    // 保持连接
+    await new Promise(resolve => setTimeout(resolve, 60000));
+
+    // 断开
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 使用环境变量
+
+安全管理认证信息：
+
+```typescript
+import { SDK, Config, Signal } from 'streamind-sdk';
+import * as dotenv from 'dotenv';
+
+// 加载 .env 文件
+dotenv.config();
+
+async function main() {
+    const config = new Config({
+        deviceId: process.env.DEVICE_ID || "device-001",
+        deviceType: process.env.DEVICE_TYPE || "sensor",
+        endpoint: process.env.STREAMIND_ENDPOINT || "",
+        tenantId: process.env.STREAMIND_TENANT_ID || "",
+        productId: process.env.STREAMIND_PRODUCT_ID || "",
+        productKey: process.env.STREAMIND_PRODUCT_KEY || ""
+    });
+
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    await sdk.connect("terminal-1");
+
+    // ... 发送信号等操作 ...
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+**创建 .env 文件**：
+
+```bash
+DEVICE_ID=sensor-001
+DEVICE_TYPE=temperature_sensor
+STREAMIND_ENDPOINT=wss://api.streamind.com/signals
+STREAMIND_TENANT_ID=your-tenant-id
+STREAMIND_PRODUCT_ID=your-product-id
+STREAMIND_PRODUCT_KEY=your-secret-key
+```
+
+**安装 dotenv**：
+```bash
+npm install dotenv
+```
+
+## 定时发送数据
+
+每隔一段时间发送传感器数据：
+
+```typescript
+import { SDK, Config, Signal } from 'streamind-sdk';
+
+async function sendPeriodicData(sdk: SDK, terminalId: string, interval: number = 10000) {
+    // 定时发送传感器数据
+    let counter = 0;
+
+    const intervalId = setInterval(async () => {
+        // 创建信号
+        const signal = new Signal("sensor.data");
+        const payload = signal.getPayload();
+        payload.setNumber("temperature", 20.0 + (counter % 10));
+        payload.setNumber("counter", counter);
+
+        // 发送
+        try {
+            await sdk.sendSignal(terminalId, signal);
+            console.log(`[${counter}] 数据已发送`);
+        } catch (error) {
+            console.error(`发送失败: ${error}`);
+        }
+
+        counter++;
+    }, interval);
+
+    // 返回清理函数
+    return () => clearInterval(intervalId);
+}
+
+async function main() {
+    const config = new Config({
+        // ... 配置参数
+    });
+    const sdk = new SDK();
+    sdk.registerTerminal("terminal-1", config);
+
+    await sdk.connect("terminal-1");
+    console.log("已连接，开始定时发送数据...");
+
+    // 定时发送数据
+    const cleanup = await sendPeriodicData(sdk, "terminal-1", 5000);
+
+    // 运行一段时间后停止
+    await new Promise(resolve => setTimeout(resolve, 60000));
+    cleanup();
+
+    await sdk.disconnect("terminal-1");
+}
+
+main().catch(console.error);
+```
+
+## 下一步
+
+- [音频流传输](/Streamind/sdk/nodejs/examples/audio-streaming) - 发送音频数据
+- [多终端管理](/Streamind/sdk/nodejs/examples/multi-terminal) - 管理多个设备连接
+- [错误处理](/Streamind/sdk/nodejs/examples/error-handling) - 完善的错误处理

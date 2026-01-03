@@ -1,9 +1,9 @@
 const meta = {
-  index: "概览",
-  "quick-start": "快速开始",
-  "core-concepts": "核心概念",
-  "api-reference": "API 参考",
-  "examples": "示例代码"
+  index: "SDK 选择指南",
+  cpp: "C++ SDK",
+  python: "Python SDK",
+  nodejs: "Node.js SDK",
+  java: "Java SDK"
 }
 
 export default meta

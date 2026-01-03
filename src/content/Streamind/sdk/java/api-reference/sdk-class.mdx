@@ -1,0 +1,328 @@
+# SDK 类
+
+SDK 类是 StreamInd Java SDK 的核心入口，用于管理终端连接、发送信号和处理指令。
+
+## 导入
+
+```java
+import com.streamind.sdk.SDK;
+```
+
+## 构造函数
+
+```java
+SDK sdk = new SDK();
+```
+
+创建一个新的 SDK 实例。不需要传入任何参数。
+
+## 方法
+
+### registerTerminal
+
+```java
+public void registerTerminal(String terminalId, Config config)
+```
+
+注册一个新的终端。
+
+**参数**：
+- `terminalId` (String) - 终端的唯一标识符
+- `config` (Config) - 终端的配置对象
+
+**示例**：
+```java
+Config config = new Config.Builder()...build();
+sdk.registerTerminal("terminal-1", config);
+```
+
+---
+
+### connect
+
+```java
+public void connect(String terminalId) throws ConnectionException
+```
+
+连接指定的终端到 StreamInd 平台。
+
+**参数**：
+- `terminalId` (String) - 要连接的终端ID
+
+**异常**：
+- `ConnectionException` - 连接失败时抛出
+
+**示例**：
+```java
+try {
+    sdk.connect("terminal-1");
+    System.out.println("连接成功");
+} catch (ConnectionException e) {
+    System.err.println("连接失败: " + e.getMessage());
+}
+```
+
+---
+
+### connectAll
+
+```java
+public Map<String, Boolean> connectAll()
+```
+
+连接所有已注册的终端。
+
+**返回**：
+- `Map<String, Boolean>` - 字典，键为终端ID，值为连接是否成功
+
+**示例**：
+```java
+Map<String, Boolean> results = sdk.connectAll();
+for (Map.Entry<String, Boolean> entry : results.entrySet()) {
+    String status = entry.getValue() ? "成功" : "失败";
+    System.out.println(entry.getKey() + ": " + status);
+}
+```
+
+---
+
+### disconnect
+
+```java
+public void disconnect(String terminalId) throws Exception
+```
+
+断开指定终端的连接。
+
+**参数**：
+- `terminalId` (String) - 要断开的终端ID
+
+**示例**：
+```java
+sdk.disconnect("terminal-1");
+```
+
+---
+
+### disconnectAll
+
+```java
+public void disconnectAll()
+```
+
+断开所有终端的连接。
+
+**示例**：
+```java
+sdk.disconnectAll();
+```
+
+---
+
+### sendSignal
+
+```java
+public void sendSignal(String terminalId, Signal signal) throws SendException
+```
+
+向指定终端发送信号。
+
+**参数**：
+- `terminalId` (String) - 目标终端ID
+- `signal` (Signal) - 要发送的信号对象
+
+**异常**：
+- `SendException` - 发送失败时抛出
+
+**示例**：
+```java
+Signal signal = new Signal("sensor.data");
+signal.getPayload().setNumber("temperature", 25.5);
+sdk.sendSignal("terminal-1", signal);
+```
+
+---
+
+### sendAudioData
+
+```java
+public void sendAudioData(String terminalId, byte[] audioData) throws SendException
+```
+
+向指定终端发送 OPUS 格式的音频数据。
+
+**参数**：
+- `terminalId` (String) - 目标终端ID
+- `audioData` (byte[]) - OPUS 格式的音频二进制数据
+
+**异常**：
+- `SendException` - 发送失败时抛出
+
+**示例**：
+```java
+byte[] audioData = Files.readAllBytes(Paths.get("audio.opus"));
+sdk.sendAudioData("terminal-1", audioData);
+```
+
+---
+
+### setDirectiveCallback
+
+```java
+public void setDirectiveCallback(String terminalId, DirectiveCallback callback)
+```
+
+设置接收指令的回调函数。
+
+**参数**：
+- `terminalId` (String) - 终端ID
+- `callback` (DirectiveCallback) - 回调接口实现
+
+**回调接口**：
+```java
+public interface DirectiveCallback {
+    void onDirective(Directive directive);
+}
+```
+
+**示例**：
+```java
+sdk.setDirectiveCallback("terminal-1", new DirectiveCallback() {
+    @Override
+    public void onDirective(Directive directive) {
+        System.out.println("收到指令: " + directive.getName());
+        Payload payload = directive.getPayload();
+        // 处理指令...
+    }
+});
+
+// 使用 Lambda (Java 8+)
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    System.out.println("收到指令: " + directive.getName());
+});
+```
+
+---
+
+### setConnectionCallback
+
+```java
+public void setConnectionCallback(String terminalId, ConnectionCallback callback)
+```
+
+设置连接状态变化的回调函数。
+
+**参数**：
+- `terminalId` (String) - 终端ID
+- `callback` (ConnectionCallback) - 回调接口实现
+
+**回调接口**：
+```java
+public interface ConnectionCallback {
+    void onConnectionChange(String status, String message);
+}
+```
+
+**状态值**：
+- `"connected"` - 已连接
+- `"disconnected"` - 已断开
+- `"reconnecting"` - 重连中
+- `"error"` - 错误
+
+**示例**：
+```java
+sdk.setConnectionCallback("terminal-1", new ConnectionCallback() {
+    @Override
+    public void onConnectionChange(String status, String message) {
+        if ("connected".equals(status)) {
+            System.out.println("连接成功");
+        } else if ("disconnected".equals(status)) {
+            System.out.println("连接断开: " + message);
+        } else if ("reconnecting".equals(status)) {
+            System.out.println("正在重连: " + message);
+        } else if ("error".equals(status)) {
+            System.out.println("连接错误: " + message);
+        }
+    }
+});
+
+// 使用 Lambda (Java 8+)
+sdk.setConnectionCallback("terminal-1", (status, message) -> {
+    System.out.println("状态: " + status + ", 消息: " + message);
+});
+```
+
+---
+
+## 完整示例
+
+```java
+import com.streamind.sdk.*;
+import com.streamind.sdk.callbacks.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class SDKExample {
+    public static void main(String[] args) {
+        // 创建SDK
+        SDK sdk = new SDK();
+
+        // 创建配置
+        Config config = new Config.Builder()
+            .deviceId("device-001")
+            .deviceType("sensor")
+            .endpoint("wss://your-platform.com/signals")
+            .tenantId("your-tenant-id")
+            .productId("your-product-id")
+            .productKey("your-secret-key")
+            .build();
+
+        // 注册终端
+        sdk.registerTerminal("terminal-1", config);
+
+        // 设置回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            System.out.println("指令: " + directive.getName());
+        });
+
+        sdk.setConnectionCallback("terminal-1", (status, message) -> {
+            System.out.println("状态: " + status + ", " + message);
+        });
+
+        try {
+            // 连接
+            sdk.connect("terminal-1");
+
+            // 发送信号
+            Signal signal = new Signal("sensor.data");
+            signal.getPayload().setNumber("value", 25.5);
+            sdk.sendSignal("terminal-1", signal);
+
+            // 发送音频
+            byte[] audioData = Files.readAllBytes(Paths.get("audio.opus"));
+            sdk.sendAudioData("terminal-1", audioData);
+
+            // 保持连接
+            Thread.sleep(60000);
+
+            // 断开连接
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 线程安全
+
+SDK 类不是线程安全的。如果需要在多线程环境中使用，请为每个线程创建独立的 SDK 实例，或使用适当的同步机制。
+
+## 最佳实践
+
+1. **单一 SDK 实例** - 在应用中使用单个 SDK 实例管理所有终端
+2. **错误处理** - 始终使用 try-catch 包裹连接和发送操作
+3. **优雅关闭** - 应用退出前调用 `disconnectAll()`
+4. **回调轻量** - 回调函数中避免阻塞操作
+5. **资源管理** - 确保正确释放资源

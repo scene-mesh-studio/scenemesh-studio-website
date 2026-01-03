@@ -1,0 +1,150 @@
+# Java SDK 概览
+
+StreamInd Java SDK 是基于 Java 11+ 的高性能 SDK，用于连接 StreamInd 平台。
+
+## 特性
+
+- ⚡️ **CompletableFuture 异步** - 现代 Java 异步编程模式
+- 🎯 **多终端管理** - 同时管理多个设备连接
+- 🎤 **音频支持** - OPUS 格式音频流传输
+- 🔄 **自动重连** - 网络异常自动恢复
+- 📦 **依赖打包** - Maven Shade Plugin 打包所有依赖
+- 🔐 **线程安全** - 核心类线程安全设计
+- 🤖 **Android 兼容** - 支持 Android 平台
+
+## 系统要求
+
+- **Java 版本**：JDK 11 或更高
+- **构建工具**：Maven 3.6+ 或 Gradle 7.0+
+- **操作系统**：Linux, macOS, Windows, Android
+
+## 安装
+
+### 方法 A：Maven
+
+#### 1. 下载 JAR 包
+
+访问 [GitHub Releases](https://github.com/scenemesh-dev/streamind-sdk-java/releases) 下载 `streamind-sdk-1.0.0.jar` 文件。
+
+#### 2. 安装到本地仓库
+
+```bash
+mvn install:install-file \
+  -Dfile=streamind-sdk-1.0.0.jar \
+  -DgroupId=com.streamind \
+  -DartifactId=streamind-sdk \
+  -Dversion=1.0.0 \
+  -Dpackaging=jar
+```
+
+#### 3. 添加依赖
+
+在 `pom.xml` 中添加：
+
+```xml
+<dependency>
+    <groupId>com.streamind</groupId>
+    <artifactId>streamind-sdk</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+### 方法 B：直接引用 JAR
+
+#### 1. 创建 libs 目录
+
+```bash
+mkdir -p libs
+cp streamind-sdk-1.0.0.jar libs/
+```
+
+#### 2. 配置 Maven
+
+在 `pom.xml` 中添加：
+
+```xml
+<dependency>
+    <groupId>com.streamind</groupId>
+    <artifactId>streamind-sdk</artifactId>
+    <version>1.0.0</version>
+    <scope>system</scope>
+    <systemPath>${project.basedir}/libs/streamind-sdk-1.0.0.jar</systemPath>
+</dependency>
+```
+
+### 方法 C：Gradle
+
+#### 1. 放置 JAR 文件
+
+```bash
+mkdir -p libs
+cp streamind-sdk-1.0.0.jar libs/
+```
+
+#### 2. 配置 Gradle
+
+在 `build.gradle` 中添加：
+
+```gradle
+dependencies {
+    implementation files('libs/streamind-sdk-1.0.0.jar')
+}
+```
+
+## 快速示例
+
+```java
+import com.streamind.sdk.SDK;
+import com.streamind.sdk.Config;
+import com.streamind.sdk.Signal;
+
+public class Main {
+    public static void main(String[] args) {
+        // 创建配置
+        Config config = new Config(
+            "device-001",                        // deviceId
+            "sensor",                            // deviceType
+            "wss://your-platform.com/signals",  // endpoint
+            "your-tenant-id",                    // tenantId
+            "your-product-id",                   // productId
+            "your-secret-key"                    // productKey
+        );
+
+        // 创建SDK并注册终端
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        // 设置回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            System.out.println("收到指令: " + directive.getName());
+        });
+
+        // 连接
+        sdk.connect("terminal-1").thenAccept(v -> {
+            System.out.println("已连接");
+
+            // 发送信号
+            Signal signal = new Signal("sensor.data");
+            signal.getPayload().setNumber("value", 25.5);
+
+            sdk.sendSignal("terminal-1", signal).thenAccept(vv -> {
+                System.out.println("信号已发送");
+            });
+        }).exceptionally(e -> {
+            System.err.println("连接失败: " + e.getMessage());
+            return null;
+        });
+    }
+}
+```
+
+## 下一步
+
+- [快速开始](/Streamind/sdk/java/quick-start) - 5分钟完成第一个应用
+- [API 参考](/Streamind/sdk/java/api-reference) - 完整的 API 文档
+- [示例代码](/Streamind/sdk/java/examples) - 常见场景示例
+
+## 获取帮助
+
+- GitHub Issues: [streamind-sdk-java/issues](https://github.com/scenemesh-dev/streamind-sdk-java/issues)
+- 文档问题或建议：请提交 Issue

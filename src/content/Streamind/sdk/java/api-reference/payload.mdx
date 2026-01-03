@@ -1,0 +1,381 @@
+# Payload 载荷
+
+Payload 类用于管理 Signal 和 Directive 中携带的数据。它提供了读写不同类型数据的方法。
+
+## 获取 Payload 对象
+
+Payload 不能直接实例化，通过 Signal 或 Directive 的 `getPayload()` 方法获取：
+
+```java
+// 从 Signal 获取
+Signal signal = new Signal("sensor.data");
+Payload payload = signal.getPayload();
+
+// 从 Directive 获取
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    Payload payload = directive.getPayload();
+});
+```
+
+## 写入方法
+
+### setNumber
+
+```java
+public void setNumber(String key, double value)
+```
+
+设置数字类型的值（整数或浮点数）。
+
+**参数**：
+- `key` (String) - 键名
+- `value` (double) - 数值
+
+**示例**：
+```java
+payload.setNumber("temperature", 25.5);
+payload.setNumber("count", 100);
+payload.setNumber("percentage", 95.8);
+```
+
+---
+
+### setString
+
+```java
+public void setString(String key, String value)
+```
+
+设置字符串类型的值。
+
+**参数**：
+- `key` (String) - 键名
+- `value` (String) - 字符串值
+
+**示例**：
+```java
+payload.setString("status", "active");
+payload.setString("message", "Hello, StreamInd");
+payload.setString("device_id", "sensor-001");
+```
+
+---
+
+### setBoolean
+
+```java
+public void setBoolean(String key, boolean value)
+```
+
+设置布尔类型的值。
+
+**参数**：
+- `key` (String) - 键名
+- `value` (boolean) - 布尔值
+
+**示例**：
+```java
+payload.setBoolean("enabled", true);
+payload.setBoolean("alarm", false);
+payload.setBoolean("is_online", true);
+```
+
+---
+
+## 读取方法
+
+### getNumber
+
+```java
+public double getNumber(String key)
+```
+
+获取数字类型的值。
+
+**参数**：
+- `key` (String) - 键名
+
+**返回**：
+- `double` - 数值
+
+**异常**：
+- 如果键不存在或类型不匹配，可能抛出异常
+
+**示例**：
+```java
+double temperature = payload.getNumber("temperature");
+int count = (int) payload.getNumber("count");  // 转换为整数
+```
+
+---
+
+### getString
+
+```java
+public String getString(String key)
+```
+
+获取字符串类型的值。
+
+**参数**：
+- `key` (String) - 键名
+
+**返回**：
+- `String` - 字符串值
+
+**示例**：
+```java
+String status = payload.getString("status");
+String message = payload.getString("message");
+```
+
+---
+
+### getBoolean
+
+```java
+public boolean getBoolean(String key)
+```
+
+获取布尔类型的值。
+
+**参数**：
+- `key` (String) - 键名
+
+**返回**：
+- `boolean` - 布尔值
+
+**示例**：
+```java
+boolean enabled = payload.getBoolean("enabled");
+boolean isOnline = payload.getBoolean("is_online");
+```
+
+---
+
+### hasKey
+
+```java
+public boolean hasKey(String key)
+```
+
+检查指定的键是否存在。
+
+**参数**：
+- `key` (String) - 键名
+
+**返回**：
+- `boolean` - 如果键存在返回 true，否则返回 false
+
+**示例**：
+```java
+if (payload.hasKey("temperature")) {
+    double temp = payload.getNumber("temperature");
+} else {
+    System.out.println("温度数据不存在");
+}
+```
+
+---
+
+## 完整示例
+
+### 写入数据到 Signal
+
+```java
+import com.streamind.sdk.Signal;
+import com.streamind.sdk.Payload;
+
+// 创建信号
+Signal signal = new Signal("sensor.multi_data");
+Payload payload = signal.getPayload();
+
+// 写入不同类型的数据
+payload.setNumber("temperature", 25.5);
+payload.setNumber("humidity", 60.0);
+payload.setString("location", "room_01");
+payload.setString("sensor_id", "TH-001");
+payload.setBoolean("is_calibrated", true);
+payload.setBoolean("alarm", false);
+
+// 发送信号
+sdk.sendSignal("terminal-1", signal);
+```
+
+### 读取 Directive 数据
+
+```java
+sdk.setDirectiveCallback("terminal-1", directive -> {
+    Payload payload = directive.getPayload();
+
+    // 安全读取数据
+    if (payload.hasKey("action")) {
+        String action = payload.getString("action");
+        System.out.println("动作: " + action);
+    }
+
+    if (payload.hasKey("value")) {
+        double value = payload.getNumber("value");
+        System.out.println("值: " + value);
+    }
+
+    if (payload.hasKey("enabled")) {
+        boolean enabled = payload.getBoolean("enabled");
+        System.out.println("启用: " + enabled);
+    }
+});
+```
+
+### 数据验证
+
+```java
+public class SensorData {
+    private double temperature;
+    private double humidity;
+    private String location;
+
+    public static SensorData fromPayload(Payload payload) throws Exception {
+        // 检查必需字段
+        String[] requiredKeys = {"temperature", "humidity", "location"};
+        for (String key : requiredKeys) {
+            if (!payload.hasKey(key)) {
+                throw new IllegalArgumentException("缺少必需字段: " + key);
+            }
+        }
+
+        // 读取数据
+        double temperature = payload.getNumber("temperature");
+        double humidity = payload.getNumber("humidity");
+        String location = payload.getString("location");
+
+        // 数据范围验证
+        if (temperature < -50 || temperature > 150) {
+            throw new IllegalArgumentException("温度超出范围: " + temperature);
+        }
+
+        if (humidity < 0 || humidity > 100) {
+            throw new IllegalArgumentException("湿度超出范围: " + humidity);
+        }
+
+        SensorData data = new SensorData();
+        data.temperature = temperature;
+        data.humidity = humidity;
+        data.location = location;
+        return data;
+    }
+
+    public void toPayload(Payload payload) {
+        payload.setNumber("temperature", this.temperature);
+        payload.setNumber("humidity", this.humidity);
+        payload.setString("location", this.location);
+    }
+}
+
+// 使用
+try {
+    SensorData data = SensorData.fromPayload(payload);
+    System.out.println("有效数据: " + data);
+} catch (Exception e) {
+    System.err.println("数据验证失败: " + e.getMessage());
+}
+```
+
+## 数据类型对应
+
+Java 类型与 Payload 方法的对应关系：
+
+| Java 类型 | Payload 方法 | 示例 |
+|----------|-------------|------|
+| `double`, `int`, `long`, `float` | `setNumber()` / `getNumber()` | `25`, `3.14` |
+| `String` | `setString()` / `getString()` | `"hello"` |
+| `boolean` | `setBoolean()` / `getBoolean()` | `true`, `false` |
+
+## 常见使用模式
+
+### 传感器数据
+
+```java
+Payload payload = signal.getPayload();
+payload.setNumber("temperature", 25.5);
+payload.setNumber("humidity", 60.0);
+payload.setNumber("pressure", 1013.25);
+payload.setString("unit", "metric");
+payload.setBoolean("calibrated", true);
+```
+
+### 设备状态
+
+```java
+Payload payload = signal.getPayload();
+payload.setString("status", "online");
+payload.setNumber("battery_level", 85);
+payload.setBoolean("charging", true);
+payload.setString("firmware_version", "1.2.3");
+payload.setNumber("uptime_seconds", 86400);
+```
+
+### 控制指令
+
+```java
+// 读取控制指令
+Payload payload = directive.getPayload();
+String action = payload.getString("action");      // "set_power"
+boolean value = payload.getBoolean("value");      // true
+double priority = payload.getNumber("priority");  // 5
+```
+
+## 错误处理
+
+```java
+public class PayloadHelper {
+    public static double safeGetNumber(Payload payload, String key, double defaultValue) {
+        // 安全获取数字，失败时返回默认值
+        try {
+            if (payload.hasKey(key)) {
+                return payload.getNumber(key);
+            }
+            return defaultValue;
+        } catch (Exception e) {
+            System.err.println("读取 " + key + " 失败: " + e.getMessage());
+            return defaultValue;
+        }
+    }
+
+    public static String safeGetString(Payload payload, String key, String defaultValue) {
+        // 安全获取字符串，失败时返回默认值
+        try {
+            if (payload.hasKey(key)) {
+                return payload.getString(key);
+            }
+            return defaultValue;
+        } catch (Exception e) {
+            System.err.println("读取 " + key + " 失败: " + e.getMessage());
+            return defaultValue;
+        }
+    }
+}
+
+// 使用
+double temperature = PayloadHelper.safeGetNumber(payload, "temperature", 0.0);
+String location = PayloadHelper.safeGetString(payload, "location", "unknown");
+```
+
+## 性能建议
+
+1. **批量操作** - 一次性设置所有数据，避免多次调用
+2. **数据大小** - 避免单个 payload 携带过多数据
+3. **类型一致** - 同一个键始终使用相同的数据类型
+4. **键名简洁** - 使用简短但清晰的键名
+
+## 最佳实践
+
+1. **检查存在性** - 读取前使用 `hasKey()` 检查
+2. **类型安全** - 确保读取的类型与写入的类型一致
+3. **默认值** - 提供合理的默认值处理缺失数据
+4. **文档化** - 在代码中注释 payload 的数据结构
+5. **验证数据** - 对关键数据进行范围和有效性验证
+
+## 相关 API
+
+- [Signal](/Streamind/sdk/java/api-reference/signal) - 信号类
+- [Directive](/Streamind/sdk/java/api-reference/directive) - 指令类

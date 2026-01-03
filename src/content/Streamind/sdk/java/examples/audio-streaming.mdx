@@ -1,0 +1,386 @@
+# 音频流传输
+
+使用 StreamInd Java SDK 发送 OPUS 格式的音频流数据。
+
+## 发送音频文件
+
+### 完整示例
+
+```java
+import com.streamind.sdk.*;
+import java.nio.file.*;
+
+public class AudioFileExample {
+    public static void sendAudioFile(SDK sdk, String terminalId, String audioFilePath) {
+        try {
+            // 读取 OPUS 音频文件
+            byte[] audioData = Files.readAllBytes(Paths.get(audioFilePath));
+
+            System.out.println("读取音频文件: " + audioFilePath);
+            System.out.println("文件大小: " + audioData.length + " 字节");
+
+            // 发送音频数据
+            sdk.sendAudioData(terminalId, audioData);
+            System.out.println("音频发送成功");
+
+        } catch (NoSuchFileException e) {
+            System.err.println("错误：文件不存在 - " + audioFilePath);
+        } catch (Exception e) {
+            System.err.println("发送音频失败: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        // 创建配置
+        Config config = new Config.Builder()
+            .deviceId("audio-device-001")
+            .deviceType("audio_client")
+            .endpoint("wss://your-platform.com/signals")
+            .tenantId("your-tenant-id")
+            .productId("your-product-id")
+            .productKey("your-secret-key")
+            .build();
+
+        // 创建 SDK
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        try {
+            // 连接
+            sdk.connect("terminal-1");
+            System.out.println("已连接到平台");
+
+            // 发送音频文件
+            sendAudioFile(sdk, "terminal-1", "audio.opus");
+
+            // 保持连接
+            Thread.sleep(5000);
+
+            // 断开连接
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 流式音频发送
+
+分块发送大音频文件：
+
+```java
+import com.streamind.sdk.*;
+import java.io.*;
+import java.nio.file.*;
+
+public class AudioStreamExample {
+    public static void sendAudioStream(
+        SDK sdk,
+        String terminalId,
+        String audioFilePath,
+        int chunkSize
+    ) {
+        try (FileInputStream fis = new FileInputStream(audioFilePath)) {
+            byte[] buffer = new byte[chunkSize];
+            int chunkIndex = 0;
+            int bytesRead;
+
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                // 创建实际大小的数据块
+                byte[] chunk = new byte[bytesRead];
+                System.arraycopy(buffer, 0, chunk, 0, bytesRead);
+
+                // 发送音频块
+                sdk.sendAudioData(terminalId, chunk);
+                chunkIndex++;
+                System.out.println("发送音频块 " + chunkIndex + ": " + bytesRead + " 字节");
+
+                // 控制发送速率（可选）
+                Thread.sleep(100);
+            }
+
+            System.out.println("音频流发送完成，共 " + chunkIndex + " 块");
+
+        } catch (Exception e) {
+            System.err.println("流式发送失败: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        try {
+            sdk.connect("terminal-1");
+
+            // 流式发送
+            sendAudioStream(sdk, "terminal-1", "large_audio.opus", 8192);
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 使用 Java Sound API 录音
+
+```java
+import com.streamind.sdk.*;
+import javax.sound.sampled.*;
+import java.io.*;
+
+public class MicrophoneRecordingExample {
+    private static final float SAMPLE_RATE = 16000.0f;
+    private static final int SAMPLE_SIZE_IN_BITS = 16;
+    private static final int CHANNELS = 1;
+    private static final boolean SIGNED = true;
+    private static final boolean BIG_ENDIAN = false;
+
+    public static void recordAndSend(SDK sdk, String terminalId, int durationSeconds) {
+        AudioFormat format = new AudioFormat(
+            SAMPLE_RATE,
+            SAMPLE_SIZE_IN_BITS,
+            CHANNELS,
+            SIGNED,
+            BIG_ENDIAN
+        );
+
+        DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+
+        try {
+            // 打开麦克风
+            TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
+            microphone.open(format);
+            microphone.start();
+
+            System.out.println("开始录音 " + durationSeconds + " 秒...");
+
+            // 读取音频数据
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+
+            long startTime = System.currentTimeMillis();
+            long duration = durationSeconds * 1000;
+
+            while (System.currentTimeMillis() - startTime < duration) {
+                int bytesRead = microphone.read(buffer, 0, buffer.length);
+                out.write(buffer, 0, bytesRead);
+
+                // 注意：这里需要将 PCM 数据编码为 OPUS 格式
+                // 实际应用中需要使用 OPUS 编码库
+            }
+
+            microphone.stop();
+            microphone.close();
+
+            byte[] audioData = out.toByteArray();
+            System.out.println("录音结束，共 " + audioData.length + " 字节");
+
+            // 发送音频数据（需要先转换为 OPUS 格式）
+            // sdk.sendAudioData(terminalId, opusEncodedData);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        try {
+            sdk.connect("terminal-1");
+            System.out.println("已连接，准备录音...");
+
+            // 录音并发送 10 秒
+            recordAndSend(sdk, "terminal-1", 10);
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 接收音频指令
+
+接收平台发送的音频控制指令：
+
+```java
+import com.streamind.sdk.*;
+
+public class AudioControlExample {
+    private static boolean isRecording = false;
+
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        // 指令回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            if ("audio.control".equals(directive.getName())) {
+                Payload payload = directive.getPayload();
+                String action = payload.getString("action");
+
+                if ("start_recording".equals(action)) {
+                    System.out.println("开始录音");
+                    isRecording = true;
+                    // 启动录音逻辑...
+                } else if ("stop_recording".equals(action)) {
+                    System.out.println("停止录音");
+                    isRecording = false;
+                    // 停止录音逻辑...
+                }
+            }
+        });
+
+        try {
+            sdk.connect("terminal-1");
+            System.out.println("等待音频控制指令...");
+
+            // 保持连接
+            Thread.sleep(3600000);
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 完整的录音应用
+
+结合信号和音频的完整示例：
+
+```java
+import com.streamind.sdk.*;
+
+public class AudioRecorderApp {
+    private SDK sdk;
+    private String terminalId;
+    private boolean isRecording = false;
+
+    public AudioRecorderApp(SDK sdk, String terminalId) {
+        this.sdk = sdk;
+        this.terminalId = terminalId;
+    }
+
+    public void startRecording() {
+        isRecording = true;
+
+        // 发送录音开始信号
+        try {
+            Signal signal = new Signal("audio.status");
+            signal.getPayload().setString("status", "recording");
+            sdk.sendSignal(terminalId, signal);
+
+            System.out.println("录音已开始");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void stopRecording() {
+        isRecording = false;
+
+        // 发送录音结束信号
+        try {
+            Signal signal = new Signal("audio.status");
+            signal.getPayload().setString("status", "stopped");
+            sdk.sendSignal(terminalId, signal);
+
+            System.out.println("录音已停止");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendAudioChunk(byte[] audioData) {
+        if (isRecording) {
+            try {
+                sdk.sendAudioData(terminalId, audioData);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Config config = new Config.Builder()...build();
+        SDK sdk = new SDK();
+        sdk.registerTerminal("terminal-1", config);
+
+        AudioRecorderApp recorder = new AudioRecorderApp(sdk, "terminal-1");
+
+        // 指令回调
+        sdk.setDirectiveCallback("terminal-1", directive -> {
+            if ("audio.control".equals(directive.getName())) {
+                Payload payload = directive.getPayload();
+                String action = payload.getString("action");
+
+                if ("start".equals(action)) {
+                    recorder.startRecording();
+                } else if ("stop".equals(action)) {
+                    recorder.stopRecording();
+                }
+            }
+        });
+
+        try {
+            sdk.connect("terminal-1");
+            System.out.println("音频系统已就绪");
+
+            // 保持运行
+            Thread.sleep(3600000);
+
+            sdk.disconnect("terminal-1");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Maven 依赖
+
+```xml
+<!-- 音频处理库 -->
+<dependency>
+    <groupId>javax.sound</groupId>
+    <artifactId>sampled</artifactId>
+    <version>1.0</version>
+</dependency>
+
+<!-- OPUS 编码（如果需要）-->
+<dependency>
+    <groupId>org.concentus</groupId>
+    <artifactId>concentus</artifactId>
+    <version>1.0</version>
+</dependency>
+```
+
+## 注意事项
+
+1. **音频格式**：StreamInd 平台要求 OPUS 格式
+2. **采样率**：推荐使用 16kHz
+3. **声道**：推荐使用单声道
+4. **分块大小**：根据网络情况调整，一般 4KB-8KB
+5. **错误处理**：音频发送失败时应有重试机制
+
+## 下一步
+
+- [多终端管理](/Streamind/sdk/java/examples/multi-terminal) - 管理多个设备
+- [错误处理](/Streamind/sdk/java/examples/error-handling) - 完善错误处理
