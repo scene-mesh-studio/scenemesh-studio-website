@@ -59,10 +59,18 @@ const WarpGrid: React.FC<{ isDark: boolean }> = ({ isDark }) => {
       vec2 grid = abs(fract(vUv * 70.0) - 0.5);
       float line = smoothstep(0.0, 0.02, min(grid.x, grid.y));
       
-      // 灰色调系统 - 更浅的网格颜色
-      vec3 baseColor1 = vec3(0.6, 0.6, 0.6);   // 浅灰色
-      vec3 baseColor2 = vec3(0.5, 0.5, 0.5);   // 中灰色
-      
+      // 根据主题模式调整网格颜色
+      vec3 baseColor1, baseColor2;
+      if(uIsDark > 0.5) {
+        // 深色模式：浅灰色
+        baseColor1 = vec3(0.6, 0.6, 0.6);
+        baseColor2 = vec3(0.5, 0.5, 0.5);
+      } else {
+        // 浅色模式：深灰色，提高对比度
+        baseColor1 = vec3(0.2, 0.2, 0.25);
+        baseColor2 = vec3(0.15, 0.15, 0.2);
+      }
+
       // 基于距离和时间的简单颜色混合
       float colorMix = sin(uTime * 0.5 + distance * 1.5) * 0.5 + 0.5;
       vec3 gridBaseColor = mix(baseColor1, baseColor2, colorMix * warp);
@@ -129,26 +137,24 @@ const WarpGrid: React.FC<{ isDark: boolean }> = ({ isDark }) => {
       float accumulatedIntensity = 0.0;
       
       // 当前传播的颜色索引
-      float currentWaveIndex = mod(waveCount, 3.0);
+      float currentWaveIndex = mod(waveCount, 2.0);
       vec3 currentWaveColor;
-      
+
       // 根据主题模式选择颜色深度
       int colorIndex = int(currentWaveIndex);
       if(colorIndex == 0) {
-        // 蓝色：深色模式加深，浅色模式保持深蓝
-        currentWaveColor = uIsDark > 0.5 ? vec3(0.0, 0.1, 0.6) : vec3(0.0, 0.1, 0.6);
-      } else if(colorIndex == 1) {
-        // 红色：两种模式一致
-        currentWaveColor = vec3(0.7, 0.0, 0.1);
+        // 蓝色：浅色模式用深蓝色，深色模式用亮蓝色
+        currentWaveColor = uIsDark > 0.5 ? vec3(0.3, 0.5, 1.0) : vec3(0.0, 0.2, 0.7);
       } else {
-        // 绿色：浅色模式用更深的暗绿色
-        currentWaveColor = uIsDark > 0.5 ? vec3(0.0, 0.6, 0.1) : vec3(0.0, 0.1, 0.0);
+        // 紫色：浅色模式用深紫色，深色模式用亮紫色
+        currentWaveColor = uIsDark > 0.5 ? vec3(0.7, 0.4, 1.0) : vec3(0.4, 0.1, 0.7);
       }
-      
-      // 只在圆圈传播路径上显示颜色 - 增强强度
+
+      // 只在圆圈传播路径上显示颜色 - 浅色模式下增强强度
+      float intensityMultiplier = uIsDark > 0.5 ? 2.5 : 3.5;
       if(ringEffect > 0.0) {
         accumulatedColor = currentWaveColor;
-        accumulatedIntensity = ringEffect * 2.5; // 增强强度
+        accumulatedIntensity = ringEffect * intensityMultiplier;
       } else {
         accumulatedColor = vec3(0.0);
         accumulatedIntensity = 0.0;
@@ -158,12 +164,17 @@ const WarpGrid: React.FC<{ isDark: boolean }> = ({ isDark }) => {
       
       // 组合网格颜色和传播效果
       vec3 colorWithFade = gridBaseColor * edgeFade * centerFade;
-      
-      // 传播区域用传播颜色替换，而不是叠加 - 增强可见性
-      vec3 finalColor = colorWithFade + glow;
+
+      // 传播区域用传播颜色替换，而不是叠加
+      vec3 finalColor = colorWithFade;
       if(totalEffect > 0.0) {
-        vec3 propagationColor = accumulatedColor * totalEffect * 4.0 * edgeFade; // 增强倍数
-        finalColor = mix(finalColor, propagationColor, totalEffect);
+        // 直接使用传播颜色，不要过度增强避免溢出变白
+        vec3 propagationColor = accumulatedColor * edgeFade;
+        // 使用更高的混合比例确保传播颜色占主导
+        finalColor = mix(finalColor, propagationColor, min(totalEffect * 2.0, 1.0));
+      } else {
+        // 只在没有传播效果时添加白色glow，避免颜色发白
+        finalColor += glow;
       }
       
       float finalAlpha = alpha + totalEffect * 0.3; // 光感也增加透明度
@@ -286,32 +297,33 @@ export const SpaceWarpAnimation: React.FC<{ className?: string; isDark?: boolean
   if (!mounted) {
     // SSR友好的占位符
     return (
-      <div 
+      <div
         className={className}
-        style={{ 
+        style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
           background: 'transparent',
-          zIndex: -1
+          zIndex: 0
         }}
       />
     )
   }
 
   return (
-    <div 
+    <div
       className={className}
-      style={{ 
+      style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: -1,
-        overflow: 'hidden'
+        zIndex: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none'
       }}
     >
       <Canvas

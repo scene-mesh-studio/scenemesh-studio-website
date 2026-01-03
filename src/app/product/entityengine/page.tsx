@@ -411,31 +411,29 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
         margin: '0 auto'
       }}>
       
-      {/* 装饰性渐变光晕 */}
-      <div 
-        className="opacity-10 dark:opacity-5"
+      {/* 装饰性渐变光晕 - 右上角辐射 */}
+      <div
+        className="opacity-15 dark:opacity-8"
         style={{
           position: 'absolute',
           top: '-50%',
-          left: '-50%',
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 50%)',
+          right: '-50%',
+          width: '200%',
+          height: '200%',
+          background: 'radial-gradient(circle at top right, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 30%, transparent 70%)',
           pointerEvents: 'none'
-        }} 
+        }}
       />
       
       {/* 2×2网格布局 */}
-      <div 
+      <div
         className="bg-gray-100/50 dark:bg-gray-700/30"
         style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gridTemplateRows: isMobile ? 'repeat(4, auto)' : '1fr 1fr',
           gap: '1px',
           position: 'relative',
-          zIndex: 1,
-          minHeight: isMobile ? 'auto' : '800px'
+          zIndex: 1
         }}>
         {features.map((feature, index) => (
           <div
@@ -443,8 +441,7 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
             className="bg-white dark:bg-gray-800"
             style={{
               position: 'relative',
-              minHeight: isMobile ? 'auto' : '400px',
-              padding: isMobile ? '24px 20px' : '40px',
+              padding: isMobile ? '24px 20px' : '40px 40px 24px 40px',
               overflow: 'hidden',
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
             }}
@@ -465,7 +462,7 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
             }} />
             
             {/* 产品序号装饰 */}
-            <div 
+            <div
               className="bg-blue-500 text-white"
               style={{
                 position: 'absolute',
@@ -482,33 +479,6 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
                 opacity: 0.9
               }}>
               {String(index + 1).padStart(2, '0')}
-            </div>
-
-            {/* 点阵动画装饰 */}
-            <div style={{
-              position: 'absolute',
-              bottom: '24px',
-              right: '24px',
-              width: '120px',
-              height: '80px',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(10, 1fr)',
-              gridTemplateRows: 'repeat(6, 1fr)',
-              gap: '2px'
-            }}>
-              {Array.from({ length: 60 }, (_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: '4px',
-                    height: '4px',
-                    borderRadius: feature.shape === 'circle' ? '50%' : '0px',
-                    background: feature.color,
-                    clipPath: feature.shape === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : 'none',
-                    opacity: 0.4
-                  }}
-                />
-              ))}
             </div>
 
             {/* 产品内容 */}
@@ -545,7 +515,7 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
               </p>
 
               {/* 功能特性 */}
-              <div style={{ marginBottom: '32px' }}>
+              <div>
                 {feature.points.map((point, pointIndex) => (
                   <div
                     key={pointIndex}
@@ -555,7 +525,7 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
                       fontWeight: 500,
                       paddingLeft: '16px',
                       position: 'relative',
-                      marginBottom: '10px'
+                      marginBottom: pointIndex < feature.points.length - 1 ? '10px' : '0'
                     }}
                   >
                     <div style={{
@@ -814,10 +784,11 @@ export default function EntityEnginePage(): React.JSX.Element {
   }, [])
   
   return (
-    <div 
+    <div
       className="bg-white dark:bg-gray-900"
-      style={{ 
-        minHeight: '100vh'
+      style={{
+        minHeight: '100vh',
+        backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
       }}>
       {/* Hero Section - 网格化设计 */}
       <section 
@@ -847,7 +818,7 @@ export default function EntityEnginePage(): React.JSX.Element {
 
         <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative', zIndex: 1 }}>
           {/* 网格容器 */}
-          <div 
+          <div
             className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm"
             style={{
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
@@ -855,7 +826,21 @@ export default function EntityEnginePage(): React.JSX.Element {
               overflow: 'hidden',
               position: 'relative'
             }}>
-            
+
+            {/* 装饰性紫色渐变光晕 */}
+            <div
+              className="opacity-15 dark:opacity-8"
+              style={{
+                position: 'absolute',
+                top: '-50%',
+                left: '-50%',
+                width: '200%',
+                height: '200%',
+                background: 'radial-gradient(circle at top left, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 30%, transparent 70%)',
+                pointerEvents: 'none'
+              }}
+            />
+
             {/* 内部网格背景 */}
             <div style={{
               position: 'absolute',
@@ -888,6 +873,22 @@ export default function EntityEnginePage(): React.JSX.Element {
                 justifyContent: 'center',
                 borderRight: isMobile ? 'none' : `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
               }}>
+                {/* 开源标识 */}
+                <div style={{
+                  display: 'inline-block',
+                  padding: '6px 12px',
+                  background: isDark ? '#1e3a8a' : '#dbeafe',
+                  color: isDark ? '#93c5fd' : '#1e40af',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  marginBottom: '16px',
+                  width: 'fit-content',
+                  letterSpacing: '0.5px'
+                }}>
+                  🔓 Apache License 2.0
+                </div>
+
                 {/* 主标题 */}
                 <h1
                   className="text-gray-900 dark:text-gray-100"
@@ -996,11 +997,12 @@ export default function EntityEnginePage(): React.JSX.Element {
       </section>
 
       {/* 数据流程演示 */}
-      <section 
+      <section
         className="bg-gray-50 dark:bg-gray-900"
         style={{
-          padding: '80px 24px',
-          position: 'relative'
+          padding: '0px 24px 80px',
+          position: 'relative',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
@@ -1031,11 +1033,12 @@ export default function EntityEnginePage(): React.JSX.Element {
       </section>
 
       {/* 核心特性展示 */}
-      <section 
+      <section
         className="bg-gray-50 dark:bg-gray-800"
         style={{
-          padding: '80px 24px',
-          position: 'relative'
+          padding: '0px 24px 80px',
+          position: 'relative',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
@@ -1064,11 +1067,12 @@ export default function EntityEnginePage(): React.JSX.Element {
       </section>
 
       {/* 代码示例与使用场景并排展示 */}
-      <section 
+      <section
         className="bg-gray-50 dark:bg-gray-800"
         style={{
-          padding: '80px 24px',
-          position: 'relative'
+          padding: '0px 24px 80px',
+          position: 'relative',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
         
         {/* 微妙的网格背景 */}
@@ -1133,23 +1137,22 @@ export default function EntityEnginePage(): React.JSX.Element {
             />
             
             {/* 1×2网格布局 */}
-            <div 
+            <div
               className="bg-gray-100/50 dark:bg-gray-700/30"
               style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
                 gap: '1px',
                 position: 'relative',
-                zIndex: 1,
-                minHeight: isMobile ? 'auto' : '600px'
+                zIndex: 1
               }}>
-              
+
               {/* 代码示例卡片 */}
               <div
                 className="bg-white dark:bg-gray-800"
                 style={{
                   position: 'relative',
-                  padding: isMobile ? '24px 20px' : '40px',
+                  padding: isMobile ? '24px 20px' : '40px 40px 24px 40px',
                   overflow: 'hidden',
                   border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                 }}
@@ -1170,7 +1173,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                 }} />
                 
                 {/* 序号装饰 */}
-                <div 
+                <div
                   className="bg-blue-500 text-white"
                   style={{
                     position: 'absolute',
@@ -1187,32 +1190,6 @@ export default function EntityEnginePage(): React.JSX.Element {
                     opacity: 0.9
                   }}>
                   01
-                </div>
-
-                {/* 点阵装饰 */}
-                <div style={{
-                  position: 'absolute',
-                  bottom: '24px',
-                  right: '24px',
-                  width: '100px',
-                  height: '60px',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(8, 1fr)',
-                  gridTemplateRows: 'repeat(5, 1fr)',
-                  gap: '2px'
-                }}>
-                  {Array.from({ length: 40 }, (_, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: '4px',
-                        height: '4px',
-                        background: '#8b5cf6',
-                        clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-                        opacity: 0.4
-                      }}
-                    />
-                  ))}
                 </div>
 
                 <div style={{ position: 'relative', zIndex: 1 }}>
@@ -1291,7 +1268,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                 className="bg-white dark:bg-gray-800"
                 style={{
                   position: 'relative',
-                  padding: isMobile ? '24px 20px' : '40px',
+                  padding: isMobile ? '24px 20px' : '40px 40px 24px 40px',
                   overflow: 'hidden',
                   border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                 }}
@@ -1312,7 +1289,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                 }} />
                 
                 {/* 序号装饰 */}
-                <div 
+                <div
                   className="bg-purple-500 text-white"
                   style={{
                     position: 'absolute',
@@ -1329,32 +1306,6 @@ export default function EntityEnginePage(): React.JSX.Element {
                     opacity: 0.9
                   }}>
                   02
-                </div>
-
-                {/* 点阵装饰 */}
-                <div style={{
-                  position: 'absolute',
-                  bottom: '24px',
-                  right: '24px',
-                  width: '100px',
-                  height: '60px',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(8, 1fr)',
-                  gridTemplateRows: 'repeat(5, 1fr)',
-                  gap: '2px'
-                }}>
-                  {Array.from({ length: 40 }, (_, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: '4px',
-                        height: '4px',
-                        background: '#8b5cf6',
-                        clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
-                        opacity: 0.4
-                      }}
-                    />
-                  ))}
                 </div>
 
                 <div style={{ position: 'relative', zIndex: 1 }}>
@@ -1375,7 +1326,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                     适合构建各种数据密集型应用，从企业管理到低代码平台
                   </p>
 
-                  <div style={{ marginBottom: '24px' }}>
+                  <div>
                     {[
                       { title: '企业管理系统', desc: 'CRM、ERP、OA等企业级应用' },
                       { title: '数据分析平台', desc: '灵活的数据查询和可视化' },
@@ -1387,7 +1338,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                         style={{
                           paddingLeft: '16px',
                           position: 'relative',
-                          marginBottom: '16px'
+                          marginBottom: index < 3 ? '16px' : '0'
                         }}
                       >
                         <div style={{
@@ -1474,13 +1425,45 @@ export default function EntityEnginePage(): React.JSX.Element {
       </section>
 
       {/* Footer */}
-      <footer 
+      <footer
         className="bg-white dark:bg-gray-900"
         style={{
           position: 'relative',
-          padding: '60px 24px 40px'
+          padding: '40px 24px 32px',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)',
+          overflow: 'hidden'
         }}>
-        
+
+        {/* 蓝色渐变 - 左上角向下辐射 */}
+        <div
+          className="opacity-20 dark:opacity-10"
+          style={{
+            position: 'absolute',
+            top: '-50%',
+            left: '-50%',
+            width: '200%',
+            height: '200%',
+            background: 'radial-gradient(circle at top left, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.15) 20%, transparent 50%)',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
+
+        {/* 紫色渐变 - 右下角向上辐射 */}
+        <div
+          className="opacity-20 dark:opacity-10"
+          style={{
+            position: 'absolute',
+            bottom: '-50%',
+            right: '-50%',
+            width: '200%',
+            height: '200%',
+            background: 'radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.15) 20%, transparent 50%)',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
+
         {/* 网格背景 */}
         <div style={{
           position: 'absolute',
@@ -1494,173 +1477,24 @@ export default function EntityEnginePage(): React.JSX.Element {
             linear-gradient(to bottom, ${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px)
           `,
           backgroundSize: '32px 32px',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          zIndex: 1
         }} />
 
-        <div style={{ 
-          maxWidth: '1200px', 
+        <div style={{
+          maxWidth: '1200px',
           margin: '0 auto',
           position: 'relative',
-          zIndex: 1
+          zIndex: 2
         }}>
-          
-          {/* 四列布局 */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
-            gridTemplateRows: isMobile ? 'auto auto' : 'auto',
-            gap: isMobile ? '32px' : '48px',
-            marginBottom: isMobile ? '32px' : '48px'
-          }}>
-
-            {/* 品牌与愿景 - 左侧第一列 */}
-            <div style={{ 
-              textAlign: 'center',
-              gridColumn: isMobile ? '1' : 'auto',
-              gridRow: isMobile ? '1' : 'auto'
-            }}>
-              <div 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}>
-                <Image 
-                  src="/images/smlogo-1.webp" 
-                  alt="SceneMesh Studio Logo" 
-                  width={200} 
-                  height={200}
-                  style={{ flexShrink: 0 }}
-                />
-              </div>
-            </div>
-            
-            {/* 其他三列容器 - 移动端并排显示 */}
-            <div style={{
-              gridColumn: isMobile ? '1' : '2 / 5',
-              gridRow: isMobile ? '2' : 'auto',
-              display: 'grid',
-              gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 1fr)',
-              gap: isMobile ? '16px' : '48px',
-              textAlign: isMobile ? 'center' : 'left'
-            }}>
-            
-            {/* 快速导航 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                快速导航
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: '核心特性', href: '#features' },
-                  { name: '开发文档', href: '/docs/entityengine' },
-                  { name: 'GitHub仓库', href: 'https://github.com/scene-mesh-studio/entity-engine' },
-                  { name: '返回首页', href: '/' }
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                    target={link.href.startsWith('http') ? '_blank' : '_self'}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* 技术栈 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                技术栈
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: 'React + TypeScript', href: '/docs/entityengine/setup' },
-                  { name: 'tRPC + Prisma', href: '/docs/entityengine/datasource' },
-                  { name: 'Mantine UI', href: '/docs/entityengine/components' },
-                  { name: 'Zod 验证', href: '/docs/entityengine/validation' }
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* 支持与社区 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                支持与社区
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: 'API文档', href: '/docs/entityengine/api' },
-                  { name: '问题反馈', href: 'https://github.com/scene-mesh-studio/entity-engine/issues' },
-                  { name: '贡献指南', href: 'https://github.com/scene-mesh-studio/entity-engine/blob/main/CONTRIBUTING.md' },
-                  { name: '更新日志', href: 'https://github.com/scene-mesh-studio/entity-engine/releases' }
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                    target={link.href.startsWith('http') ? '_blank' : '_self'}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-            
-            </div>
-          </div>
 
           {/* 底部版权信息 */}
-          <div 
-            className="border-t border-gray-200 dark:border-gray-600"
+          <div
             style={{
-              paddingTop: '32px',
+              paddingTop: '0px',
               textAlign: 'center'
             }}>
-            <div 
+            <div
               className="text-gray-500 dark:text-gray-400"
               style={{
                 fontSize: '14px'

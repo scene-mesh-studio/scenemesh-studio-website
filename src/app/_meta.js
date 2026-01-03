@@ -2,24 +2,35 @@ export default {
   index: {
     display: 'hidden'
   },
-  product: {
-    type: 'menu',      
-    title: '产品',
+  streamind: {
+    type: 'page',
+    title: 'Streamind',
+    href: '/product/streamind'
+  },
+  'use-cases': {
+    type: 'menu',
+    title: 'Streamind解决方案',
     items: {
-      entityengine: {
-        title: 'entityengine'
+      'streamind-smart-hardware': {
+        title: 'Streamind 智能硬件',
+        href: '/use-cases/streamind/smart-hardware'
       }
     }
   },
+  entityengine: {
+    type: 'page',
+    title: 'Entity Engine',
+    href: '/product/entityengine'
+  },
   entityengine_moduel: {
-    type: 'menu',      
-    title: 'entityengine模块',
+    type: 'menu',
+    title: 'Entity Engine模块',
     items: {
       aimoduel: {
-        title: 'aimoduel'
+        title: 'AI模块'
       },
       studiomoduel: {
-        title: 'studiomoduel'
+        title: 'Studio模块'
       }
     }
   },

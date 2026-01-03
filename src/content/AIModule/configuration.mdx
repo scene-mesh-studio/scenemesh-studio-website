@@ -1,6 +1,210 @@
 # 环境配置
 
-AI Module通过环境变量进行配置，支持通义千问和DeepSeek两个AI服务商。
+AI Module 提供了两种配置方式：**环境变量配置**（适合静态配置）和**运行时 API 配置**（支持动态热更新）。支持通义千问和 DeepSeek 两个 AI 服务商。
+
+## 运行时配置 API（推荐）
+
+从 v1.0.3 版本开始，AI Module 支持通过代码动态配置，无需重启即可更新 AI 行为参数。
+
+### 核心配置接口
+
+```typescript
+interface AIModuleConfig {
+  // AI 核心参数
+  systemPrompt?: string;          // 系统提示词
+  temperature?: number;            // 温度 (0-2)
+  maxTokens?: number;              // 最大输出 tokens
+  topP?: number;                   // 核采样 (0-1)
+  topK?: number;                   // Top-K 采样
+  presencePenalty?: number;        // 存在性惩罚 (-2 to 2)
+  frequencyPenalty?: number;       // 频率惩罚 (-2 to 2)
+
+  // 功能开关
+  enableTools?: boolean;           // 是否启用工具调用
+  enableEmbeddings?: boolean;      // 是否启用向量嵌入
+
+  // 模型配置
+  defaultProvider?: string;        // 默认提供商 (qwen, openai, anthropic)
+  defaultModel?: string;           // 默认模型
+  defaultEmbeddingModel?: string;  // 默认嵌入模型
+}
+```
+
+### 初始化时配置
+
+在创建 AI Module 实例时传入配置：
+
+```typescript
+import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+
+// 创建带有自定义配置的 AI Module
+const aiModule = new EntityAIModule({
+  systemPrompt: '你是一个专业的数据分析助手...',
+  temperature: 0.8,
+  maxTokens: 2000,
+  enableTools: true,
+  defaultProvider: 'qwen',
+  defaultModel: 'qwen-plus'
+});
+
+// 在 Entity Engine 中使用
+const init = new EnginePrimitiveInitializer({
+  models,
+  views,
+  modules: [aiModule]
+});
+```
+
+### 运行时热更新配置
+
+无需重启应用即可动态更新配置：
+
+```typescript
+import { EntityAIModule } from '@scenemesh/entity-engine-aimodule';
+
+// 获取 AI Module 实例
+const aiModule = EntityAIModule.getInstance();
+
+// 更新配置（部分更新）
+aiModule.updateConfig({
+  temperature: 0.9,
+  maxTokens: 3000
+});
+
+// 获取当前有效配置
+const currentConfig = aiModule.getEffectiveConfig();
+console.log('当前配置:', currentConfig);
+
+// 获取运行时配置（仅用户设置的部分）
+const runtimeConfig = aiModule.getRuntimeConfig();
+console.log('运行时配置:', runtimeConfig);
+```
+
+### 配置优先级
+
+配置的优先级从高到低为：
+
+1. **请求参数**（单次请求临时覆盖）
+2. **运行时配置**（通过 `updateConfig()` 设置）
+3. **初始化配置**（构造函数传入）
+4. **环境变量**（`.env` 文件）
+5. **硬编码默认值**
+
+示例：
+
+```typescript
+// 1. 初始化配置
+const aiModule = new EntityAIModule({
+  temperature: 0.7,  // 初始化配置
+  maxTokens: 2000
+});
+
+// 2. 运行时更新（优先级更高）
+aiModule.updateConfig({
+  temperature: 0.9  // 覆盖初始化配置
+});
+
+// 3. 请求时覆盖（优先级最高）
+await fetch('/api/ai/chat', {
+  method: 'POST',
+  body: JSON.stringify({
+    messages: [...],
+    temperature: 0.5,  // 此次请求使用 0.5，不影响全局配置
+    maxTokens: 1000
+  })
+});
+```
+
+### 实际应用场景
+
+**场景 1：根据用户角色动态调整**
+
+```typescript
+function configureAIForUser(userRole: string) {
+  const aiModule = EntityAIModule.getInstance();
+
+  if (userRole === 'developer') {
+    aiModule.updateConfig({
+      systemPrompt: '你是一个代码助手，精通 TypeScript 和 React...',
+      temperature: 0.3,  // 更精确的代码生成
+      enableTools: true
+    });
+  } else if (userRole === 'analyst') {
+    aiModule.updateConfig({
+      systemPrompt: '你是一个数据分析专家...',
+      temperature: 0.7,  // 更有创造性的分析
+      maxTokens: 4000    // 支持更长的分析报告
+    });
+  }
+}
+```
+
+**场景 2：A/B 测试不同的提示词**
+
+```typescript
+async function runABTest() {
+  const aiModule = EntityAIModule.getInstance();
+
+  // 测试组 A
+  aiModule.updateConfig({
+    systemPrompt: '提示词版本 A...',
+    temperature: 0.7
+  });
+  const resultA = await testAIPerformance();
+
+  // 测试组 B
+  aiModule.updateConfig({
+    systemPrompt: '提示词版本 B...',
+    temperature: 0.8
+  });
+  const resultB = await testAIPerformance();
+
+  console.log('A/B 测试结果:', { resultA, resultB });
+}
+```
+
+**场景 3：根据业务模式动态配置**
+
+```typescript
+// 在管理后台提供配置界面
+function updateAIConfig(formData: AIModuleConfig) {
+  const aiModule = EntityAIModule.getInstance();
+
+  // 保存到数据库
+  await saveConfigToDatabase(formData);
+
+  // 立即生效（无需重启）
+  aiModule.updateConfig(formData);
+
+  console.log('AI 配置已更新并生效');
+}
+```
+
+### 配置参数说明
+
+| 参数 | 类型 | 范围 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `systemPrompt` | string | - | 内置提示词 | 系统级提示词，定义 AI 角色和行为 |
+| `temperature` | number | 0-2 | 0.7 | 控制输出随机性，越低越确定 |
+| `maxTokens` | number | >0 | 4000 | 最大输出 token 数量 |
+| `topP` | number | 0-1 | 0.95 | 核采样，控制输出多样性 |
+| `topK` | number | >0 | - | Top-K 采样（部分模型支持） |
+| `presencePenalty` | number | -2 to 2 | 0 | 惩罚已出现的 token，鼓励新话题 |
+| `frequencyPenalty` | number | -2 to 2 | 0 | 惩罚频繁出现的 token |
+| `enableTools` | boolean | - | true | 是否启用工具调用（如实体查询） |
+| `enableEmbeddings` | boolean | - | true | 是否启用向量嵌入功能 |
+| `defaultProvider` | string | qwen/openai/anthropic | qwen | 默认 AI 服务商 |
+| `defaultModel` | string | - | qwen-plus | 默认使用的模型 |
+| `defaultEmbeddingModel` | string | - | - | 默认嵌入模型 |
+
+### 注意事项
+
+- ✅ **线程安全**：`updateConfig()` 是同步操作，立即生效
+- ✅ **部分更新**：只需传入需要修改的字段，其他字段保持不变
+- ⚠️ **持久化**：运行时配置不会自动持久化，重启后恢复为初始化配置
+- ⚠️ **全局影响**：配置更新会影响所有后续请求（除非请求自带参数覆盖）
+
+---
 
 ## 基础环境变量
 

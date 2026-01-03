@@ -1,0 +1,255 @@
+# 音频集成示例
+
+完整的 TTS 音频处理示例，展示如何接收平台的 TTS 音频流并播放。
+
+## 概述
+
+本示例展示完整的 TTS 音频播放流程：
+1. 接收 `audio.opus_data_start` 指令（开启播放）
+2. 通过 `SetAudioDataCallback` 接收 OPUS 音频流
+3. 播放完成后上报结果
+
+## 完整代码
+
+```cpp
+#include <streamind.h>
+#include <esp_log.h>
+#include <esp_timer.h>
+#include <cJSON.h>
+#include <atomic>
+
+static const char* TAG = "AudioTTSExample";
+
+// 全局播放控制门控（线程安全）
+static std::atomic<bool> playback_enabled_(false);
+
+// 音频解码队列（假设有 AudioService 类）
+extern bool PushToAudioDecodeQueue(const uint8_t* data, size_t size);
+
+// ============================================
+// 第 1 步：注册 audio.opus_data_start 指令
+// ============================================
+
+class AudioTTSIntegration {
+public:
+    static std::string GetModuleName() { return "audio"; }
+
+    static void RegisterCapabilities(streamind::CapabilityRegistry& registry) {
+        // 注册 TTS 播放开始指令
+        registry.RegisterAction("audio.opus_data_start", HandleOpusDataStart);
+        ESP_LOGI(TAG, "AudioTTS registered: 1 action");
+    }
+
+private:
+    static bool HandleOpusDataStart(const streamind::foundation::Directive& directive) {
+        std::string send_id = directive.GetId();
+        auto& sdk = streamind::SDK::GetInstance();
+
+        // 定义异步任务函数（检查状态并启用播放）
+        auto action_func = [send_id]() -> bool {
+            // 检查当前状态（实际项目中从 Application 获取）
+            bool is_listening = false;
+
+            if (is_listening) {
+                ESP_LOGW(TAG, "Listening in progress, rejecting playback");
+                return false;  // 拒绝播放
+            } else {
+                ESP_LOGI(TAG, "Playback enabled");
+                playback_enabled_ = true;  // 🔑 启用播放门控
+                return true;
+            }
+        };
+
+        // 定义完成回调（上报执行结果到平台）
+        auto completion_callback = [send_id](const std::string& task_id, bool success) {
+            // 创建结果 Signal
+            cJSON* result_payload = cJSON_CreateObject();
+            cJSON_AddStringToObject(result_payload, "directive", "audio.opus_data_start");
+            cJSON_AddStringToObject(result_payload, "status", "success");
+            cJSON_AddBoolToObject(result_payload, "playback_started", success);
+            cJSON_AddNumberToObject(result_payload, "timestamp", esp_timer_get_time() / 1000);
+
+            if (!send_id.empty()) {
+                cJSON_AddStringToObject(result_payload, "_sendId_", send_id.c_str());
+            }
+
+            if (!success) {
+                cJSON_AddStringToObject(result_payload, "reason", "listening_in_progress");
+            }
+
+            // 🔑 上报结果到平台
+            streamind::foundation::Signal signal("sys.directive.result");
+            signal.GetPayload()->FromJson(result_payload);
+
+            auto& sdk = streamind::SDK::GetInstance();
+            sdk.SendSignal(signal);
+
+            cJSON_Delete(result_payload);
+            ESP_LOGI(TAG, "Result reported: playback_started=%s", success ? "true" : "false");
+        };
+
+        // 使用 ExecuteHardwareTask 异步执行
+        std::string task_id = sdk.ExecuteHardwareTask(
+            "audio.opus_data_start",
+            "audio",
+            action_func,
+            completion_callback,
+            send_id
+        );
+
+        return !task_id.empty();
+    }
+};
+
+// ============================================
+// 第 2 步：设置音频数据回调（接收 TTS 流）
+// ============================================
+
+void SetupAudioDataCallback(streamind::SDK& sdk) {
+    sdk.SetAudioDataCallback([](const uint8_t* data, size_t size, const std::string& format) {
+        // 🔑 检查播放门控（如果未启用，丢弃数据）
+        if (!playback_enabled_.load()) {
+            static int discard_count = 0;
+            if (++discard_count % 50 == 1) {
+                ESP_LOGD(TAG, "Audio discarded (playback disabled), count=%d", discard_count);
+            }
+            return;
+        }
+
+        // 处理有效的音频数据
+        if (size > 0 && format == "opus") {
+            static int packet_count = 0;
+            packet_count++;
+
+            ESP_LOGI(TAG, "✅ Received TTS audio: size=%zu, format=%s, packet#%d",
+                     size, format.c_str(), packet_count);
+
+            // 🔑 推送到解码队列播放
+            bool success = PushToAudioDecodeQueue(data, size);
+
+            if (!success) {
+                ESP_LOGW(TAG, "⚠️ Audio queue full, packet#%d dropped", packet_count);
+            }
+        }
+    });
+
+    ESP_LOGI(TAG, "Audio data callback configured");
+}
+
+// ============================================
+// 第 3 步：主程序完整示例
+// ============================================
+
+extern "C" void app_main() {
+    // 1. 初始化 WiFi（省略）
+    ESP_LOGI(TAG, "WiFi connected");
+
+    // 2. 获取 SDK 单例并配置
+    auto& sdk = streamind::SDK::GetInstance();
+
+    streamind::Config config;
+    config.device_id = "device-001";
+    config.device_type = "robot";
+    config.endpoint = "ws://your-server.com:8090/signals";  // ⭐ 注意 /signals 路径
+
+    // 3. 初始化 SDK
+    streamind::Error err = sdk.Initialize(config);
+    if (err != streamind::Error::OK) {
+        ESP_LOGE(TAG, "SDK init failed: %s", sdk.GetLastError().c_str());
+        return;
+    }
+
+    // 4. 注册音频 TTS 适配器
+    auto& registry = sdk.GetRegistry();
+    streamind::RegisterHardwareAdapter<AudioTTSIntegration>(registry);
+
+    // 5. 设置音频数据回调（接收 TTS 流）
+    SetupAudioDataCallback(sdk);
+
+    // 6. 设置指令回调（记录执行结果）
+    sdk.SetDirectiveCallback([](const streamind::foundation::Directive& directive,
+                                 bool success,
+                                 const std::string& error_message) {
+        if (success) {
+            ESP_LOGI(TAG, "✅ Directive executed: %s", directive.GetName().c_str());
+        } else {
+            ESP_LOGW(TAG, "❌ Directive failed: %s - %s",
+                     directive.GetName().c_str(), error_message.c_str());
+        }
+    });
+
+    // 7. 设置连接回调
+    sdk.SetConnectionCallback([&sdk](bool connected, const std::string& message) {
+        if (connected) {
+            ESP_LOGI(TAG, "✅ Connected to platform");
+
+            // ⭐ 必须启动指令接收
+            streamind::Error recv_err = sdk.StartDirectiveReceiving();
+            if (recv_err != streamind::Error::OK) {
+                ESP_LOGE(TAG, "Failed to start directive receiving");
+            }
+        } else {
+            ESP_LOGW(TAG, "Disconnected: %s", message.c_str());
+            playback_enabled_ = false;  // 断线时禁用播放
+        }
+    });
+
+    // 8. 连接到平台
+    ESP_LOGI(TAG, "Connecting to platform...");
+    sdk.Connect();
+
+    ESP_LOGI(TAG, "Application started");
+}
+```
+
+## 关键要点
+
+### 1. 双通道架构
+- **指令通道**：`audio.opus_data_start`（开启播放）
+- **音频通道**：`SetAudioDataCallback`（接收 TTS 流）
+
+### 2. 播放门控机制
+- `playback_enabled_` 控制是否接受音频数据
+- 避免在聆听时播放 TTS（造成回音）
+
+### 3. 异步任务管理
+- 使用 `ExecuteHardwareTask` 保证音频任务排队执行
+- `completion_callback` 自动上报执行结果
+
+### 4. 必须调用 StartDirectiveReceiving()
+- 在连接成功回调中调用
+- 否则无法接收指令
+
+### 5. WebSocket 路径
+- 必须包含 `/signals` 路径
+- 错误：`ws://server.com:8090/`
+- 正确：`ws://server.com:8090/signals`
+
+## 预期日志输出
+
+```
+I (123) AudioTTSExample: WiFi connected
+I (130) StreamInd: SDK initialized
+I (140) AudioTTSExample: AudioTTS registered: 1 action
+I (145) AudioTTSExample: Audio data callback configured
+I (160) AudioTTSExample: Connecting to platform...
+I (500) AudioTTSExample: ✅ Connected to platform
+I (505) StreamInd: Directive receiving started
+
+# 用户说话后，平台返回 TTS
+I (15000) AudioTTSExample: ✅ Directive executed: audio.opus_data_start
+I (15005) AudioTTSExample: Playback enabled
+I (15010) AudioTTSExample: Result reported: playback_started=true
+I (15020) AudioTTSExample: ✅ Received TTS audio: size=1024, format=opus, packet#1
+I (15050) AudioTTSExample: ✅ Received TTS audio: size=1024, format=opus, packet#2
+I (15080) AudioTTSExample: ✅ Received TTS audio: size=1024, format=opus, packet#3
+...
+```
+
+## 最佳实践
+
+1. **门控机制**：始终检查 `playback_enabled_` 避免无效数据
+2. **异步处理**：音频任务使用 `ExecuteHardwareTask` 避免阻塞
+3. **错误处理**：队列满时丢弃数据而非阻塞
+4. **状态上报**：使用 `completion_callback` 自动上报结果
+5. **断线处理**：连接断开时禁用播放

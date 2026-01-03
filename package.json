@@ -20,9 +20,9 @@
     "@types/mdx": "^2.0.13",
     "flexsearch": "^0.8.212",
     "framer-motion": "^12.23.13",
-    "next": "^15.5.3",
-    "nextra": "^4.4.0",
-    "nextra-theme-docs": "^4.4.0",
+    "next": "^15.5.9",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "three": "^0.180.0"
@@ -34,7 +34,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.3",
+    "eslint-config-next": "15.5.9",
     "pagefind": "^1.4.0",
     "typescript": "^5.9.2"
   }

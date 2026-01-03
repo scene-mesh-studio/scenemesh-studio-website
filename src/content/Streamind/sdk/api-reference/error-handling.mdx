@@ -1,0 +1,237 @@
+# 错误处理
+
+StreamInd SDK 使用 `Error` 枚举类型来表示所有操作的返回状态。
+
+## 错误代码
+
+```cpp
+namespace streamind {
+    enum class Error {
+        // 成功
+        OK = 0,
+
+        // 初始化错误 (1xx)
+        NOT_INITIALIZED = 100,
+        ALREADY_INITIALIZED = 101,
+        INVALID_CONFIG = 102,
+
+        // 连接错误 (2xx)
+        NOT_CONNECTED = 200,
+        CONNECTION_FAILED = 201,
+        CONNECTION_TIMEOUT = 202,
+        WEBSOCKET_ERROR = 203,
+        ALREADY_CONNECTED = 204,
+
+        // Signal 错误 (3xx)
+        INVALID_SIGNAL = 300,
+        SIGNAL_TOO_LARGE = 301,
+        SEND_FAILED = 302,
+        QUEUE_FULL = 303,
+
+        // Directive 错误 (4xx)
+        INVALID_DIRECTIVE = 400,
+        DIRECTIVE_EXECUTION_FAILED = 401,
+        NO_HANDLER = 402,
+
+        // 注册错误 (5xx)
+        REGISTRATION_FAILED = 500,
+
+        // 通用错误 (9xx)
+        INTERNAL_ERROR = 900,
+        MEMORY_ERROR = 901,
+        INVALID_PARAMETER = 902,
+        UNKNOWN_ERROR = 999
+    };
+}
+```
+
+## 错误处理函数
+
+### ErrorToString()
+
+将错误代码转换为可读字符串。
+
+```cpp
+const char* ErrorToString(Error error);
+```
+
+**示例**：
+```cpp
+Error err = sdk.Connect();
+if (err != Error::OK) {
+    ESP_LOGE("APP", "Connection failed: %s", ErrorToString(err));
+}
+```
+
+### IsOK() / IsFailed()
+
+检查错误状态。
+
+```cpp
+bool IsOK(Error error);
+bool IsFailed(Error error);
+```
+
+**示例**：
+```cpp
+Error err = sdk.Initialize(config);
+if (IsFailed(err)) {
+    // 处理错误
+}
+```
+
+## 使用模式
+
+### 基本错误检查
+
+```cpp
+auto& sdk = streamind::SDK::GetInstance();
+
+Error err = sdk.Initialize(config);
+if (err != Error::OK) {
+    ESP_LOGE("APP", "SDK init failed: %s", ErrorToString(err));
+    return;
+}
+
+err = sdk.Connect();
+if (err != Error::OK) {
+    ESP_LOGE("APP", "Connect failed: %s", ErrorToString(err));
+    return;
+}
+```
+
+### 获取详细错误信息
+
+```cpp
+Error err = sdk.SendSignal(signal);
+if (err != Error::OK) {
+    // 获取详细错误消息
+    std::string detail = sdk.GetLastError();
+    ESP_LOGE("APP", "Send failed: %s - %s", ErrorToString(err), detail.c_str());
+}
+```
+
+### 错误恢复
+
+```cpp
+Error err = sdk.Connect();
+switch (err) {
+    case Error::OK:
+        ESP_LOGI("APP", "Connected successfully");
+        break;
+
+    case Error::CONNECTION_TIMEOUT:
+        ESP_LOGW("APP", "Connection timeout, retrying...");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        sdk.Connect();  // 重试
+        break;
+
+    case Error::INVALID_CONFIG:
+        ESP_LOGE("APP", "Invalid configuration, check endpoint");
+        break;
+
+    default:
+        ESP_LOGE("APP", "Connection error: %s", ErrorToString(err));
+        break;
+}
+```
+
+## 常见错误处理
+
+### NOT_INITIALIZED
+
+**原因**：SDK 未初始化就调用其他方法。
+
+**解决**：
+```cpp
+// 错误示例
+sdk.Connect();  // 错误！未初始化
+
+// 正确示例
+sdk.Initialize(config);  // 先初始化
+sdk.Connect();  // 再连接
+```
+
+### CONNECTION_FAILED
+
+**原因**：
+- 网络不可达
+- 服务器地址错误
+- 防火墙阻止
+
+**解决**：
+```cpp
+// 检查配置
+config.endpoint = "ws://192.168.1.100:8080/signals";  // 确保正确
+
+// 检查网络
+wifi_check_connection();
+
+// 添加重试逻辑
+for (int i = 0; i < 3; i++) {
+    Error err = sdk.Connect();
+    if (err == Error::OK) break;
+
+    ESP_LOGW("APP", "Retry %d/3", i + 1);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+}
+```
+
+### QUEUE_FULL
+
+**原因**：信号发送速度过快，队列已满。
+
+**解决**：
+```cpp
+// 检查队列状态
+Error err = sdk.SendSignal(signal);
+if (err == Error::QUEUE_FULL) {
+    ESP_LOGW("APP", "Queue full, waiting...");
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // 重试
+    err = sdk.SendSignal(signal);
+}
+
+// 或者降低发送频率
+vTaskDelay(pdMS_TO_TICKS(100));  // 添加延迟
+```
+
+### NO_HANDLER
+
+**原因**：收到未注册的 Directive。
+
+**解决**：
+```cpp
+// 注册所有支持的指令
+registry.RegisterAction("motor.move", HandleMotorMove);
+registry.RegisterAction("led.on", HandleLedOn);
+// ...
+
+// 或者添加默认处理器
+registry.RegisterAction("*", [](const Directive& dir) {
+    ESP_LOGW("APP", "Unhandled directive: %s", dir.GetName().c_str());
+    return false;
+});
+```
+
+## 日志级别
+
+设置日志级别以调试错误：
+
+```cpp
+// 启用详细日志
+esp_log_level_set("StreamInd", ESP_LOG_DEBUG);
+esp_log_level_set("WebSocketClient", ESP_LOG_DEBUG);
+
+// 仅显示错误
+esp_log_level_set("StreamInd", ESP_LOG_ERROR);
+```
+
+## 最佳实践
+
+1. **始终检查返回值**：所有 SDK 方法都返回 `Error`
+2. **使用 ErrorToString()**：获取可读的错误信息
+3. **记录详细日志**：使用 `GetLastError()` 获取详情
+4. **实现重试逻辑**：网络操作应有重试机制
+5. **优雅降级**：关键错误时安全关闭系统

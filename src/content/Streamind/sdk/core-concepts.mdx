@@ -1,0 +1,496 @@
+# 核心概念
+
+深入理解 StreamInd SDK 的架构设计和核心概念。
+
+## Signal-Directive 架构
+
+StreamInd SDK 采用创新的 **Signal-Directive** 双向通信模式，区别于传统的请求-响应模式。
+
+### 传统模式 vs Signal-Directive
+
+```
+传统模式（Request-Response）
+┌────────┐  请求   ┌────────┐
+│  设备  │ ------> │  服务器 │
+│        │ <------ │        │
+└────────┘  响应   └────────┘
+• 同步阻塞
+• 强耦合
+• 难以扩展
+
+Signal-Directive 模式
+┌────────┐  Signal  ┌────────┐
+│  设备  │ ------> │  平台  │
+│        │         │ 认知引擎│
+│        │ <------ │        │
+└────────┘ Directive└────────┘
+• 异步非阻塞
+• 松耦合
+• 易扩展
+```
+
+## Signal（信号）
+
+### 什么是 Signal？
+
+Signal 是设备向云平台上报的**事件、数据或状态**。它是设备的"表达"，让平台了解设备的状态和能力。
+
+### Signal 的结构
+
+```cpp
+class Signal {
+    std::string uuid;          // 唯一标识
+    std::string type;          // 信号类型（如 "sensor.temperature"）
+    std::string timestamp;     // 时间戳
+    SignalSource* source;      // 信号源信息
+    SignalPayload* payload;    // 有效载荷（数据）
+};
+```
+
+### Signal 示例
+
+#### 1. 传感器数据上报
+
+```cpp
+// 温度传感器数据
+foundation::Signal tempSignal("sensor.temperature");
+tempSignal.GetPayload()->SetNumber("value", 25.5);
+tempSignal.GetPayload()->SetString("unit", "celsius");
+tempSignal.GetPayload()->SetString("location", "living_room");
+sdk.SendSignal(tempSignal);
+```
+
+#### 2. 事件上报
+
+```cpp
+// 按钮按下事件
+foundation::Signal buttonSignal("button.pressed");
+buttonSignal.GetPayload()->SetString("button_id", "power");
+buttonSignal.GetPayload()->SetNumber("press_duration_ms", 1500);
+sdk.SendSignal(buttonSignal);
+```
+
+#### 3. 状态变更
+
+```cpp
+// 设备状态变更
+foundation::Signal stateSignal("device.state_changed");
+stateSignal.GetPayload()->SetString("from", "idle");
+stateSignal.GetPayload()->SetString("to", "working");
+stateSignal.GetPayload()->SetString("reason", "user_command");
+sdk.SendSignal(stateSignal);
+```
+
+### SignalPayload 数据类型
+
+Payload 支持多种数据类型：
+
+```cpp
+auto* payload = signal.GetPayload();
+
+// 字符串
+payload->SetString("key", "value");
+
+// 数字
+payload->SetNumber("temperature", 25.5);
+payload->SetNumber("count", 42);
+
+// 布尔值
+payload->SetBool("is_active", true);
+
+// JSON对象（复杂数据）
+cJSON* obj = cJSON_CreateObject();
+cJSON_AddStringToObject(obj, "status", "ok");
+payload->SetObject("metadata", obj);
+```
+
+## Directive（指令）
+
+### 什么是 Directive？
+
+Directive 是云平台向设备下发的**控制指令或命令**。它是平台的"意图"，告诉设备该做什么。
+
+### Directive 的结构
+
+```cpp
+class Directive {
+    std::string id;            // 指令ID
+    std::string name;          // 指令名称（如 "motor.move"）
+    std::string parameters;    // 参数（JSON字符串）
+    uint64_t timestamp;        // 时间戳
+};
+```
+
+### Directive 示例
+
+#### 1. 简单控制指令
+
+```cpp
+// LED开关指令
+registry.RegisterAction("led.on", [](const auto& directive) {
+    ESP_LOGI(TAG, "Turn on LED");
+    gpio_set_level(LED_GPIO, 1);
+    return true;  // 返回执行结果
+});
+```
+
+#### 2. 带参数的指令
+
+```cpp
+// 舵机角度控制
+registry.RegisterAction("servo.set_angle", [](const auto& directive) {
+    // 从指令中提取参数
+    int angle = directive.GetIntParameter("angle", 90);
+    int servo_id = directive.GetIntParameter("servo_id", 0);
+
+    ESP_LOGI(TAG, "Set servo %d to angle %d", servo_id, angle);
+
+    // 执行控制
+    servo_controller->SetAngle(servo_id, angle);
+
+    return true;
+});
+```
+
+#### 3. 异步任务指令
+
+```cpp
+// 电机移动指令（耗时操作）
+registry.RegisterAction("motor.move", [&sdk](const auto& directive) {
+    int distance = directive.GetIntParameter("distance_cm", 100);
+    int speed = directive.GetIntParameter("speed", 100);
+
+    // 使用异步任务管理
+    std::string task_id = sdk.ExecuteHardwareTask(
+        "motor.move",
+        "motor",  // 硬件类型
+        [distance, speed]() -> bool {
+            // 执行移动（可能需要几秒钟）
+            motor_controller->Move(distance, speed);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            return true;
+        },
+        [](const std::string& id, bool success) {
+            // 完成回调
+            ESP_LOGI(TAG, "Motor task %s: %s",
+                     id.c_str(), success ? "SUCCESS" : "FAILED");
+        }
+    );
+
+    return !task_id.empty();
+});
+```
+
+### 参数提取方法
+
+```cpp
+// 字符串参数
+std::string direction = directive.GetStringParameter("direction", "forward");
+
+// 整数参数
+int angle = directive.GetIntParameter("angle", 90);
+
+// 浮点数参数
+double speed = directive.GetDoubleParameter("speed", 1.0);
+
+// 布尔参数
+bool enabled = directive.GetBoolParameter("enabled", true);
+```
+
+## Capability（能力）
+
+### 能力注册系统
+
+设备通过 **CapabilityRegistry** 向平台声明自己的能力。这包括：
+
+1. **动作能力（Actions）** - 设备能执行哪些指令
+2. **数据能力（Data）** - 设备能提供哪些数据
+
+### 动作注册
+
+```cpp
+auto& registry = sdk.GetRegistry();
+
+// 注册单个动作
+registry.RegisterAction("action_name", handler_function);
+
+// 查看已注册的能力
+auto stats = registry.GetStats();
+ESP_LOGI(TAG, "Registered: %d actions, %d data sources",
+         stats.action_count, stats.data_provider_count);
+```
+
+### 数据注册
+
+数据注册支持三种模式：
+
+#### 1. 事件触发模式
+
+```cpp
+// 当特定事件发生时上报数据
+registry.RegisterEventData(
+    "battery.status",           // 数据类型
+    []() -> cJSON* {            // 数据提供器
+        cJSON* data = cJSON_CreateObject();
+        cJSON_AddNumberToObject(data, "level", battery_get_level());
+        cJSON_AddBoolToObject(data, "charging", is_charging());
+        return data;
+    },
+    "battery.low"               // 触发事件
+);
+
+// 触发数据上报
+registry.TriggerEventReport("battery.low");
+```
+
+#### 2. 定时上报模式
+
+```cpp
+// 每10秒自动上报一次
+registry.RegisterTimerData(
+    "system.stats",
+    []() -> cJSON* {
+        cJSON* data = cJSON_CreateObject();
+        cJSON_AddNumberToObject(data, "free_heap", esp_get_free_heap_size());
+        cJSON_AddNumberToObject(data, "uptime", esp_timer_get_time() / 1000000);
+        return data;
+    },
+    10000  // 10秒间隔
+);
+```
+
+#### 3. 实时流模式
+
+```cpp
+// 实时数据流（如传感器连续读取）
+registry.RegisterRealTimeData(
+    "sensor.distance",
+    []() -> cJSON* {
+        cJSON* data = cJSON_CreateObject();
+        cJSON_AddNumberToObject(data, "distance_cm", ultrasonic_read());
+        return data;
+    }
+);
+```
+
+## 硬件适配器模式
+
+### 设计理念
+
+StreamInd SDK 推荐使用 **硬件适配器（Hardware Adapter）** 模式来组织代码：
+
+- **适配器层** - 负责能力注册和指令转发（轻量级）
+- **硬件层** - 负责硬件生命周期和实际控制（由应用管理）
+
+### 适配器模板
+
+```cpp
+class MyHardwareAdapter {
+public:
+    // 返回模块名称
+    static std::string GetModuleName() {
+        return "my_hardware";
+    }
+
+    // 注册能力
+    static void RegisterCapabilities(streamind::CapabilityRegistry& registry) {
+        // 注册动作
+        registry.RegisterAction("my_hardware.command", HandleCommand);
+
+        // 注册数据
+        registry.RegisterEventData("my_hardware.status", GetStatus, "status_changed");
+    }
+
+private:
+    // 指令处理器
+    static bool HandleCommand(const streamind::foundation::Directive& directive) {
+        // 获取硬件实例（由应用管理）
+        auto* hardware = Application::GetHardware();
+
+        // 执行操作
+        int param = directive.GetIntParameter("param", 0);
+        hardware->DoSomething(param);
+
+        return true;
+    }
+
+    // 数据提供器
+    static cJSON* GetStatus() {
+        auto* hardware = Application::GetHardware();
+
+        cJSON* data = cJSON_CreateObject();
+        cJSON_AddStringToObject(data, "status", hardware->GetStatus());
+        return data;
+    }
+};
+```
+
+### 注册适配器
+
+```cpp
+// 在app_main中
+auto& registry = sdk.GetRegistry();
+
+// 使用模板注册
+streamind::RegisterHardwareAdapter<MyHardwareAdapter>(registry);
+streamind::RegisterHardwareAdapter<AudioAdapter>(registry);
+streamind::RegisterHardwareAdapter<MotorAdapter>(registry);
+
+// 初始化所有能力
+sdk.InitializeCapabilities();
+```
+
+## 异步任务管理
+
+### 为什么需要异步任务？
+
+某些硬件操作需要较长时间（如电机移动、音频播放），如果在指令处理器中同步执行：
+
+- ❌ 阻塞主线程
+- ❌ 导致超时
+- ❌ 无法并发控制多个硬件
+
+### ExecuteHardwareTask
+
+StreamInd SDK 提供内置的异步任务管理：
+
+```cpp
+std::string task_id = sdk.ExecuteHardwareTask(
+    "task_name",              // 任务名称
+    "hardware_type",          // 硬件类型（同类型硬件会排队）
+    []() -> bool {            // 任务函数
+        // 执行耗时操作
+        do_long_running_work();
+        return true;          // 返回执行结果
+    },
+    [](const std::string& id, bool success) {  // 完成回调（可选）
+        if (success) {
+            ESP_LOGI(TAG, "Task %s completed", id.c_str());
+            // 上报结果Signal
+        }
+    }
+);
+```
+
+### 任务特性
+
+- **硬件排队** - 同类型硬件的任务会自动排队执行
+- **任务ID** - 每个任务都有唯一ID，可用于追踪
+- **中止任务** - 支持中途取消任务
+
+```cpp
+// 中止特定硬件类型的所有任务
+sdk.AbortHardwareTasks("motor");
+
+// 中止特定任务
+sdk.AbortTask(task_id);
+
+// 检查是否有硬件忙碌
+bool busy = sdk.IsAnyHardwareBusy();
+```
+
+## 连接管理
+
+### 自动重连
+
+SDK 内置自动重连机制：
+
+```cpp
+streamind::Config config;
+config.reconnect_interval_ms = 5000;  // 5秒重连间隔
+config.connection_timeout_ms = 10000; // 10秒连接超时
+```
+
+### 连接状态回调
+
+```cpp
+sdk.SetConnectionCallback([&sdk](bool connected, const std::string& msg) {
+    if (connected) {
+        ESP_LOGI(TAG, "✅ Connected");
+
+        // 连接成功后的操作
+        sdk.StartDirectiveReceiving();
+
+        // 可选：重新注册设备能力
+        sdk.InitializeCapabilities();
+    } else {
+        ESP_LOGW(TAG, "❌ Disconnected: %s", msg.c_str());
+
+        // 连接断开后的操作
+        sdk.StopDirectiveReceiving();
+    }
+});
+```
+
+## TraceID 机制
+
+### 什么是 TraceID？
+
+TraceID 用于关联一次完整的交互流程（如一轮语音对话）。
+
+### 使用场景
+
+```cpp
+// 1. 生成TraceID
+std::string trace_id = sdk.GenerateTraceId();
+
+// 2. 在Signal中设置TraceID
+foundation::Signal signal("user.speech_start");
+signal.SetSourceTraceId(trace_id);
+sdk.SendSignal(signal);
+
+// 3. 接收的Directive会携带相同的TraceID
+// 平台根据TraceID关联请求和响应
+```
+
+## 最佳实践
+
+### 1. 合理组织代码
+
+```
+your_project/
+├── main/
+│   ├── core/              # 核心应用逻辑
+│   ├── hardware/          # 硬件驱动
+│   ├── integrations/      # StreamInd适配器
+│   └── main.cpp
+└── components/
+    └── streamind_sdk/     # SDK
+```
+
+### 2. 错误处理
+
+```cpp
+auto err = sdk.SendSignal(signal);
+if (err != streamind::Error::OK) {
+    ESP_LOGE(TAG, "Failed to send signal: %s", sdk.GetLastError().c_str());
+    // 记录到本地或重试
+}
+```
+
+### 3. 资源管理
+
+```cpp
+// Signal和Directive中的cJSON对象会自动释放
+// 但如果你手动创建cJSON，需要手动释放
+cJSON* custom_obj = cJSON_CreateObject();
+// ... 使用 ...
+cJSON_Delete(custom_obj);  // 手动释放
+```
+
+### 4. 日志级别
+
+```cpp
+// 生产环境
+esp_log_level_set("StreamInd", ESP_LOG_INFO);
+
+// 开发调试
+esp_log_level_set("StreamInd", ESP_LOG_DEBUG);
+esp_log_level_set("WebSocketClient", ESP_LOG_DEBUG);
+```
+
+## 下一步
+
+- 查看 [API 参考](./api-reference/sdk-class) 了解完整的 API
+- 阅读 [示例代码](./examples/audio-integration) 学习实际应用
+- 探索 [智能硬件应用场景](/use-cases/streamind/smart-hardware) 获取灵感

@@ -2,7 +2,7 @@
 import { Footer, Layout, Navbar, ThemeSwitch } from 'nextra-theme-docs'
 import { getPageMap } from 'nextra/page-map'
 import { Search, Head } from 'nextra/components'
-import Image from 'next/image'
+import ThemeLogo from '../components/ThemeLogo'
 import 'nextra-theme-docs/style.css'
 
 export const metadata = {
@@ -37,18 +37,7 @@ export default async function RootLayout({ children }) {
   
   const navbar = (
     <Navbar
-      logo={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Image 
-            src="/images/smlogo.webp" 
-            alt="SceneMesh Studio Logo" 
-            width={24} 
-            height={24}
-            style={{ flexShrink: 0 }}
-          />
-          <b>SceneMesh Studio</b>
-        </div>
-      }
+      logo={<ThemeLogo />}
       projectLink="https://github.com/scene-mesh-studio"
     >
       <ThemeSwitch />

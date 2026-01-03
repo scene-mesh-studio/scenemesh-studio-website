@@ -225,15 +225,16 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
       description: '专业的事件驱动开发平台，原生集成 AI 能力。通过我们的综合 SDK 和现代化架构，构建可扩展的智能应用程序。',
       features: [
         '实时事件处理引擎',
-        '原生 AI 模块集成', 
+        '原生 AI 模块集成',
         '云原生可扩展架构',
         '直观的开发者 API 和 SDK'
       ],
       color: '#3b82f6',
-      shape: 'circle'
+      shape: 'circle',
+      link: '/product/streamind/'
     },
     {
-      id: 'entity-engine', 
+      id: 'entity-engine',
       title: 'Entity Engine',
       description: '先进的类型安全数据建模引擎，具备智能模式生成能力。将复杂的数据结构转换为可查询实体，自动处理关系映射和数据验证。',
       features: [
@@ -243,35 +244,23 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
         '企业级扩展性和性能'
       ],
       color: '#8b5cf6',
-      shape: 'triangle'
+      shape: 'triangle',
+      link: '/product/entityengine/'
     }
   ]
 
   return (
-    <div 
-      className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
+    <div
+      className="dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900"
       style={{
         position: 'relative',
         border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
         overflow: 'hidden',
         maxWidth: '1200px',
-        margin: '0 auto'
+        margin: '0 auto',
+        background: isDark ? undefined : 'linear-gradient(to bottom right, rgb(248, 248, 247), rgb(249, 250, 251))'
       }}>
-      
-      {/* 装饰性渐变光晕 */}
-      <div 
-        className="opacity-10 dark:opacity-5"
-        style={{
-          position: 'absolute',
-          top: '-50%',
-          right: '-50%',
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 50%)',
-          pointerEvents: 'none'
-        }} 
-      />
-      
+
       {/* 2列网格布局 */}
       <div 
         className="bg-gray-100/50 dark:bg-gray-700/30"
@@ -280,8 +269,7 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
           gap: '1px',
           position: 'relative',
-          zIndex: 1,
-          minHeight: isMobile ? 'auto' : '520px'
+          zIndex: 1
         }}>
         {products.map((product, index) => (
           <motion.div
@@ -293,8 +281,7 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
             className="bg-white dark:bg-gray-800"
             style={{
               position: 'relative',
-              minHeight: isMobile ? 'auto' : '480px',
-              padding: isMobile ? '24px 20px' : '32px',
+              padding: isMobile ? '24px 20px' : '32px 32px 24px 32px',
               overflow: 'hidden',
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
             }}
@@ -313,7 +300,21 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
               `,
               backgroundSize: '12px 12px'
             }} />
-            
+
+            {/* 装饰性渐变光晕 - 左上角辐射 */}
+            <div
+              className="opacity-15 dark:opacity-8"
+              style={{
+                position: 'absolute',
+                top: '-50%',
+                left: '-50%',
+                width: '200%',
+                height: '200%',
+                background: `radial-gradient(circle at top left, rgba(${index === 0 ? '59, 130, 246' : '139, 92, 246'}, 0.15) 0%, rgba(${index === 0 ? '59, 130, 246' : '139, 92, 246'}, 0.08) 30%, transparent 70%)`,
+                pointerEvents: 'none'
+              }}
+            />
+
             {/* 产品序号装饰 */}
             <div 
               className="bg-blue-500 text-white"
@@ -334,10 +335,10 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
               {String(index + 1).padStart(2, '0')}
             </div>
 
-            {/* 点阵动画装饰 */}
+            {/* 点阵动画装饰 - 与按钮平行 */}
             <div style={{
               position: 'absolute',
-              bottom: '24px',
+              bottom: '32px',
               right: '24px',
               width: index === 0 ? '140px' : '120px',
               height: index === 0 ? '90px' : '100px',
@@ -390,7 +391,7 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
               </p>
 
               {/* 功能特性 */}
-              <div style={{ marginBottom: '32px' }}>
+              <div>
                 {product.features.map((feature, featureIndex) => (
                   <div
                     key={featureIndex}
@@ -400,7 +401,7 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
                       fontWeight: 500,
                       paddingLeft: '16px',
                       position: 'relative',
-                      marginBottom: '10px'
+                      marginBottom: featureIndex < product.features.length - 1 ? '10px' : '24px'
                     }}
                   >
                     <div style={{
@@ -426,6 +427,7 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
                 style={{
                   borderColor: product.color
                 }}
+                onClick={() => window.location.href = product.link}
               >
                 了解更多
                 <span style={{ fontSize: '12px' }}>→</span>
@@ -496,10 +498,6 @@ const StudioPhilosophyGrid = ({ isDark, isMobile }: { isDark: boolean; isMobile:
       description: '我们相信AI应该成为应用场景的原生能力，而非外挂式的附加工具'
     },
     {
-      title: '开源驱动创新',
-      description: '通过开源生态的力量，让技术创新惠及更广泛的开发者社区'
-    },
-    {
       title: '业务价值导向',
       description: '技术创新必须服务于真实的业务价值创造，而非为了技术而技术'
     },
@@ -518,12 +516,13 @@ const StudioPhilosophyGrid = ({ isDark, isMobile }: { isDark: boolean; isMobile:
   ]
   
   return (
-    <div 
-      className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900"
+    <div
+      className="dark:bg-gradient-to-br dark:from-gray-800 dark:to-gray-900"
       style={{
         position: 'relative',
         border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        background: isDark ? undefined : 'linear-gradient(to bottom right, rgb(248, 248, 247), rgb(249, 250, 251))'
       }}>
       
       {/* 装饰性渐变光晕 */}
@@ -540,39 +539,37 @@ const StudioPhilosophyGrid = ({ isDark, isMobile }: { isDark: boolean; isMobile:
         }} 
       />
       
-      {/* 6模块非对称网格布局 */}
-      <div 
+      {/* 5模块非对称网格布局 */}
+      <div
         className="bg-gray-100/50 dark:bg-gray-700/30"
         style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '2fr 1.2fr 1.3fr',
-          gridTemplateRows: isMobile ? 'repeat(6, auto)' : '1fr 1fr 0.8fr',
+          gridTemplateRows: isMobile ? 'repeat(5, auto)' : '1fr 1fr 0.8fr',
           gap: '1px',
           position: 'relative',
           zIndex: 1,
           minHeight: isMobile ? 'auto' : '580px'
         }}>
         {philosophies.map((philosophy, index) => {
-          // 重新设计6个模块的布局
+          // 5个模块的布局配置
           const getGridConfig = (index: number) => {
             if (isMobile) {
               // 移动端：所有模块都使用相同配置
               return { gridRow: 'span 1', gridColumn: 'span 1', isLarge: false, isWide: false }
             }
-            
-            // PC端：保持原有布局
+
+            // PC端：5模块布局
             switch(index) {
               case 0: // 原生AI能力 - 左侧大块，跨两行
                 return { gridRow: 'span 2', isLarge: true }
-              case 1: // 开源驱动创新 - 右上角
+              case 1: // 业务价值导向 - 右上左
                 return { gridRow: 'span 1', isLarge: false }
-              case 2: // 业务价值导向 - 右上中
+              case 2: // 生态共建 - 右上右
                 return { gridRow: 'span 1', isLarge: false }
-              case 3: // 生态共建 - 右中左
-                return { gridRow: 'span 1', isLarge: false }
-              case 4: // 产品驱动 - 右中右
-                return { gridRow: 'span 1', isLarge: false }
-              case 5: // 持续演进 - 整个底部区域，跨三列
+              case 3: // 产品驱动 - 右中，跨两列
+                return { gridRow: 'span 1', gridColumn: 'span 2', isLarge: false }
+              case 4: // 持续演进 - 整个底部区域，跨三列
                 return { gridRow: 'span 1', gridColumn: 'span 3', isWide: true }
               default:
                 return { gridRow: 'span 1', isLarge: false }
@@ -703,21 +700,23 @@ export default function HomePage(): React.JSX.Element {
   }, [])
   
   return (
-    <div 
-      className="bg-white dark:bg-gray-900"
-      style={{ 
-        minHeight: '100vh'
+    <div
+      className="dark:bg-gray-900"
+      style={{
+        minHeight: '100vh',
+        backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
       }}>
       {/* Hero Section with 3D Background */}
-      <section 
+      <section
         style={{
           position: 'relative',
           paddingTop: '120px',
           paddingBottom: '0px',
           paddingLeft: '24px',
           paddingRight: '24px',
-          minHeight: '60vh',
-          overflow: 'hidden'
+          minHeight: '45vh',
+          overflow: 'hidden',
+          background: 'transparent'
         }}
       >
         {/* 3D背景 */}
@@ -733,46 +732,17 @@ export default function HomePage(): React.JSX.Element {
             zIndex: 1
           }}
         >
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="backdrop-blur-sm bg-white/10 dark:bg-white/10 text-gray-900 dark:text-white"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 20px',
-              borderRadius: '24px',
-              fontSize: '14px',
-              marginBottom: '40px',
-              fontWeight: 500,
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-              transition: 'all 0.3s ease',
-              border: '1px solid rgba(255, 255, 255, 0.2)'
-            }}
-          >
-            <span style={{ 
-              width: '6px', 
-              height: '6px', 
-              borderRadius: '50%', 
-              background: '#10b981',
-              boxShadow: '0 0 8px rgba(16, 185, 129, 0.4)'
-            }} />
-            开源 & Apache License 2.0
-          </motion.div>
-
           {/* 主标题 */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-blue-600 dark:text-blue-400"
+            className="text-gray-900 dark:text-gray-100"
             style={{
               fontSize: 'clamp(56px, 8vw, 84px)',
               fontWeight: 800,
               lineHeight: 1.05,
-              marginBottom: '32px',
+              marginBottom: '48px',
               letterSpacing: '-0.03em'
             }}
           >
@@ -784,18 +754,21 @@ export default function HomePage(): React.JSX.Element {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="text-white"
             style={{
               fontSize: 'clamp(24px, 4vw, 36px)',
               fontWeight: 600,
               lineHeight: 1.2,
-              marginBottom: '24px',
-              letterSpacing: '-0.01em'
+              marginBottom: '36px',
+              letterSpacing: '-0.01em',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
             }}
           >
             构建原生的AI应用场景
           </motion.h2>
-          
+
           {/* 描述文字 */}
           <motion.p
             initial={{ opacity: 0, y: 30 }}
@@ -805,54 +778,62 @@ export default function HomePage(): React.JSX.Element {
             style={{
               fontSize: '20px',
               lineHeight: 1.6,
-              maxWidth: '700px',
-              margin: '0 auto 48px'
+              maxWidth: '1200px',
+              margin: '0 auto 80px',
+              whiteSpace: isMobile ? 'normal' : 'nowrap'
             }}
           >
-            我们相信AI应该成为应用场景的原生能力，而非附加工具。
-            让AI真正服务于业务价值的创造。
+            我们相信AI应该成为应用场景的原生能力，而非附加工具。让AI真正服务于业务价值的创造。
           </motion.p>
 
-          {/* CTA按钮 */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            style={{
-              display: 'flex',
-              gap: '16px',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              marginBottom: '60px'
-            }}
-          >
-            <Button 
-              variant="outline" 
-              size="lg" 
-              onClick={() => window.location.href = '/docs'}
+        </div>
+      </section>
+
+      {/* 产品展示 */}
+      <section style={{
+        padding: '80px 24px'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-gray-900 dark:text-gray-100"
+              style={{
+                fontSize: '36px',
+                fontWeight: 700,
+                marginBottom: '16px'
+              }}
             >
-              开始构建
-              <span style={{ marginLeft: '8px' }}>→</span>
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="lg" 
-              onClick={() => window.open('https://github.com/scene-mesh-studio', '_blank')}
+              工作室产品
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-gray-600 dark:text-gray-300"
+              style={{
+                fontSize: '18px'
+              }}
             >
-              <span style={{ marginRight: '8px' }}>⭐</span>
-              GitHub
-            </Button>
-          </motion.div>
+              选择你想使用的产品
+            </motion.p>
+          </div>
+
+          <StudioProducts isDark={isDark} isMobile={isMobile} />
 
         </div>
       </section>
 
       {/* 工作室理念展示 */}
-      <section 
-        className="bg-gray-50 dark:bg-gray-800"
+      <section
+        className="dark:bg-gray-800"
         style={{
-          padding: '80px 24px',
-          position: 'relative'
+          padding: '0px 24px 80px',
+          position: 'relative',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
@@ -889,55 +870,47 @@ export default function HomePage(): React.JSX.Element {
         </div>
       </section>
 
-      {/* 产品展示 */}
-      <section style={{
-        padding: '80px 24px'
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '64px' }}>
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-gray-900 dark:text-gray-100"
-              style={{
-                fontSize: '36px',
-                fontWeight: 700,
-                marginBottom: '16px'
-              }}
-            >
-              工作室产品
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="text-gray-600 dark:text-gray-300"
-              style={{
-                fontSize: '18px'
-              }}
-            >
-              构建现代软件应用所需的一切工具
-            </motion.p>
-          </div>
-
-          <div style={{ marginBottom: '64px' }}>
-            <StudioProducts isDark={isDark} isMobile={isMobile} />
-          </div>
-
-        </div>
-      </section>
-
 
       {/* Footer */}
-      <footer 
-        className="bg-white dark:bg-gray-900"
+      <footer
+        className="dark:bg-gray-900"
         style={{
           position: 'relative',
-          padding: '60px 24px 40px'
+          padding: '24px 24px 20px',
+          backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)',
+          overflow: 'hidden'
         }}>
-        
+
+        {/* 蓝色渐变 - 左上角向下辐射 */}
+        <div
+          className="opacity-20 dark:opacity-10"
+          style={{
+            position: 'absolute',
+            top: '-50%',
+            left: '-50%',
+            width: '200%',
+            height: '200%',
+            background: 'radial-gradient(circle at top left, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.15) 20%, transparent 50%)',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
+
+        {/* 紫色渐变 - 右下角向上辐射 */}
+        <div
+          className="opacity-20 dark:opacity-10"
+          style={{
+            position: 'absolute',
+            bottom: '-50%',
+            right: '-50%',
+            width: '200%',
+            height: '200%',
+            background: 'radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.15) 20%, transparent 50%)',
+            pointerEvents: 'none',
+            zIndex: 0
+          }}
+        />
+
         {/* 网格背景 */}
         <div style={{
           position: 'absolute',
@@ -951,176 +924,52 @@ export default function HomePage(): React.JSX.Element {
             linear-gradient(to bottom, ${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px)
           `,
           backgroundSize: '32px 32px',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          zIndex: 1
         }} />
 
-        <div style={{ 
-          maxWidth: '1200px', 
+        <div style={{
+          maxWidth: '1200px',
           margin: '0 auto',
           position: 'relative',
-          zIndex: 1
+          zIndex: 2
         }}>
-          
-          {/* 四列布局 */}
+
+          {/* Logo居中 */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
-            gridTemplateRows: isMobile ? 'auto auto' : 'auto',
-            gap: isMobile ? '32px' : '48px',
-            marginBottom: isMobile ? '32px' : '48px'
+            textAlign: 'center',
+            marginBottom: '16px'
           }}>
-
-            {/* 品牌与愿景 - 左侧第一列 */}
-            <div style={{ 
-              textAlign: 'center',
-              gridColumn: isMobile ? '1' : 'auto',
-              gridRow: isMobile ? '1' : 'auto'
-            }}>
-              <div 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}>
-                <Image 
-                  src="/images/smlogo-1.webp" 
-                  alt="SceneMesh Studio Logo" 
-                  width={200} 
-                  height={200}
-                  style={{ flexShrink: 0 }}
-                />
-              </div>
-            </div>
-            
-            {/* 其他三列容器 - 移动端并排显示 */}
-            <div style={{
-              gridColumn: isMobile ? '1' : '2 / 5',
-              gridRow: isMobile ? '2' : 'auto',
-              display: 'grid',
-              gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 1fr)',
-              gap: isMobile ? '16px' : '48px',
-              textAlign: isMobile ? 'center' : 'left'
-            }}>
-            
-            {/* 快速导航 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                快速导航
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: '产品展示', href: '#products' },
-                  { name: '开源项目', href: 'https://github.com/scene-mesh-studio' },
-                  { name: '解决方案', href: '/solutions' },
-                  { name: '定价方案', href: '/pricing' }
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                    target={link.href.startsWith('http') ? '_blank' : '_self'}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* 资源与支持 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                资源与支持
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: '开发文档', href: '/docs' },
-                  { name: 'API文档', href: '/docs/api' },
-                  { name: '社区论坛', href: '/community' },
-                  { name: '技术博客', href: '/blog' }
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                    target={link.href.startsWith('http') ? '_blank' : '_self'}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* 关注我们 */}
-            <div>
-              <h3 
-                className="text-gray-900 dark:text-gray-100"
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  marginBottom: '24px'
-                }}>
-                关注我们
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[
-                  { name: 'GitHub', href: 'https://github.com/scene-mesh-studio' },
-                ].map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.href}
-                    className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                    style={{
-                      textDecoration: 'none',
-                      fontSize: '14px',
-                      transition: 'color 0.2s'
-                    }}
-                    target={link.href.startsWith('http') ? '_blank' : '_self'}
-                  >
-                    • {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-            
+            <div
+              className="text-gray-900 dark:text-gray-100"
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+              <Image
+                src={isDark ? "/images/smlogo-down-white.webp" : "/images/smlogo-down-black.webp"}
+                alt="SceneMesh Studio Logo"
+                width={200}
+                height={200}
+                style={{ flexShrink: 0 }}
+              />
             </div>
           </div>
 
           {/* 底部版权信息 */}
-          <div 
+          <div
             className="border-t border-gray-200 dark:border-gray-600"
             style={{
-              paddingTop: '32px',
+              paddingTop: '12px',
               textAlign: 'center'
             }}>
-            <div 
+            <div
               className="text-gray-500 dark:text-gray-400"
               style={{
                 fontSize: '14px'
               }}>
-              © 2025 SceneMesh Studio 基于Apache License 2.0开源
+              © 2025 SceneMesh Studio
             </div>
           </div>
         </div>

@@ -1,0 +1,158 @@
+# 能力注册器
+
+`CapabilityRegistry` 是设备能力的中央注册表，用于注册动作处理器（Action Handlers）和数据上报器（Data Reporters）。
+
+## 类定义
+
+```cpp
+namespace streamind {
+    class CapabilityRegistry;
+}
+```
+
+## 动作处理器
+
+### RegisterAction()
+
+注册指令处理器。
+
+**函数签名**：
+```cpp
+void RegisterAction(
+    const std::string& action_name,
+    ActionHandler handler
+);
+```
+
+**参数**：
+- `action_name`: 指令名称（如 "motor.move", "led.set_color"）
+- `handler`: 处理函数，返回 `bool` 表示成功/失败
+
+**示例**：
+```cpp
+registry.RegisterAction("servo.rotate", [](const Directive& dir) {
+    int angle = dir.GetIntParameter("angle", 90);
+    servo_set_angle(angle);
+    return true;
+});
+```
+
+**注意**：
+- 处理器在 SDK 内部线程执行，保持处理速度快
+- 长时间任务应使用 `ExecuteHardwareTask()` 异步执行
+
+### SupportsAction()
+
+检查是否支持某个指令。
+
+**函数签名**：
+```cpp
+bool SupportsAction(const std::string& action_name) const;
+```
+
+### GetSupportedActions()
+
+获取所有已注册的指令列表。
+
+**函数签名**：
+```cpp
+std::vector<std::string> GetSupportedActions() const;
+```
+
+## 数据上报器
+
+### RegisterEventData()
+
+注册事件触发的数据源。
+
+**函数签名**：
+```cpp
+void RegisterEventData(
+    const std::string& data_type,
+    DataReporter reporter,
+    const std::string& trigger_event
+);
+```
+
+**示例**：
+```cpp
+registry.RegisterEventData("sensor.distance", []() {
+    cJSON* data = cJSON_CreateObject();
+    cJSON_AddNumberToObject(data, "distance_cm", ultrasonic_read());
+    return data;
+}, "motion_detected");
+```
+
+### RegisterTimerData()
+
+注册定时上报的数据源。
+
+**函数签名**：
+```cpp
+void RegisterTimerData(
+    const std::string& data_type,
+    DataReporter reporter,
+    int interval_ms
+);
+```
+
+**示例**：
+```cpp
+// 每 5 秒上报一次温度
+registry.RegisterTimerData("sensor.temperature", []() {
+    cJSON* data = cJSON_CreateObject();
+    cJSON_AddNumberToObject(data, "celsius", read_temperature());
+    return data;
+}, 5000);
+```
+
+### TriggerEventReport()
+
+触发事件数据上报。
+
+**函数签名**：
+```cpp
+int TriggerEventReport(const std::string& event_name);
+```
+
+**返回值**：触发的数据源数量。
+
+## 数据类型
+
+### ActionHandler
+
+```cpp
+using ActionHandler = std::function<bool(const foundation::Directive&)>;
+```
+
+### DataReporter
+
+```cpp
+using DataReporter = std::function<cJSON*()>;
+```
+
+**注意**：返回的 cJSON 对象由调用者负责释放。
+
+## 完整示例
+
+```cpp
+#include <streamind.h>
+
+void setup_capabilities() {
+    auto& sdk = streamind::SDK::GetInstance();
+    auto& registry = sdk.GetRegistry();
+
+    // 注册动作
+    registry.RegisterAction("led.on", [](const Directive& dir) {
+        gpio_set_level(LED_PIN, 1);
+        return true;
+    });
+
+    // 注册定时数据
+    registry.RegisterTimerData("sensor.temperature", []() {
+        cJSON* data = cJSON_CreateObject();
+        cJSON_AddNumberToObject(data, "celsius", read_temp());
+        return data;
+    }, 10000);  // 每 10 秒
+}
+```

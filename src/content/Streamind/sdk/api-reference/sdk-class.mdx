@@ -1,0 +1,562 @@
+# SDK 核心类
+
+完整的 `streamind::SDK` 类 API 参考文档。
+
+## 类概述
+
+```cpp
+namespace streamind {
+    class SDK {
+        // 单例模式
+        static SDK& GetInstance();
+
+        // 初始化与连接
+        Error Initialize(const Config& config);
+        Error Connect();
+        void Disconnect();
+        bool IsConnected() const;
+
+        // 信号发送
+        Error SendSignal(const foundation::Signal& signal);
+        Error SendAudioData(const uint8_t* data, size_t size,
+                          const std::string& format = "opus");
+        Error RegisterDevice(const std::vector<std::string>& capabilities);
+
+        // 回调设置
+        void SetDirectiveCallback(DirectiveCallback callback);
+        void SetConnectionCallback(ConnectionCallback callback);
+        void SetAudioDataCallback(AudioDataCallback callback);
+
+        // 错误处理
+        std::string GetLastError() const;
+        void ClearError();
+
+        // 版本信息
+        static std::string GetVersion();
+        static void GetVersionComponents(int& major, int& minor, int& patch);
+
+        // 硬件任务执行
+        std::string ExecuteHardwareTask(...);
+        void AbortHardwareTasks(const std::string& hardware_type);
+        void AbortTask(const std::string& task_id);
+        bool IsAnyHardwareBusy();
+
+        // 能力注册
+        CapabilityRegistry& GetRegistry();
+        Error InitializeCapabilities();
+
+        // 指令控制
+        Error StartDirectiveReceiving(const std::string& trace_id = "");
+        void StopDirectiveReceiving();
+        bool IsReceivingDirectives() const;
+    };
+}
+```
+
+## 单例获取
+
+### GetInstance()
+
+获取 SDK 的全局单例实例。
+
+```cpp
+static SDK& GetInstance();
+```
+
+**返回值**：SDK 单例引用
+
+**示例**：
+```cpp
+auto& sdk = streamind::SDK::GetInstance();
+```
+
+**注意**：SDK 使用线程安全的单例模式，多次调用返回同一个实例。
+
+## 初始化与连接
+
+### Initialize()
+
+初始化 SDK，必须在使用其他功能前调用。
+
+```cpp
+Error Initialize(const Config& config);
+```
+
+**参数**：
+- `config` - SDK 配置对象
+
+**返回值**：`Error::OK` 表示成功，其他值表示失败
+
+**示例**：
+```cpp
+streamind::Config config;
+config.device_id = "my-device-001";
+config.device_type = "robot";
+config.endpoint = "ws://platform.com:8090/signals";
+
+// 租户和产品认证信息（必填）
+config.tenant_id = "tenant_001";
+config.product_id = "robot_product_001";
+config.product_key = "your_product_key";
+
+auto err = sdk.Initialize(config);
+if (err != streamind::Error::OK) {
+    ESP_LOGE(TAG, "Init failed: %s", sdk.GetLastError().c_str());
+}
+```
+
+### Connect()
+
+连接到云平台 WebSocket 服务器。
+
+```cpp
+Error Connect();
+```
+
+**返回值**：`Error::OK` 表示连接成功
+
+**示例**：
+```cpp
+auto err = sdk.Connect();
+if (err == streamind::Error::OK) {
+    ESP_LOGI(TAG, "Connected successfully");
+}
+```
+
+**注意**：
+- 连接前必须先调用 `Initialize()`
+- SDK 会自动处理断线重连
+- 使用 `SetConnectionCallback()` 监听连接状态变化
+
+### Disconnect()
+
+主动断开与平台的连接。
+
+```cpp
+void Disconnect();
+```
+
+**示例**：
+```cpp
+sdk.Disconnect();
+ESP_LOGI(TAG, "Disconnected from platform");
+```
+
+### IsConnected()
+
+检查当前是否已连接。
+
+```cpp
+bool IsConnected() const;
+```
+
+**返回值**：`true` 表示已连接，`false` 表示未连接
+
+**示例**：
+```cpp
+if (sdk.IsConnected()) {
+    // 发送数据
+    sdk.SendSignal(signal);
+}
+```
+
+## 信号发送
+
+### SendSignal()
+
+向平台发送 Signal 信号。
+
+```cpp
+Error SendSignal(const foundation::Signal& signal);
+```
+
+**参数**：
+- `signal` - 要发送的信号对象
+
+**返回值**：`Error::OK` 表示发送成功
+
+**示例**：
+```cpp
+foundation::Signal tempSignal("sensor.temperature");
+tempSignal.GetPayload()->SetNumber("value", 25.5);
+tempSignal.GetPayload()->SetString("unit", "celsius");
+
+auto err = sdk.SendSignal(tempSignal);
+if (err != streamind::Error::OK) {
+    ESP_LOGE(TAG, "Failed to send signal");
+}
+```
+
+### SendAudioData()
+
+发送音频数据流（用于语音识别等场景）。
+
+```cpp
+Error SendAudioData(
+    const uint8_t* data,
+    size_t size,
+    const std::string& format = "opus"
+);
+```
+
+**参数**：
+- `data` - 音频数据指针
+- `size` - 数据大小（字节）
+- `format` - 音频格式，默认 "opus"
+
+**返回值**：`Error::OK` 表示发送成功
+
+**示例**：
+```cpp
+uint8_t audio_buffer[1024];
+// ... 填充音频数据 ...
+
+auto err = sdk.SendAudioData(audio_buffer, sizeof(audio_buffer), "opus");
+if (err == streamind::Error::OK) {
+    ESP_LOGI(TAG, "Audio sent: %d bytes", sizeof(audio_buffer));
+}
+```
+
+**支持的格式**：
+- `"opus"` - OPUS 编码（推荐）
+- `"pcm"` - 原始 PCM 数据
+
+### RegisterDevice()
+
+向平台注册设备能力（通常在初始化后自动调用）。
+
+```cpp
+Error RegisterDevice(const std::vector<std::string>& capabilities);
+```
+
+**参数**：
+- `capabilities` - 能力名称列表
+
+**返回值**：`Error::OK` 表示注册成功
+
+## 回调设置
+
+### SetDirectiveCallback()
+
+设置指令接收回调函数。
+
+```cpp
+void SetDirectiveCallback(DirectiveCallback callback);
+```
+
+**回调签名**：
+```cpp
+using DirectiveCallback = std::function<void(const foundation::Directive&)>;
+```
+
+**示例**：
+```cpp
+sdk.SetDirectiveCallback([](const auto& directive) {
+    ESP_LOGI(TAG, "Received directive: %s", directive.GetName().c_str());
+    // 处理指令...
+});
+```
+
+**注意**：通常不需要手动设置，SDK 会自动分发指令到对应的 Action Handler。
+
+### SetConnectionCallback()
+
+设置连接状态变化回调。
+
+```cpp
+void SetConnectionCallback(ConnectionCallback callback);
+```
+
+**回调签名**：
+```cpp
+using ConnectionCallback = std::function<void(bool connected, const std::string& message)>;
+```
+
+**示例**：
+```cpp
+sdk.SetConnectionCallback([&sdk](bool connected, const std::string& msg) {
+    if (connected) {
+        ESP_LOGI(TAG, "Connected!");
+        sdk.StartDirectiveReceiving();
+    } else {
+        ESP_LOGW(TAG, "Disconnected: %s", msg.c_str());
+    }
+});
+```
+
+### SetAudioDataCallback()
+
+设置音频数据接收回调（用于接收 TTS 音频）。
+
+```cpp
+void SetAudioDataCallback(AudioDataCallback callback);
+```
+
+**回调签名**：
+```cpp
+using AudioDataCallback = std::function<void(const uint8_t* data, size_t size)>;
+```
+
+**示例**：
+```cpp
+sdk.SetAudioDataCallback([](const uint8_t* data, size_t size) {
+    ESP_LOGI(TAG, "Received TTS audio: %zu bytes", size);
+    // 推送到音频播放队列
+    audio_service->PushPacket(data, size);
+});
+```
+
+## 错误处理
+
+### GetLastError()
+
+获取最后一次错误的详细描述。
+
+```cpp
+std::string GetLastError() const;
+```
+
+**返回值**：错误描述字符串
+
+**示例**：
+```cpp
+auto err = sdk.Connect();
+if (err != streamind::Error::OK) {
+    ESP_LOGE(TAG, "Error: %s", sdk.GetLastError().c_str());
+}
+```
+
+### ClearError()
+
+清除错误状态。
+
+```cpp
+void ClearError();
+```
+
+## 版本信息
+
+### GetVersion()
+
+获取 SDK 版本字符串。
+
+```cpp
+static std::string GetVersion();
+```
+
+**返回值**：版本字符串（如 "1.0.0"）
+
+**示例**：
+```cpp
+std::string version = streamind::SDK::GetVersion();
+ESP_LOGI(TAG, "SDK Version: %s", version.c_str());
+```
+
+### GetVersionComponents()
+
+获取版本号的各个组成部分。
+
+```cpp
+static void GetVersionComponents(int& major, int& minor, int& patch);
+```
+
+**参数**：
+- `major` - 主版本号（输出）
+- `minor` - 次版本号（输出）
+- `patch` - 补丁版本号（输出）
+
+**示例**：
+```cpp
+int major, minor, patch;
+streamind::SDK::GetVersionComponents(major, minor, patch);
+ESP_LOGI(TAG, "Version: %d.%d.%d", major, minor, patch);
+```
+
+## 硬件任务管理
+
+### ExecuteHardwareTask()
+
+异步执行硬件任务。
+
+```cpp
+std::string ExecuteHardwareTask(
+    const std::string& directive_name,
+    const std::string& hardware_type,
+    std::function<bool()> action_func,
+    std::function<void(const std::string& task_id, bool success)> completion_callback = nullptr,
+    const std::string& send_id = ""
+);
+```
+
+**参数**：
+- `directive_name` - 指令名称
+- `hardware_type` - 硬件类型（相同类型会排队）
+- `action_func` - 任务执行函数
+- `completion_callback` - 完成回调（可选）
+- `send_id` - 发送ID（可选）
+
+**返回值**：任务ID，失败返回空字符串
+
+**示例**：
+```cpp
+std::string task_id = sdk.ExecuteHardwareTask(
+    "motor.move",
+    "motor",
+    []() -> bool {
+        // 执行耗时操作
+        motor_move(100);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        return true;
+    },
+    [](const std::string& id, bool success) {
+        ESP_LOGI(TAG, "Task %s: %s", id.c_str(), success ? "OK" : "FAIL");
+    }
+);
+```
+
+### AbortHardwareTasks()
+
+中止指定硬件类型的所有任务。
+
+```cpp
+void AbortHardwareTasks(const std::string& hardware_type);
+```
+
+**示例**：
+```cpp
+sdk.AbortHardwareTasks("motor");  // 中止所有电机任务
+```
+
+### AbortTask()
+
+中止指定ID的任务。
+
+```cpp
+void AbortTask(const std::string& task_id);
+```
+
+### IsAnyHardwareBusy()
+
+检查是否有硬件正在忙碌。
+
+```cpp
+bool IsAnyHardwareBusy();
+```
+
+**返回值**：`true` 表示有硬件忙碌
+
+## 能力注册
+
+### GetRegistry()
+
+获取能力注册器实例。
+
+```cpp
+CapabilityRegistry& GetRegistry();
+```
+
+**返回值**：能力注册器引用
+
+**示例**：
+```cpp
+auto& registry = sdk.GetRegistry();
+registry.RegisterAction("led.on", handler);
+```
+
+### InitializeCapabilities()
+
+初始化所有已注册的能力。
+
+```cpp
+Error InitializeCapabilities();
+```
+
+**返回值**：`Error::OK` 表示成功
+
+**注意**：在所有硬件适配器注册完成后调用。
+
+## 指令控制
+
+### StartDirectiveReceiving()
+
+开始接收云端指令。
+
+```cpp
+Error StartDirectiveReceiving(const std::string& trace_id = "");
+```
+
+**参数**：
+- `trace_id` - 可选的追踪ID
+
+**返回值**：`Error::OK` 表示成功
+
+**示例**：
+```cpp
+sdk.StartDirectiveReceiving();
+```
+
+### StopDirectiveReceiving()
+
+停止接收指令。
+
+```cpp
+void StopDirectiveReceiving();
+```
+
+### IsReceivingDirectives()
+
+检查是否正在接收指令。
+
+```cpp
+bool IsReceivingDirectives() const;
+```
+
+**返回值**：`true` 表示正在接收
+
+## 完整使用示例
+
+```cpp
+#include <streamind.h>
+
+extern "C" void app_main(void) {
+    // 1. 初始化
+    auto& sdk = streamind::SDK::GetInstance();
+
+    streamind::Config config;
+    config.device_id = "device-001";
+    config.device_type = "smart_device";
+    config.endpoint = "ws://platform.com:8090/signals";
+
+    // 租户和产品认证信息（必填）
+    config.tenant_id = "tenant_001";
+    config.product_id = "product_001";
+    config.product_key = "your_product_key";
+
+    sdk.Initialize(config);
+
+    // 2. 注册能力
+    auto& registry = sdk.GetRegistry();
+    registry.RegisterAction("led.on", [](const auto& d) {
+        gpio_set_level(LED_GPIO, 1);
+        return true;
+    });
+
+    // 3. 设置回调
+    sdk.SetConnectionCallback([&sdk](bool connected, const std::string& msg) {
+        if (connected) {
+            sdk.StartDirectiveReceiving();
+        }
+    });
+
+    // 4. 连接
+    sdk.Connect();
+
+    // 5. 发送心跳
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(30000));
+
+        foundation::Signal heartbeat("device.heartbeat");
+        sdk.SendSignal(heartbeat);
+    }
+}
+```

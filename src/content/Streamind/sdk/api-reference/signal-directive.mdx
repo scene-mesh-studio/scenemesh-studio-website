@@ -1,0 +1,155 @@
+# Signal 与 Directive
+
+Signal（信号）和 Directive（指令）是 StreamInd SDK 的核心通信数据结构。
+
+## Signal（信号）
+
+Signal 用于从设备向平台上报事件、数据和状态。
+
+### 类定义
+
+```cpp
+namespace streamind::foundation {
+    class Signal;
+    class SignalPayload;
+    class SignalSource;
+}
+```
+
+### 创建 Signal
+
+```cpp
+// 创建信号
+foundation::Signal signal("sensor.temperature");
+
+// 设置payload数据
+signal.GetPayload()->SetNumber("celsius", 25.5);
+signal.GetPayload()->SetString("location", "living_room");
+signal.GetPayload()->SetBool("alarm", false);
+
+// 发送
+sdk.SendSignal(signal);
+```
+
+### SignalPayload 方法
+
+```cpp
+// 设置数据
+void SetString(const std::string& key, const std::string& value);
+void SetNumber(const std::string& key, double value);
+void SetBool(const std::string& key, bool value);
+void SetObject(const std::string& key, cJSON* value);
+
+// 获取数据
+std::string GetString(const std::string& key, const std::string& default_value = "");
+double GetNumber(const std::string& key, double default_value = 0.0);
+bool GetBool(const std::string& key, bool default_value = false);
+cJSON* GetObject(const std::string& key);
+
+// 检查和管理
+bool HasKey(const std::string& key);
+void RemoveKey(const std::string& key);
+void Clear();
+```
+
+## Directive（指令）
+
+Directive 用于平台向设备下发控制命令。
+
+### 类定义
+
+```cpp
+namespace streamind::foundation {
+    class Directive;
+}
+```
+
+### 接收 Directive
+
+指令通过注册的 ActionHandler 接收：
+
+```cpp
+registry.RegisterAction("motor.move", [](const Directive& dir) {
+    // 提取参数
+    int speed = dir.GetIntParameter("speed", 100);
+    std::string direction = dir.GetStringParameter("direction", "forward");
+
+    // 执行动作
+    motor_control(speed, direction);
+
+    return true;  // 返回执行结果
+});
+```
+
+### Directive 方法
+
+```cpp
+// 基本信息
+const std::string& GetId();
+const std::string& GetName();
+uint64_t GetTimestamp();
+
+// 参数提取
+std::string GetStringParameter(const std::string& key, const std::string& defaultValue = "");
+int GetIntParameter(const std::string& key, int defaultValue = 0);
+double GetDoubleParameter(const std::string& key, double defaultValue = 0.0);
+bool GetBoolParameter(const std::string& key, bool defaultValue = false);
+
+// JSON参数
+cJSON* GetParametersAsJson();
+```
+
+## 完整示例
+
+### 上报传感器数据
+
+```cpp
+// 温度传感器数据
+foundation::Signal temp_signal("sensor.temperature");
+temp_signal.GetPayload()->SetNumber("celsius", 25.5);
+temp_signal.GetPayload()->SetNumber("humidity", 60.0);
+temp_signal.GetPayload()->SetString("sensor_id", "dht22_01");
+sdk.SendSignal(temp_signal);
+
+// 运动检测事件
+foundation::Signal motion_signal("sensor.motion_detected");
+motion_signal.GetPayload()->SetBool("detected", true);
+motion_signal.GetPayload()->SetString("location", "entrance");
+sdk.SendSignal(motion_signal);
+```
+
+### 处理控制指令
+
+```cpp
+// LED控制
+registry.RegisterAction("led.set_color", [](const Directive& dir) {
+    int r = dir.GetIntParameter("r", 0);
+    int g = dir.GetIntParameter("g", 0);
+    int b = dir.GetIntParameter("b", 0);
+
+    led_set_rgb(r, g, b);
+    return true;
+});
+
+// 舵机控制
+registry.RegisterAction("servo.rotate", [](const Directive& dir) {
+    int servo_id = dir.GetIntParameter("servo_id", 0);
+    int angle = dir.GetIntParameter("angle", 90);
+
+    if (angle < 0 || angle > 180) {
+        ESP_LOGE("APP", "Invalid angle: %d", angle);
+        return false;
+    }
+
+    servo_set_angle(servo_id, angle);
+    return true;
+});
+```
+
+## 最佳实践
+
+1. **Signal 命名**：使用 `category.event` 格式（如 `sensor.temperature`, `device.status`）
+2. **Payload 数据**：保持简洁，避免大对象
+3. **Directive 验证**：始终验证参数有效性
+4. **错误处理**：Directive 失败时返回 `false`
+5. **异步操作**：耗时操作使用 `ExecuteHardwareTask()`

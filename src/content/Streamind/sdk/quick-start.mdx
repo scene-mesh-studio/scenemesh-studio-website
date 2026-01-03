@@ -1,0 +1,382 @@
+# 快速开始
+
+5分钟快速集成 StreamInd SDK 到你的 ESP32-S3 项目。
+
+## 前置要求
+
+开始之前，请确保你已准备好：
+
+- ✅ **ESP-IDF 5.0+** - [安装指南](https://docs.espressif.com/projects/esp-idf/zh_CN/latest/esp32s3/get-started/)
+- ✅ **ESP32-S3 开发板** - 推荐 16MB Flash + 8MB PSRAM
+- ✅ **基本的 C++ 知识** - 熟悉 C++17 语法
+- ✅ **WiFi 网络** - 用于连接云平台
+- ✅ **StreamInd 平台账号** - 获取租户ID和产品认证信息
+
+### 获取平台认证信息
+
+在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息：
+
+1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
+2. **product_id**（产品ID）- 设备所属产品的标识
+3. **product_key**（产品密钥）- 产品的访问密钥
+
+登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
+
+## 安装 SDK
+
+### 方法 A：使用 Git Submodule（推荐）
+
+```bash
+cd your_project
+git submodule add https://github.com/streamind/sdk-prebuilt.git components/streamind_sdk
+git submodule update --init --recursive
+```
+
+### 方法 B：直接复制
+
+1. 下载 [最新版本](https://github.com/streamind/sdk-prebuilt/releases)
+2. 解压到 `your_project/components/streamind_sdk/`
+
+## 配置项目
+
+### 步骤 1：编辑 CMakeLists.txt
+
+在 `main/CMakeLists.txt` 中添加 SDK 依赖：
+
+```cmake
+idf_component_register(
+    SRCS "main.cpp"
+    INCLUDE_DIRS "."
+    REQUIRES streamind_sdk  # 添加StreamInd SDK依赖
+)
+```
+
+### 步骤 2：设置分区表（可选）
+
+如果你的项目功能较多，建议使用自定义分区表。在 `sdkconfig.defaults` 中添加：
+
+```ini
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+```
+
+## 初始化 SDK
+
+### 完整示例代码
+
+创建 `main/main.cpp`：
+
+```cpp
+#include <streamind.h>
+#include <esp_log.h>
+#include <esp_wifi.h>
+#include <nvs_flash.h>
+
+static const char* TAG = "APP";
+
+// WiFi 配置（请替换为你的WiFi信息）
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+
+// StreamInd 平台配置
+#define STREAMIND_ENDPOINT "ws://your-platform.com:8090/signals"
+#define DEVICE_ID "esp32s3_001"
+
+// 平台认证信息（从开发配置菜单获取）
+#define TENANT_ID "tenant_001"
+#define PRODUCT_ID "product_001"
+#define PRODUCT_KEY "your_product_key"
+
+// WiFi 初始化（简化版）
+void init_wifi() {
+    nvs_flash_init();
+    esp_netif_init();
+    esp_event_loop_create_default();
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+
+    wifi_config_t wifi_config = {};
+    strcpy((char*)wifi_config.sta.ssid, WIFI_SSID);
+    strcpy((char*)wifi_config.sta.password, WIFI_PASSWORD);
+
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+    esp_wifi_start();
+    esp_wifi_connect();
+
+    ESP_LOGI(TAG, "WiFi connecting...");
+    vTaskDelay(pdMS_TO_TICKS(5000));  // 等待连接
+}
+
+extern "C" void app_main(void) {
+    // 1️⃣ 初始化WiFi
+    init_wifi();
+
+    // 2️⃣ 创建SDK配置
+    streamind::Config config;
+    config.device_id = DEVICE_ID;
+    config.device_type = "smart_device";
+    config.endpoint = STREAMIND_ENDPOINT;
+
+    // 租户和产品认证信息（必填）
+    config.tenant_id = TENANT_ID;
+    config.product_id = PRODUCT_ID;
+    config.product_key = PRODUCT_KEY;
+
+    config.connection_timeout_ms = 10000;
+    config.reconnect_interval_ms = 5000;
+
+    // 3️⃣ 获取SDK实例
+    auto& sdk = streamind::SDK::GetInstance();
+
+    // 4️⃣ 初始化SDK
+    auto err = sdk.Initialize(config);
+    if (err != streamind::Error::OK) {
+        ESP_LOGE(TAG, "❌ SDK initialization failed: %s",
+                 sdk.GetLastError().c_str());
+        return;
+    }
+    ESP_LOGI(TAG, "✅ SDK initialized");
+
+    // 5️⃣ 注册硬件能力
+    auto& registry = sdk.GetRegistry();
+
+    // 注册LED控制能力
+    registry.RegisterAction("led.on", [](const auto& directive) {
+        ESP_LOGI(TAG, "💡 LED ON command received");
+        // TODO: 实现LED控制
+        // gpio_set_level(LED_GPIO, 1);
+        return true;
+    });
+
+    registry.RegisterAction("led.off", [](const auto& directive) {
+        ESP_LOGI(TAG, "🔴 LED OFF command received");
+        // TODO: 实现LED控制
+        // gpio_set_level(LED_GPIO, 0);
+        return true;
+    });
+
+    ESP_LOGI(TAG, "✅ Registered %d actions",
+             registry.GetStats().action_count);
+
+    // 6️⃣ 设置连接回调
+    sdk.SetConnectionCallback([&sdk](bool connected, const std::string& msg) {
+        if (connected) {
+            ESP_LOGI(TAG, "🌐 Connected to platform");
+            // 连接成功后启动指令接收
+            sdk.StartDirectiveReceiving();
+        } else {
+            ESP_LOGW(TAG, "⚠️ Disconnected: %s", msg.c_str());
+        }
+    });
+
+    // 7️⃣ 连接到平台
+    err = sdk.Connect();
+    if (err != streamind::Error::OK) {
+        ESP_LOGE(TAG, "❌ Failed to connect: %s",
+                 sdk.GetLastError().c_str());
+        return;
+    }
+
+    ESP_LOGI(TAG, "🚀 SDK started successfully!");
+
+    // 8️⃣ 定时发送心跳信号（示例）
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(30000));  // 30秒
+
+        if (sdk.IsConnected()) {
+            foundation::Signal heartbeat("device.heartbeat");
+            heartbeat.GetPayload()->SetNumber("uptime", esp_timer_get_time() / 1000000);
+            heartbeat.GetPayload()->SetNumber("free_heap", esp_get_free_heap_size());
+            sdk.SendSignal(heartbeat);
+
+            ESP_LOGI(TAG, "💓 Heartbeat sent");
+        }
+    }
+}
+```
+
+## 编译和烧录
+
+### 设置目标芯片
+
+```bash
+idf.py set-target esp32s3
+```
+
+### 配置项目（可选）
+
+```bash
+idf.py menuconfig
+```
+
+推荐配置：
+- **Component config → ESP32S3-Specific** → `Support for external, SPI-connected RAM`
+- **Component config → LWIP** → `TCP/IP Task Stack Size` = 8192
+
+### 编译项目
+
+```bash
+idf.py build
+```
+
+### 烧录和监控
+
+```bash
+idf.py -p /dev/ttyUSB0 flash monitor
+```
+
+（macOS 用户通常使用 `/dev/tty.usbserial-*` 或 `/dev/tty.SLAB_USBtoUART`）
+
+## 验证安装
+
+### 期望的日志输出
+
+启动后应该看到以下日志：
+
+```
+I (1234) APP: ✅ SDK initialized
+I (1250) APP: ✅ Registered 2 actions
+I (3456) APP: 🌐 Connected to platform
+I (3460) StreamInd: Device registered: esp32s3_001
+I (3465) APP: 🚀 SDK started successfully!
+I (33465) APP: 💓 Heartbeat sent
+```
+
+### 测试指令接收
+
+在你的平台控制台发送指令：
+
+```json
+{
+  "name": "led.on",
+  "parameters": "{}"
+}
+```
+
+应该看到日志：
+
+```
+I (45678) APP: 💡 LED ON command received
+```
+
+## 下一步
+
+### 📤 发送自定义信号
+
+```cpp
+// 上报温度传感器数据
+foundation::Signal signal("sensor.temperature");
+signal.GetPayload()->SetNumber("value", 25.5);
+signal.GetPayload()->SetString("unit", "celsius");
+signal.GetPayload()->SetNumber("timestamp", esp_timer_get_time() / 1000);
+sdk.SendSignal(signal);
+```
+
+### 🎤 接收 TTS 音频
+
+```cpp
+sdk.SetAudioDataCallback([](const uint8_t* data, size_t size) {
+    ESP_LOGI(TAG, "🔊 Received TTS audio: %zu bytes", size);
+    // TODO: 推送到音频解码队列
+    // audio_service->PushPacket(data, size);
+});
+```
+
+### 📣 发送音频数据
+
+```cpp
+// 发送麦克风录音（OPUS格式）
+uint8_t audio_buffer[1024];
+// ... 录音并编码为OPUS ...
+sdk.SendAudioData(audio_buffer, sizeof(audio_buffer), "opus");
+```
+
+### 🔧 注册硬件适配器
+
+```cpp
+// 创建硬件适配器类
+class ServoAdapter {
+public:
+    static std::string GetModuleName() { return "servo"; }
+
+    static void RegisterCapabilities(streamind::CapabilityRegistry& registry) {
+        registry.RegisterAction("servo.set_angle", HandleSetAngle);
+    }
+
+private:
+    static bool HandleSetAngle(const streamind::foundation::Directive& dir) {
+        int angle = dir.GetIntParameter("angle", 90);
+        // TODO: 控制舵机
+        return true;
+    }
+};
+
+// 在app_main中注册
+streamind::RegisterHardwareAdapter<ServoAdapter>(registry);
+```
+
+## 故障排查
+
+### 连接失败
+
+**问题**：无法连接到平台
+
+**解决方案**：
+1. 检查 WiFi 是否已连接：`esp_wifi_sta_get_ap_info()`
+2. 验证服务器地址是否正确（包括端口号）
+3. 检查防火墙是否阻止 WebSocket 连接
+4. 尝试增加连接超时时间：`config.connection_timeout_ms = 20000`
+
+### 编译错误
+
+**问题**：链接错误 `undefined reference to 'streamind::SDK'`
+
+**解决方案**：
+1. 确认 `CMakeLists.txt` 中添加了 `REQUIRES streamind_sdk`
+2. 清理构建缓存：`rm -rf build && idf.py build`
+
+### 内存不足
+
+**问题**：运行时崩溃 `out of memory`
+
+**解决方案**：
+1. 增加主任务栈大小：`CONFIG_ESP_MAIN_TASK_STACK_SIZE=24576`
+2. 启用 PSRAM：`CONFIG_ESP32S3_SPIRAM_SUPPORT=y`
+3. 优化 LWIP 缓冲区大小
+
+### 调试日志
+
+启用详细日志：
+
+```cpp
+esp_log_level_set("StreamInd", ESP_LOG_DEBUG);
+esp_log_level_set("WebSocketClient", ESP_LOG_DEBUG);
+esp_log_level_set("*", ESP_LOG_INFO);  // 其他模块
+```
+
+## 完整示例
+
+查看 SDK 仓库的 `examples/` 目录获取更多示例：
+
+- **音频集成** - `examples/audio_integration.cpp`
+- **完整 TTS** - `examples/audio_tts_complete.cpp`
+- **舵机控制** - `examples/servo_integration.cpp`
+- **传感器集成** - `examples/ultrasonic_integration.cpp`
+
+## 获取帮助
+
+遇到问题？我们提供多种支持渠道：
+
+- 📖 [完整 API 文档](./api-reference/sdk-class)
+- 💬 [GitHub Discussions](https://github.com/streamind/sdk/discussions)
+- 🐛 [问题反馈](https://github.com/streamind/sdk/issues)
+- 💡 [示例代码](./examples/audio-integration)
+
+---
+
+**🎉 恭喜！你已成功集成 StreamInd SDK！**
+
+继续阅读 [核心概念](./core-concepts) 深入了解 Signal-Directive 架构。
