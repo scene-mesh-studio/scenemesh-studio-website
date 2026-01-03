@@ -1,15 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Image from 'next/image'
-
-// 客户端渲染检测Hook
-const useIsMounted = () => {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  return mounted
-}
+import { motion } from 'framer-motion'
 
 // 移动端检测Hook
 const useIsMobile = () => {
@@ -583,7 +575,7 @@ export default function StreamindPage(): React.JSX.Element {
                 margin: '0 auto'
               }}
             >
-              实时AI的"不可能三角"：延迟、成本与复杂度的三重困境
+              实时AI的&ldquo;不可能三角&rdquo;：延迟、成本与复杂度的三重困境
             </p>
           </div>
 

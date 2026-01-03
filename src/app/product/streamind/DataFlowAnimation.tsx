@@ -24,7 +24,7 @@ function CognitiveFlowParticles({
   metadata
 }: {
   isDark: boolean
-  particlesRef: React.RefObject<THREE.Points>
+  particlesRef: React.RefObject<THREE.Points | null>
   metadata: ParticleMetadata[]
 }) {
   const particleCount = metadata.length
@@ -153,8 +153,8 @@ function CognitiveFlowParticles({
   return (
     <points ref={particlesRef}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
-        <bufferAttribute attach="attributes-color" count={particleCount} array={colors} itemSize={3} />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
       <pointsMaterial
         size={0.28}
@@ -163,122 +163,6 @@ function CognitiveFlowParticles({
         opacity={1.0}
         sizeAttenuation
         blending={THREE.AdditiveBlending}
-      />
-    </points>
-  )
-}
-
-// 激活光晕组件 - 固定3个位置同步闪烁
-function ActivationGlow({
-  isDark
-}: {
-  isDark: boolean
-}) {
-  const glowRef = useRef<THREE.Points>(null)
-  const glowCount = 3 // 固定3个光晕
-
-  const { positions, colors, sizes } = useMemo(() => {
-    const positions = new Float32Array(glowCount * 3)
-    const colors = new Float32Array(glowCount * 3)
-    const sizes = new Float32Array(glowCount)
-
-    // 初始化3个光晕的固定位置
-    // 上车道 (Y=10)
-    positions[0] = -4.5
-    positions[1] = 10
-    positions[2] = -0.5
-
-    // 中车道 (Y=0)
-    positions[3] = -4.5
-    positions[4] = 0
-    positions[5] = -0.5
-
-    // 下车道 (Y=-10)
-    positions[6] = -4.5
-    positions[7] = -10
-    positions[8] = -0.5
-
-    // 颜色：白色
-    for (let i = 0; i < glowCount; i++) {
-      colors[i * 3] = 1
-      colors[i * 3 + 1] = 1
-      colors[i * 3 + 2] = 1
-      sizes[i] = 0
-    }
-
-    return { positions, colors, sizes }
-  }, [glowCount])
-
-  useFrame((state) => {
-    if (!glowRef.current) return
-
-    const glowSizes = glowRef.current.geometry.attributes.size.array as Float32Array
-
-    // 统一的闪烁周期：1.5秒一次
-    const cycleDuration = 1.5
-    const timeInCycle = state.clock.elapsedTime % cycleDuration
-    const progress = timeInCycle / cycleDuration
-
-    // 只在前0.3秒显示光晕
-    const glowDuration = 0.3
-    if (timeInCycle < glowDuration) {
-      const glowProgress = timeInCycle / glowDuration
-      const expandCurve = Math.sin(glowProgress * Math.PI)
-      const size = 0.1 + expandCurve * 0.3
-
-      // 3个光晕同时闪烁，大小一致
-      glowSizes[0] = size
-      glowSizes[1] = size
-      glowSizes[2] = size
-    } else {
-      // 其他时间隐藏光晕
-      glowSizes[0] = 0
-      glowSizes[1] = 0
-      glowSizes[2] = 0
-    }
-
-    glowRef.current.geometry.attributes.size.needsUpdate = true
-  })
-
-  return (
-    <points ref={glowRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={glowCount} array={positions} itemSize={3} />
-        <bufferAttribute attach="attributes-color" count={glowCount} array={colors} itemSize={3} />
-        <bufferAttribute attach="attributes-size" count={glowCount} array={sizes} itemSize={1} />
-      </bufferGeometry>
-      <shaderMaterial
-        transparent
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-        vertexShader={`
-          attribute float size;
-          attribute vec3 color;
-          varying vec3 vColor;
-
-          void main() {
-            vColor = color;
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = size * 80.0 * (300.0 / -mvPosition.z);
-            gl_Position = projectionMatrix * mvPosition;
-          }
-        `}
-        fragmentShader={`
-          varying vec3 vColor;
-
-          void main() {
-            vec2 center = gl_PointCoord - vec2(0.5);
-            float dist = length(center) * 2.0;
-
-            if (dist > 1.0) discard;
-
-            // 径向渐变：中心亮，边缘透明，提高透明度让识别带更明显
-            float alpha = 1.0 - smoothstep(0.0, 1.0, dist);
-            alpha = pow(alpha, 2.5) * 0.4;
-
-            gl_FragColor = vec4(vColor, alpha);
-          }
-        `}
       />
     </points>
   )

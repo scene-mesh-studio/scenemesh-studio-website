@@ -1,4 +1,4 @@
-export default {
+const meta = {
   "overview": "概览",
   "module-definition": "模块定义",
   "module-lifecycle": "模块生命周期",
@@ -6,3 +6,4 @@ export default {
   "service-registration": "服务注册",
   "configuration-management": "配置管理"
 }
+export default meta

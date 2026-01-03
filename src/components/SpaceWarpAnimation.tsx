@@ -267,25 +267,6 @@ const SpaceWarpScene: React.FC<{ isDark: boolean }> = ({ isDark }) => {
   )
 }
 
-// 响应式设置Hook
-const useResponsiveSize = () => {
-  const [size, setSize] = useState({ width: 600, height: 400 })
-  
-  useEffect(() => {
-    const updateSize = () => {
-      const width = Math.min(window.innerWidth * 0.8, 800)
-      const height = Math.min(width * 0.6, 500)
-      setSize({ width, height })
-    }
-    
-    updateSize()
-    window.addEventListener('resize', updateSize)
-    return () => window.removeEventListener('resize', updateSize)
-  }, [])
-  
-  return size
-}
-
 // 主导出组件 - 作为Hero背景
 export const SpaceWarpAnimation: React.FC<{ className?: string; isDark?: boolean }> = ({ className, isDark = false }) => {
   const [mounted, setMounted] = useState(false)

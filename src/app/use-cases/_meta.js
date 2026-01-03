@@ -1,4 +1,4 @@
-export default {
+const meta = {
   streamind: {
     type: 'menu',
     title: 'Streamind 场景',
@@ -9,3 +9,5 @@ export default {
     }
   }
 }
+
+export default meta

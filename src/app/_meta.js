@@ -1,4 +1,4 @@
-export default {
+const meta = {
   index: {
     display: 'hidden'
   },
@@ -39,3 +39,4 @@ export default {
     title: '文档'
   }
 }
+export default meta

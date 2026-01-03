@@ -1336,7 +1336,7 @@ streamind::RegisterHardwareAdapter<MotorStreamInd>(registry);
 // 完成初始化
 sdk.InitializeCapabilities();`
                 }
-              ].map((item, index) => (
+              ].map((item) => (
                 <div
                   key={item.step}
                   className="bg-white dark:bg-gray-800"

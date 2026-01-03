@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Image from 'next/image'
+import { motion } from 'framer-motion'
 
 // 客户端渲染检测Hook
 const useIsMounted = () => {
@@ -157,28 +156,6 @@ const Button: React.FC<{
     >
       {children}
     </motion.button>
-  )
-}
-
-// 精简的卡片组件
-const Card: React.FC<{
-  children: React.ReactNode
-  className?: string
-  hover?: boolean
-}> = ({ children, className = '', hover = false }) => {
-  return (
-    <motion.div
-      whileHover={hover ? { y: -4, boxShadow: theme.shadows.xl } : {}}
-      className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ${className}`}
-      style={{
-        borderRadius: theme.borderRadius.lg,
-        padding: theme.spacing['2xl'],
-        boxShadow: theme.shadows.sm,
-        transition: 'all 0.2s ease'
-      }}
-    >
-      {children}
-    </motion.div>
   )
 }
 
@@ -547,213 +524,6 @@ const CoreFeatures = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-// 代码示例展示
-const CodeExamples = () => {
-  const examples = [
-    {
-      title: '模型定义',
-      description: '类型安全的实体模型定义',
-      code: `const UserModel: IEntityModel = {
-  name: 'User',
-  fields: {
-    id: { type: 'uuid', primary: true },
-    name: { type: 'string', required: true },
-    email: { type: 'email', unique: true },
-    status: { type: 'enum', options: ['active', 'inactive'] },
-    createdAt: { type: 'datetime', auto: true }
-  },
-  relations: {
-    profile: { type: 'one-to-one', target: 'UserProfile' },
-    posts: { type: 'one-to-many', target: 'Post' }
-  }
-}`
-    },
-    {
-      title: '视图配置',
-      description: '声明式视图配置，自动生成UI',
-      code: `const UserFormView: IEntityView = {
-  name: 'UserForm',
-  type: 'form',
-  model: 'User',
-  layout: {
-    sections: [
-      {
-        title: '基本信息',
-        fields: ['name', 'email', 'status']
-      },
-      {
-        title: '关联数据',
-        fields: ['profile', 'posts']
-      }
-    ]
-  },
-  validation: UserFormSchema
-}`
-    }
-  ]
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-      gap: theme.spacing.xl
-    }}>
-      {examples.map((example, index) => (
-        <div
-          key={example.title}
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-          style={{
-            borderRadius: theme.borderRadius.lg,
-            overflow: 'hidden'
-          }}
-        >
-          <div style={{
-            padding: theme.spacing.xl,
-            borderBottom: '1px solid var(--nextra-border)'
-          }}>
-            <h4 
-              className="text-gray-900 dark:text-gray-100"
-              style={{
-                fontSize: '16px',
-                fontWeight: 600,
-                marginBottom: '4px'
-              }}>
-              {example.title}
-            </h4>
-            <p 
-              className="text-gray-600 dark:text-gray-300"
-              style={{
-                fontSize: '14px'
-              }}>
-              {example.description}
-            </p>
-          </div>
-          <div 
-            className="bg-gray-50 dark:bg-gray-900/80"
-            style={{
-              padding: theme.spacing.lg,
-              fontSize: '12px',
-              fontFamily: 'var(--font-mono, Consolas, Monaco, monospace)',
-              lineHeight: 1.5,
-              overflow: 'auto'
-            }}
-          >
-            <pre className="text-gray-800 dark:text-gray-200">
-              <code>{example.code}</code>
-            </pre>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// 使用场景展示
-const UseCases = () => {
-  const cases = [
-    {
-      title: '中后台管理系统',
-      description: '快速构建数据密集型的管理界面，支持复杂的业务逻辑和数据关系',
-      features: ['用户权限管理', '数据报表展示', '工作流配置', '系统设置管理']
-    },
-    {
-      title: '数据工作台',
-      description: '为业务用户提供灵活的数据查看、编辑和分析能力，无需编程知识',
-      features: ['可视化数据编辑', '自定义查询', '数据导入导出', '实时协作']
-    },
-    {
-      title: '低代码平台',
-      description: '作为低代码平台的数据和视图引擎，支持拖拽式界面构建',
-      features: ['可视化建模', '组件库扩展', '模板市场', 'API自动生成']
-    },
-    {
-      title: 'AI辅助应用',
-      description: '结合AI模块提供智能化的数据处理和业务分析能力',
-      features: ['智能数据填充', '自动化规则生成', '异常检测', '预测分析']
-    }
-  ]
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-      gap: theme.spacing.xl
-    }}>
-      {cases.map((useCase, index) => (
-        <motion.div
-          key={useCase.title}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: index * 0.15 }}
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-          style={{
-            padding: theme.spacing['2xl'],
-            borderRadius: theme.borderRadius.lg,
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          {/* 渐变装饰 */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '2px',
-            background: `linear-gradient(90deg, transparent, ${'#8b5cf6'}, transparent)`
-          }} />
-          
-          <h4 
-            className="text-gray-900 dark:text-gray-100"
-            style={{
-              fontSize: '18px',
-              fontWeight: 600,
-              marginBottom: '12px'
-            }}>
-            {useCase.title}
-          </h4>
-          <p 
-            className="text-gray-600 dark:text-gray-300"
-            style={{
-              fontSize: '14px',
-              lineHeight: 1.5,
-              marginBottom: theme.spacing.lg
-            }}>
-            {useCase.description}
-          </p>
-          
-          <div style={{
-            display: 'grid',
-            gap: theme.spacing.sm
-          }}>
-            {useCase.features.map((feature, featureIndex) => (
-              <div
-                key={featureIndex}
-                className="text-gray-700 dark:text-gray-300"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: theme.spacing.sm,
-                  fontSize: '13px'
-                }}
-              >
-                <div style={{
-                  width: '4px',
-                  height: '4px',
-                  border: '1px solid #8b5cf6',
-                  background: 'transparent'
-                }} />
-                {feature}
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      ))}
     </div>
   )
 }
@@ -1243,7 +1013,7 @@ export default function EntityEnginePage(): React.JSX.Element {
                     flexWrap: 'wrap',
                     gap: '8px'
                   }}>
-                    {['类型安全', '自动推导', '热重载'].map((tag, index) => (
+                    {['类型安全', '自动推导', '热重载'].map((tag) => (
                       <span
                         key={tag}
                         style={{

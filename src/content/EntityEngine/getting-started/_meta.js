@@ -1,4 +1,4 @@
-export default {
+const meta = {
   "installation": "安装与前置条件",
   "quick-start-nextjs": "Next.js 快速集成",
   "project-structure": "项目结构建议", 
@@ -6,3 +6,4 @@ export default {
   "config-runtime-load": "运行时加载配置",
   "faq-beginner": "入门常见问题"
 }
+export default meta

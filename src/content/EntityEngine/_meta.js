@@ -1,4 +1,4 @@
-export default {
+const meta = {
   index: "概览",
   "getting-started": "快速开始",
   "concepts": "核心概念",
@@ -12,3 +12,4 @@ export default {
   "glossary": "术语表",
   "faq": "常见问题"
 }
+export default meta

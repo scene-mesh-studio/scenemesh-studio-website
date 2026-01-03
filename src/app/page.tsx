@@ -1,22 +1,15 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 
 // 动态导入3D组件避免SSR问题
-const SpaceWarpAnimation = dynamic(() => 
-  import('../components/SpaceWarpAnimation').then(mod => ({ default: mod.SpaceWarpAnimation })), 
+const SpaceWarpAnimation = dynamic(() =>
+  import('../components/SpaceWarpAnimation').then(mod => ({ default: mod.SpaceWarpAnimation })),
   { ssr: false }
 )
-
-// 客户端渲染检测Hook
-const useIsMounted = () => {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  return mounted
-}
 
 // 移动端检测Hook
 const useIsMobile = () => {
@@ -98,28 +91,6 @@ const theme = {
   }
 }
 
-// 专业图标组件 (不使用emoji)
-const Icon: React.FC<{ name: string; className?: string }> = ({ name, className = '' }) => {
-  return (
-    <div className={className} style={{ 
-      width: '24px', 
-      height: '24px', 
-      borderRadius: '50%',
-      background: `linear-gradient(135deg, ${theme.colors.blue[500]}, ${theme.colors.purple[500]})`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    }}>
-      <div style={{ 
-        width: '8px', 
-        height: '8px', 
-        borderRadius: '50%', 
-        background: theme.colors.neutral[0] 
-      }} />
-    </div>
-  )
-}
-
 // AI SDK风格按钮组件
 const Button: React.FC<{
   children: React.ReactNode
@@ -189,28 +160,6 @@ const Button: React.FC<{
     >
       {children}
     </motion.button>
-  )
-}
-
-// 精简的卡片组件
-const Card: React.FC<{
-  children: React.ReactNode
-  className?: string
-  hover?: boolean
-}> = ({ children, className = '', hover = false }) => {
-  return (
-    <motion.div
-      whileHover={hover ? { y: -4, boxShadow: theme.shadows.xl } : {}}
-      className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ${className}`}
-      style={{
-        borderRadius: theme.borderRadius.lg,
-        padding: theme.spacing['2xl'],
-        boxShadow: theme.shadows.sm,
-        transition: 'all 0.2s ease'
-      }}
-    >
-      {children}
-    </motion.div>
   )
 }
 
@@ -436,56 +385,6 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
           </motion.div>
         ))}
       </div>
-    </div>
-  )
-}
-
-// 统计数据展示组件
-const StatsSection = () => {
-  const stats = [
-    { label: '开发者', value: '2,500+' },
-    { label: '项目', value: '1,200+' },
-    { label: '国家和地区', value: '45+' },
-    { label: '贡献者', value: '150+' }
-  ]
-  
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-      gap: theme.spacing.lg,
-      marginTop: theme.spacing['3xl']
-    }}>
-      {stats.map((stat, index) => (
-        <motion.div
-          key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          style={{
-            textAlign: 'center',
-            padding: theme.spacing.lg
-          }}
-        >
-          <div 
-            className="text-blue-600 dark:text-blue-400"
-            style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              marginBottom: '4px'
-            }}>
-            {stat.value}
-          </div>
-          <div 
-            className="text-gray-600 dark:text-gray-400"
-            style={{
-              fontSize: '14px',
-              fontWeight: 500
-            }}>
-            {stat.label}
-          </div>
-        </motion.div>
-      ))}
     </div>
   )
 }

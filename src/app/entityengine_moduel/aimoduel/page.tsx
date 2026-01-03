@@ -1,15 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Image from 'next/image'
-
-// 客户端渲染检测Hook
-const useIsMounted = () => {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  return mounted
-}
+import { motion } from 'framer-motion'
 
 // 移动端检测Hook
 const useIsMobile = () => {

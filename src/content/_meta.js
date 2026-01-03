@@ -1,5 +1,6 @@
-export default {
+const meta = {
   index: '',
   Streamind: '',
   EntityEngine: ''
 }
+export default meta
