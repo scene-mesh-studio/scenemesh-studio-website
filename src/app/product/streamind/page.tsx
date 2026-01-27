@@ -3,6 +3,13 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 
+// 客户端渲染检测Hook
+const useIsMounted = () => {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  return mounted
+}
+
 // 移动端检测Hook
 const useIsMobile = () => {
   const [isMobile, setIsMobile] = useState(false)
@@ -141,7 +148,7 @@ const Button: React.FC<{
 }
 
 // Signal-Decision 架构流程演示
-const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
+const SignalFlowDemo = ({ isDark, isMobile }: { isDark: boolean; isMobile: boolean }) => {
   const steps = [
     {
       name: '多维信号提取',
@@ -150,7 +157,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
       color: '#3b82f6'
     },
     {
-      name: '智能决策引擎',
+      name: 'Agent决策引擎',
       subtitle: 'Decision Engine',
       desc: '缓存命中 → <50ms返回 · 简单任务 → 边缘小模型 · 复杂任务 → 云端大模型',
       color: '#3b82f6'
@@ -174,7 +181,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
       {/* 标题 */}
       <div style={{ textAlign: 'center', marginBottom: theme.spacing['2xl'] }}>
         <h3 className="text-gray-900 dark:text-gray-100" style={{
-          fontSize: '32px',
+          fontSize: isMobile ? '28px' : '32px',
           fontWeight: 700,
           marginBottom: '12px'
         }}>Signal-Decision 驱动架构</h3>
@@ -191,6 +198,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
           border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
           overflow: 'hidden',
           maxWidth: '1400px',
+          width: '100%',
           margin: '0 auto'
         }}>
 
@@ -212,7 +220,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
           className="bg-gray-100/50 dark:bg-gray-700/30"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
             gap: '1px',
             position: 'relative',
             zIndex: 1
@@ -223,7 +231,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
               className="bg-white dark:bg-gray-800"
               style={{
                 position: 'relative',
-                padding: theme.spacing.xl,
+                padding: isMobile ? '24px 20px' : '32px',
                 overflow: 'hidden',
                 border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
               }}
@@ -291,7 +299,7 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
               </div>
 
               {/* 箭头连接 */}
-              {index < steps.length - 1 && (
+              {!isMobile && index < steps.length - 1 && (
                 <div style={{
                   position: 'absolute',
                   right: '-10px',
@@ -315,14 +323,14 @@ const SignalFlowDemo = ({ isDark }: { isDark: boolean }) => {
 
 // 主页面组件
 export default function StreamindPage(): React.JSX.Element {
-  const [isDark, setIsDark] = useState(false)
+  const mounted = useIsMounted()
   const isMobile = useIsMobile()
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
     // 检测主题变化
     const checkTheme = () => {
-      const isDarkMode = document.documentElement.classList.contains('dark') ||
-                        window.matchMedia('(prefers-color-scheme: dark)').matches
+      const isDarkMode = document.documentElement.classList.contains('dark')
       setIsDark(isDarkMode)
     }
 
@@ -338,12 +346,18 @@ export default function StreamindPage(): React.JSX.Element {
     return () => observer.disconnect()
   }, [])
 
+  if (!mounted) {
+    return <></>
+  }
+
   return (
     <div
-      className="bg-white dark:bg-gray-900"
+      className="nx-w-full bg-white dark:bg-gray-900"
       style={{
         minHeight: '100vh',
-        backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
+        backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)',
+        overflowX: 'hidden',
+        width: '100%'
       }}>
       {/* Hero Section - 网格化设计 */}
       <section
@@ -375,7 +389,13 @@ export default function StreamindPage(): React.JSX.Element {
           zIndex: 1
         }} />
 
-        <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative', zIndex: 2 }}>
+        <div style={{
+          maxWidth: '1400px',
+          width: '100%',
+          margin: '0 auto',
+          position: 'relative',
+          zIndex: 2
+        }}>
           {/* 网格容器 */}
           <div
             style={{
@@ -444,14 +464,14 @@ export default function StreamindPage(): React.JSX.Element {
                   width: 'fit-content',
                   letterSpacing: '0.5px'
                 }}>
-                  STREAMIND
+                  STREAMIND AGENT
                 </div>
 
                 {/* 主标题 */}
-                <h1
+                <h2
                   className="text-gray-900 dark:text-gray-100"
                   style={{
-                    fontSize: isMobile ? '32px' : '42px',
+                    fontSize: isMobile ? '36px' : '52px',
                     fontWeight: 800,
                     lineHeight: 1.1,
                     marginBottom: '16px',
@@ -459,7 +479,7 @@ export default function StreamindPage(): React.JSX.Element {
                   }}
                 >
                   让你的数据在流动中思考，在实时中进化
-                </h1>
+                </h2>
 
                 {/* 副标题 */}
                 <h2
@@ -470,7 +490,7 @@ export default function StreamindPage(): React.JSX.Element {
                     marginBottom: '24px'
                   }}
                 >
-                  重构实时智能的架构范式
+                  重构实时Agent的架构范式
                 </h2>
 
                 {/* 描述 */}
@@ -482,14 +502,14 @@ export default function StreamindPage(): React.JSX.Element {
                     marginBottom: '32px'
                   }}
                 >
-                  Streamind 是首个认知流计算平台。我们将大模型的理解能力注入毫秒级的流数据管道，化“流”为“智”。
-                  使得生成式 AI 真正变成了可以处理专业任务、实时任务的“智能生产力工具”。
+                  Streamind 是首个 Agent 驱动的流计算平台。我们将 Agent 的理解能力注入实时数据流。
+                  让 Agent 真正变成了可以处理实时数据的&ldquo;生产力工具&rdquo;。
                 </p>
 
                 {/* CTA按钮 */}
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <Button variant="outline" size="md" onClick={() => window.location.href = '/docs/Streamind'}>
-                    立即构建认知流（每日100信号免费）
+                    了解更多
                     <span style={{ marginLeft: '6px' }}>→</span>
                   </Button>
                 </div>
@@ -498,16 +518,17 @@ export default function StreamindPage(): React.JSX.Element {
               {/* 右侧：特性网格 */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr',
-                gridTemplateRows: isMobile ? 'repeat(3, auto)' : '1fr 1fr 1fr'
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gridTemplateRows: isMobile ? 'repeat(6, auto)' : '1fr 1fr 1fr',
+                gap: isMobile ? '0' : '0'
               }}>
                 {[
-                  { title: '毫秒级响应', desc: '语义信号决策' },
-                  { title: '信号-决策', desc: '驱动架构' },
-                  { title: '按价值付费', desc: '信号计费模式' },
+                  { title: '毫秒级响应', desc: '理解用户意图' },
+                  { title: '理解-决策', desc: '驱动架构' },
+                  { title: '按价值付费', desc: '按使用量计费' },
                   { title: '无缝集成', desc: 'Kafka/Webhooks' },
-                  { title: '混合路由', desc: '分层推理' },
-                  { title: '企业安全', desc: '插件防护' }
+                  { title: 'Agent路由', desc: '灵活推理' },
+                  { title: '企业安全', desc: '安全防护' }
                 ].map((feature, index) => (
                   <div
                     key={feature.title}
@@ -517,8 +538,8 @@ export default function StreamindPage(): React.JSX.Element {
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'center',
-                      borderBottom: index < 4 ? `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}` : 'none',
-                      borderRight: index % 2 === 0 ? `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}` : 'none'
+                      borderBottom: isMobile ? (index < 5 ? `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}` : 'none') : (index < 4 ? `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}` : 'none'),
+                      borderRight: isMobile ? 'none' : (index % 2 === 0 ? `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}` : 'none')
                     }}
                   >
                     <div
@@ -555,17 +576,17 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             <h2
               className="text-gray-900 dark:text-gray-100"
               style={{
-                fontSize: '36px',
+                fontSize: isMobile ? '32px' : '40px',
                 fontWeight: 700,
                 marginBottom: '16px'
               }}
             >
-              为什么传统的 AI 架构无法应对实时业务？
+              为什么传统架构无法应对实时业务？
             </h2>
             <p
               className="text-gray-600 dark:text-gray-300"
@@ -575,7 +596,7 @@ export default function StreamindPage(): React.JSX.Element {
                 margin: '0 auto'
               }}
             >
-              实时AI的&ldquo;不可能三角&rdquo;：延迟、成本与复杂度的三重困境
+              实时Agent的&ldquo;不可能三角&rdquo;：延迟、成本与复杂度的三重困境
             </p>
           </div>
 
@@ -587,6 +608,7 @@ export default function StreamindPage(): React.JSX.Element {
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
               overflow: 'hidden',
               maxWidth: '1400px',
+              width: '100%',
               margin: '0 auto'
             }}>
 
@@ -638,7 +660,7 @@ export default function StreamindPage(): React.JSX.Element {
                   className="bg-white dark:bg-gray-800"
                   style={{
                     position: 'relative',
-                    padding: theme.spacing['2xl'],
+                    padding: isMobile ? '24px 20px' : '40px',
                     overflow: 'hidden',
                     border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                   }}
@@ -732,8 +754,8 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <SignalFlowDemo isDark={isDark} />
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+          <SignalFlowDemo isDark={isDark} isMobile={isMobile} />
         </div>
       </section>
 
@@ -745,12 +767,12 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '80px' }}>
             <h2
               className="text-gray-900 dark:text-gray-100"
               style={{
-                fontSize: '36px',
+                fontSize: isMobile ? '32px' : '40px',
                 fontWeight: 700,
                 marginBottom: '16px'
               }}
@@ -775,6 +797,7 @@ export default function StreamindPage(): React.JSX.Element {
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
               overflow: 'hidden',
               maxWidth: '1400px',
+              width: '100%',
               margin: '0 auto'
             }}>
 
@@ -824,7 +847,7 @@ export default function StreamindPage(): React.JSX.Element {
                   points: ['HTTP/gRPC/MQTT', 'Webhook推送', '协议自动转换']
                 },
                 {
-                  title: '混合智能路由',
+                  title: 'Agent路由',
                   subtitle: 'Hybrid Routing',
                   highlight: '平衡精度与成本',
                   description: '自动将任务分发给本地小模型 (SLM) 或云端大模型 (LLM)',
@@ -836,7 +859,7 @@ export default function StreamindPage(): React.JSX.Element {
                   className="bg-white dark:bg-gray-800"
                   style={{
                     position: 'relative',
-                    padding: theme.spacing['2xl'],
+                    padding: isMobile ? '24px 20px' : '40px',
                     overflow: 'hidden',
                     border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                   }}
@@ -961,17 +984,17 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             <h2
               className="text-gray-900 dark:text-gray-100"
               style={{
-                fontSize: '36px',
+                fontSize: isMobile ? '32px' : '40px',
                 fontWeight: 700,
                 marginBottom: '16px'
               }}
             >
-              平台核心优势
+              Streamind核心优势
             </h2>
             <p
               className="text-gray-600 dark:text-gray-300"
@@ -979,7 +1002,7 @@ export default function StreamindPage(): React.JSX.Element {
                 fontSize: '18px'
               }}
             >
-              毫秒及完成感知     实时增强型AI接入动态变换数据，让 AI 掌握“此时此刻”发生的资料
+              毫秒及完成感知     实时Agent接入动态变换数据，让Agent掌握&ldquo;此时此刻&rdquo;发生的资料
             </p>
           </div>
 
@@ -991,6 +1014,7 @@ export default function StreamindPage(): React.JSX.Element {
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
               overflow: 'hidden',
               maxWidth: '1400px',
+              width: '100%',
               margin: '0 auto'
             }}>
 
@@ -1052,7 +1076,7 @@ export default function StreamindPage(): React.JSX.Element {
                   className="bg-white dark:bg-gray-800"
                   style={{
                     position: 'relative',
-                    padding: theme.spacing['2xl'],
+                    padding: isMobile ? '24px 20px' : '40px',
                     overflow: 'hidden',
                     border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                   }}
@@ -1164,12 +1188,12 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             <h2
               className="text-gray-900 dark:text-gray-100"
               style={{
-                fontSize: '36px',
+                fontSize: isMobile ? '32px' : '40px',
                 fontWeight: 700,
                 marginBottom: '16px'
               }}
@@ -1195,6 +1219,7 @@ export default function StreamindPage(): React.JSX.Element {
               border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
               overflow: 'hidden',
               maxWidth: '1400px',
+              width: '100%',
               margin: '0 auto'
             }}>
 
@@ -1231,7 +1256,7 @@ export default function StreamindPage(): React.JSX.Element {
                 {
                   title: '金融实时风控',
                   subtitle: 'Real-time Risk Control',
-                  description: '实时向量化交易数据，识别异常模式并自动触发 Agent 调查。',
+                  description: '实时分析交易数据，识别异常模式并自动触发Agent调查。',
                   benefit: '降低误报率，实时阻断欺诈'
                 },
                 {
@@ -1246,7 +1271,7 @@ export default function StreamindPage(): React.JSX.Element {
                   className="bg-white dark:bg-gray-800"
                   style={{
                     position: 'relative',
-                    padding: theme.spacing['2xl'],
+                    padding: isMobile ? '24px 20px' : '40px',
                     overflow: 'hidden',
                     border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
                   }}
@@ -1347,17 +1372,17 @@ export default function StreamindPage(): React.JSX.Element {
           position: 'relative',
           backgroundColor: isDark ? undefined : 'rgb(248, 248, 247)'
         }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             <h2
               className="text-gray-900 dark:text-gray-100"
               style={{
-                fontSize: '36px',
+                fontSize: isMobile ? '32px' : '40px',
                 fontWeight: 700,
                 marginBottom: '16px'
               }}
             >
-              融入您现有的技术栈
+              可接对接多种技术栈
             </h2>
             <p
               className="text-gray-600 dark:text-gray-300"
@@ -1373,22 +1398,22 @@ export default function StreamindPage(): React.JSX.Element {
           <div
             className="bg-white dark:bg-gray-800"
             style={{
-              padding: theme.spacing['3xl'],
+              padding: isMobile ? '24px 20px' : '48px',
               borderRadius: theme.borderRadius.lg,
               border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`
             }}>
             <div style={{
               display: 'grid',
               gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(6, 1fr)',
-              gap: theme.spacing.xl
+              gap: isMobile ? '12px' : '24px'
             }}>
               {['Kafka', 'Redpanda', 'PostgreSQL', 'Python', 'Node.js', 'Docker', 'Kubernetes', 'gRPC', 'MQTT', 'Webhooks', 'Redis', 'Pinecone'].map((tech) => (
                 <div key={tech} style={{
-                  padding: '20px',
+                  padding: isMobile ? '12px 8px' : '20px',
                   background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
                   borderRadius: '8px',
                   textAlign: 'center',
-                  fontSize: '14px',
+                  fontSize: isMobile ? '12px' : '14px',
                   fontWeight: 500,
                   transition: 'all 0.2s',
                   cursor: 'default',
@@ -1398,55 +1423,6 @@ export default function StreamindPage(): React.JSX.Element {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section
-        className="bg-blue-600 dark:bg-blue-700"
-        style={{
-          padding: '80px 24px',
-          position: 'relative'
-        }}
-      >
-        <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
-          <h2
-            className="text-white"
-            style={{
-              fontSize: '36px',
-              fontWeight: 700,
-              marginBottom: '16px'
-            }}
-          >
-            准备好升级您的数据流了吗？
-          </h2>
-          <p
-            className="text-white/90"
-            style={{
-              fontSize: '18px',
-              marginBottom: '40px'
-            }}
-          >
-            立即开始构建实时认知流应用，每日100免费事件
-          </p>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '16px',
-              justifyContent: 'center',
-              flexWrap: 'wrap'
-            }}
-          >
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => window.location.href = '/docs/Streamind'}
-            >
-              免费开始
-              <span style={{ marginLeft: '8px' }}>→</span>
-            </Button>
           </div>
         </div>
       </section>
@@ -1510,6 +1486,7 @@ export default function StreamindPage(): React.JSX.Element {
 
         <div style={{
           maxWidth: '1200px',
+          width: '100%',
           margin: '0 auto',
           position: 'relative',
           zIndex: 2

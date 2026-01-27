@@ -14,9 +14,9 @@ async def main():
         device_id="device-001",
         device_type="sensor",
         endpoint="wss://your-platform.com/signals",
-        tenant_id="your-tenant-id",
-        product_id="your-product-id",
-        product_key="your-secret-key"
+        spaceId="your-spaceId",
+        neuronId="your-neuronId",
+        appkey="your-secret-key"
     )
 
     # 2. 创建 SDK 实例
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 ## 运行示例
 
 1. 保存代码为 `basic_usage.py`
-2. 替换配置信息（tenant_id, product_id, product_key）
+2. 替换配置信息（spaceId, neuronId, appkey）
 3. 运行：
 
 ```bash
@@ -111,9 +111,9 @@ config = Config(
     device_id="device-001",      # 设备唯一 ID
     device_type="sensor",        # 设备类型
     endpoint="wss://...",        # WebSocket 端点
-    tenant_id="...",             # 租户 ID
-    product_id="...",            # 产品 ID
-    product_key="..."            # 产品密钥
+    spaceId="...",             # 租户 ID
+    neuronId="...",            # 产品 ID
+    appkey="..."            # 产品密钥
 )
 ```
 
@@ -187,9 +187,9 @@ async def main():
         device_id=os.getenv("DEVICE_ID", "device-001"),
         device_type=os.getenv("DEVICE_TYPE", "sensor"),
         endpoint=os.getenv("STREAMIND_ENDPOINT"),
-        tenant_id=os.getenv("STREAMIND_TENANT_ID"),
-        product_id=os.getenv("STREAMIND_PRODUCT_ID"),
-        product_key=os.getenv("STREAMIND_PRODUCT_KEY")
+        spaceId=os.getenv("STREAMIND_spaceId"),
+        neuronId=os.getenv("STREAMIND_NEURONID"),
+        appkey=os.getenv("STREAMIND_APPKEY")
     )
 
     sdk = SDK()
@@ -210,9 +210,9 @@ asyncio.run(main())
 DEVICE_ID=sensor-001
 DEVICE_TYPE=temperature_sensor
 STREAMIND_ENDPOINT=wss://api.streamind.com/signals
-STREAMIND_TENANT_ID=your-tenant-id
-STREAMIND_PRODUCT_ID=your-product-id
-STREAMIND_PRODUCT_KEY=your-secret-key
+STREAMIND_spaceId=your-spaceId
+STREAMIND_NEURONID=your-neuronId
+STREAMIND_APPKEY=your-secret-key
 ```
 
 ## 定时发送数据

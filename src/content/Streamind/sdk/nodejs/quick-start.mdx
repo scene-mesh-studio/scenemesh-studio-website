@@ -13,9 +13,9 @@
 
 在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息：
 
-1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
-2. **product_id**（产品ID）- 设备所属产品的标识
-3. **product_key**（产品密钥）- 产品的访问密钥
+1. **spaceId**（租户ID）- 你的组织/账户唯一标识
+2. **neuronId**（产品ID）- 设备所属产品的标识
+3. **appkey**（产品密钥）- 产品的访问密钥
 
 登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
 
@@ -65,9 +65,9 @@ async function main() {
     'device-001',                        // deviceId - 设备唯一ID
     'sensor',                            // deviceType - 设备类型
     'wss://your-platform.com/signals',  // endpoint - WebSocket端点
-    'your-tenant-id',                    // tenantId - 替换为你的租户ID
-    'your-product-id',                   // productId - 替换为你的产品ID
-    'your-secret-key'                    // productKey - 替换为你的产品密钥
+    'your-spaceId',                    // spaceId - 替换为你的租户ID
+    'your-neuronId',                   // neuronId - 替换为你的产品ID
+    'your-secret-key'                    // appkey - 替换为你的产品密钥
   );
 
   // 2. 创建SDK实例
@@ -140,8 +140,8 @@ async function main(): Promise<void> {
     'device-001',
     'sensor',
     'wss://your-platform.com/signals',
-    'your-tenant-id',
-    'your-product-id',
+    'your-spaceId',
+    'your-neuronId',
     'your-secret-key'
   );
 
@@ -231,9 +231,9 @@ const config = new Config(
   'device-001',      // deviceId - 必需：设备唯一标识
   'sensor',          // deviceType - 必需：设备类型
   'wss://...',       // endpoint - 必需：WebSocket服务端点
-  'tenant-id',       // tenantId - 必需：租户ID
-  'product-id',      // productId - 必需：产品ID
-  'product-key'      // productKey - 必需：产品密钥
+  'spaceId',       // spaceId - 必需：租户ID
+  'neuronId',      // neuronId - 必需：产品ID
+  'appkey'        // appkey - 必需：产品密钥
 );
 ```
 
@@ -336,9 +336,9 @@ try {
 DEVICE_ID=sensor-001
 DEVICE_TYPE=temperature_sensor
 STREAMIND_ENDPOINT=wss://api.streamind.com/signals
-STREAMIND_TENANT_ID=your-tenant-id
-STREAMIND_PRODUCT_ID=your-product-id
-STREAMIND_PRODUCT_KEY=your-secret-key
+STREAMIND_spaceId=your-spaceId
+STREAMIND_NEURONID=your-neuronId
+STREAMIND_APPKEY=your-secret-key
 ```
 
 使用 dotenv：
@@ -357,9 +357,9 @@ const config = new Config(
   process.env.DEVICE_ID,
   process.env.DEVICE_TYPE,
   process.env.STREAMIND_ENDPOINT,
-  process.env.STREAMIND_TENANT_ID,
-  process.env.STREAMIND_PRODUCT_ID,
-  process.env.STREAMIND_PRODUCT_KEY
+  process.env.STREAMIND_spaceId,
+  process.env.STREAMIND_NEURONID,
+  process.env.STREAMIND_APPKEY
 );
 ```
 
@@ -452,7 +452,7 @@ app.listen(3000, async () => {
 ### 无法连接
 
 1. 检查 `endpoint` 是否正确
-2. 检查 `tenantId`、`productId`、`productKey` 是否正确
+2. 检查 `spaceId`、`neuronId`、`appkey` 是否正确
 3. 检查网络连接
 
 ### 安装失败

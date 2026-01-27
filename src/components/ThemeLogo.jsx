@@ -15,7 +15,7 @@ export default function ThemeLogo() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <div style={{ width: 24, height: 24 }} />
-        <b>SceneMesh Studio</b>
+        <b>SceneMesh</b>
       </div>
     )
   }
@@ -27,13 +27,13 @@ export default function ThemeLogo() {
           ? '/images/smlogo-up-white.webp'
           : '/images/smlogo-up-black.webp'
         }
-        alt="SceneMesh Studio Logo"
+        alt="SceneMesh Logo"
         width={24}
         height={24}
         style={{ flexShrink: 0 }}
         priority
       />
-      <b>SceneMesh Studio</b>
+      <b>SceneMesh</b>
     </div>
   )
 }

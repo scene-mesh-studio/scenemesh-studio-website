@@ -13,7 +13,7 @@ import { Config } from '@streamind/sdk';
 ## 构造函数
 
 ```javascript
-const config = new Config(deviceId, deviceType, endpoint, tenantId, productId, productKey)
+const config = new Config(deviceId, deviceType, endpoint, spaceId, neuronId, appkey)
 ```
 
 **参数**：
@@ -23,9 +23,9 @@ const config = new Config(deviceId, deviceType, endpoint, tenantId, productId, p
 | `deviceId` | string | ✅ | 设备的唯一标识符 |
 | `deviceType` | string | ✅ | 设备类型 |
 | `endpoint` | string | ✅ | WebSocket 服务端点 URL |
-| `tenantId` | string | ✅ | 租户ID |
-| `productId` | string | ✅ | 产品ID |
-| `productKey` | string | ✅ | 产品密钥 |
+| `spaceId` | string | ✅ | 租户ID |
+| `neuronId` | string | ✅ | 产品ID |
+| `appkey` | string | ✅ | 产品密钥 |
 
 **示例**：
 ```javascript
@@ -33,8 +33,8 @@ const config = new Config(
   'device-001',
   'sensor',
   'wss://your-platform.com/signals',
-  'your-tenant-id',
-  'your-product-id',
+  'your-spaceId',
+  'your-neuronId',
   'your-secret-key'
 );
 ```
@@ -124,8 +124,8 @@ const config = new Config(
   process.env.DEVICE_ID,
   process.env.DEVICE_TYPE,
   process.env.STREAMIND_ENDPOINT,
-  process.env.STREAMIND_TENANT_ID,
-  process.env.STREAMIND_PRODUCT_ID,
-  process.env.STREAMIND_PRODUCT_KEY
+  process.env.STREAMIND_spaceId,
+  process.env.STREAMIND_NEURONID,
+  process.env.STREAMIND_APPKEY
 );
 ```

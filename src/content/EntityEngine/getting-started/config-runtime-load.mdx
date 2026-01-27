@@ -97,7 +97,7 @@ export { handler as GET, handler as POST };
 
 ```typescript filename="lib/tenant-config.ts"
 interface TenantConfig {
-  tenantId: string;
+  spaceId: string;
   enabledModels: string[];
   customFields?: Record<string, any>;
 }
@@ -105,14 +105,14 @@ interface TenantConfig {
 export class TenantConfigLoader {
   private configCache = new Map<string, { models: IEntityModel[], views: IEntityView[] }>();
 
-  async loadTenantConfig(tenantId: string): Promise<{ models: IEntityModel[], views: IEntityView[] }> {
+  async loadTenantConfig(spaceId: string): Promise<{ models: IEntityModel[], views: IEntityView[] }> {
     // 检查缓存
-    if (this.configCache.has(tenantId)) {
-      return this.configCache.get(tenantId)!;
+    if (this.configCache.has(spaceId)) {
+      return this.configCache.get(spaceId)!;
     }
 
     // 获取租户配置
-    const tenantConfig = await this.getTenantConfig(tenantId);
+    const tenantConfig = await this.getTenantConfig(spaceId);
     
     const models: IEntityModel[] = [];
     const views: IEntityView[] = [];
@@ -134,22 +134,22 @@ export class TenantConfigLoader {
         views.push(...viewModule.views);
         
       } catch (error) {
-        console.warn(`Failed to load model ${modelName} for tenant ${tenantId}:`, error);
+        console.warn(`Failed to load model ${modelName} for tenant ${spaceId}:`, error);
       }
     }
 
     const result = { models, views };
-    this.configCache.set(tenantId, result);
+    this.configCache.set(spaceId, result);
     
     return result;
   }
 
-  private async getTenantConfig(tenantId: string): Promise<TenantConfig> {
+  private async getTenantConfig(spaceId: string): Promise<TenantConfig> {
     // 从数据库或配置服务获取租户配置
     // 这里使用模拟数据
     const configs: Record<string, TenantConfig> = {
       'tenant-a': {
-        tenantId: 'tenant-a',
+        spaceId: 'tenant-a',
         enabledModels: ['User', 'Product', 'Order'],
         customFields: {
           User: {
@@ -158,12 +158,12 @@ export class TenantConfigLoader {
         }
       },
       'tenant-b': {
-        tenantId: 'tenant-b',
+        spaceId: 'tenant-b',
         enabledModels: ['User', 'Product'],
       }
     };
 
-    return configs[tenantId] || { tenantId, enabledModels: ['User'] };
+    return configs[spaceId] || { spaceId, enabledModels: ['User'] };
   }
 
   private applyCustomFields(model: IEntityModel, customFields: Record<string, any>): IEntityModel {
@@ -187,21 +187,21 @@ export const tenantConfigLoader = new TenantConfigLoader();
 
 ### 租户路由处理
 
-```typescript filename="app/api/[tenantId]/ee/[[...slug]]/route.ts"
+```typescript filename="app/api/[spaceId]/ee/[[...slug]]/route.ts"
 import { fetchEntityEntranceHandler } from '@scenemesh/entity-engine/server';
 import { tenantConfigLoader } from '../../../../../lib/tenant-config';
 
-const handler = async (req: Request, { params }: { params: { tenantId: string } }) => {
-  const { tenantId } = params;
+const handler = async (req: Request, { params }: { params: { spaceId: string } }) => {
+  const { spaceId } = params;
   
   // 验证租户ID
-  if (!tenantId) {
+  if (!spaceId) {
     return new Response('Tenant ID required', { status: 400 });
   }
 
   try {
     // 加载租户配置
-    const config = await tenantConfigLoader.loadTenantConfig(tenantId);
+    const config = await tenantConfigLoader.loadTenantConfig(spaceId);
     
     const initializer = new EnginePrimitiveInitializer({
       models: config.models,
@@ -210,12 +210,12 @@ const handler = async (req: Request, { params }: { params: { tenantId: string } 
 
     return fetchEntityEntranceHandler({
       request: req,
-      endpoint: `/api/${tenantId}/ee`,
+      endpoint: `/api/${spaceId}/ee`,
       initializer
     });
     
   } catch (error) {
-    console.error(`Failed to load config for tenant ${tenantId}:`, error);
+    console.error(`Failed to load config for tenant ${spaceId}:`, error);
     return new Response('Configuration error', { status: 500 });
   }
 };

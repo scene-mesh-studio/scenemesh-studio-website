@@ -7,14 +7,14 @@ import 'nextra-theme-docs/style.css'
 
 export const metadata = {
   title: {
-    template: '%s - SceneMesh Studio',
-    default: 'SceneMesh Studio'
+    template: '%s - SceneMesh',
+    default: 'SceneMesh'
   },
   description: '现代开发平台，提供事件驱动架构和智能数据建模引擎',
-  applicationName: 'SceneMesh Studio',
+  applicationName: 'SceneMesh',
   generator: 'Next.js',
   appleWebApp: {
-    title: 'SceneMesh Studio'
+    title: 'SceneMesh'
   },
   icons: {
     icon: [
@@ -34,11 +34,10 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
   const pageMap = await getPageMap()
-  
+
   const navbar = (
     <Navbar
       logo={<ThemeLogo />}
-      projectLink="https://github.com/scene-mesh-studio"
     >
       <ThemeSwitch />
     </Navbar>

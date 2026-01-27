@@ -16,9 +16,9 @@
 
 在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息：
 
-1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
-2. **product_id**（产品ID）- 设备所属产品的标识
-3. **product_key**（产品密钥）- 产品的访问密钥
+1. **spaceId**（租户ID）- 你的组织/账户唯一标识
+2. **neuronId**（产品ID）- 设备所属产品的标识
+3. **appkey**（产品密钥）- 产品的访问密钥
 
 登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
 
@@ -83,9 +83,9 @@ static const char* TAG = "APP";
 #define DEVICE_ID "esp32s3_001"
 
 // 平台认证信息（从开发配置菜单获取）
-#define TENANT_ID "tenant_001"
-#define PRODUCT_ID "product_001"
-#define PRODUCT_KEY "your_product_key"
+#define spaceId "tenant_001"
+#define neuronId "product_001"
+#define appkey "your_appkey"
 
 // WiFi 初始化（简化版）
 void init_wifi() {
@@ -121,9 +121,9 @@ extern "C" void app_main(void) {
     config.endpoint = STREAMIND_ENDPOINT;
 
     // 租户和产品认证信息（必填）
-    config.tenant_id = TENANT_ID;
-    config.product_id = PRODUCT_ID;
-    config.product_key = PRODUCT_KEY;
+    config.spaceId = spaceId;
+    config.neuronId = neuronId;
+    config.appkey = appkey;
 
     config.connection_timeout_ms = 10000;
     config.reconnect_interval_ms = 5000;

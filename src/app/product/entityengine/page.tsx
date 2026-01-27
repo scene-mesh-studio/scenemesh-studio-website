@@ -536,8 +536,7 @@ export default function EntityEnginePage(): React.JSX.Element {
   useEffect(() => {
     // 检测主题变化
     const checkTheme = () => {
-      const isDarkMode = document.documentElement.classList.contains('dark') || 
-                        window.matchMedia('(prefers-color-scheme: dark)').matches
+      const isDarkMode = document.documentElement.classList.contains('dark')
       setIsDark(isDarkMode)
     }
     

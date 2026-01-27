@@ -95,9 +95,9 @@ config.device_type = "robot";
 config.endpoint = "ws://platform.com:8090/signals";
 
 // 租户和产品认证信息（必填）
-config.tenant_id = "tenant_001";
-config.product_id = "robot_product_001";
-config.product_key = "your_product_key";
+config.spaceId = "tenant_001";
+config.neuronId = "robot_product_001";
+config.appkey = "your_appkey";
 
 auto err = sdk.Initialize(config);
 if (err != streamind::Error::OK) {
@@ -528,9 +528,9 @@ extern "C" void app_main(void) {
     config.endpoint = "ws://platform.com:8090/signals";
 
     // 租户和产品认证信息（必填）
-    config.tenant_id = "tenant_001";
-    config.product_id = "product_001";
-    config.product_key = "your_product_key";
+    config.spaceId = "tenant_001";
+    config.neuronId = "product_001";
+    config.appkey = "your_appkey";
 
     sdk.Initialize(config);
 

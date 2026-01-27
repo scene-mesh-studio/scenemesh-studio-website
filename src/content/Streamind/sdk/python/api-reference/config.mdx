@@ -15,9 +15,9 @@ config = Config(
     device_id: str,
     device_type: str,
     endpoint: str,
-    tenant_id: str,
-    product_id: str,
-    product_key: str
+    spaceId: str,
+    neuronId: str,
+    appkey: str
 )
 ```
 
@@ -28,9 +28,9 @@ config = Config(
 | `device_id` | str | ✅ | 设备的唯一标识符 |
 | `device_type` | str | ✅ | 设备类型（如 "sensor", "actuator"） |
 | `endpoint` | str | ✅ | WebSocket 服务端点 URL |
-| `tenant_id` | str | ✅ | 租户ID（从平台获取） |
-| `product_id` | str | ✅ | 产品ID（从平台获取） |
-| `product_key` | str | ✅ | 产品密钥（从平台获取） |
+| `spaceId` | str | ✅ | 租户ID（从平台获取） |
+| `neuronId` | str | ✅ | 产品ID（从平台获取） |
+| `appkey` | str | ✅ | 产品密钥（从平台获取） |
 
 **示例**：
 ```python
@@ -38,9 +38,9 @@ config = Config(
     device_id="device-001",
     device_type="sensor",
     endpoint="wss://your-platform.com/signals",
-    tenant_id="your-tenant-id",
-    product_id="your-product-id",
-    product_key="your-secret-key"
+    spaceId="your-spaceId",
+    neuronId="your-neuronId",
+    appkey="your-secret-key"
 )
 ```
 
@@ -101,9 +101,9 @@ config = Config(
     device_id="sensor-001",
     device_type="temperature_sensor",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id="tenant-12345",
-    product_id="product-67890",
-    product_key="sk_1234567890abcdef"
+    spaceId="tenant-12345",
+    neuronId="product-67890",
+    appkey="sk_1234567890abcdef"
 )
 ```
 
@@ -116,9 +116,9 @@ config = Config(
     device_id="sensor-001",
     device_type="temperature_sensor",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id="tenant-12345",
-    product_id="product-67890",
-    product_key="sk_1234567890abcdef"
+    spaceId="tenant-12345",
+    neuronId="product-67890",
+    appkey="sk_1234567890abcdef"
 )
 
 # 自定义心跳间隔为60秒
@@ -139,18 +139,18 @@ config_sensor1 = Config(
     device_id="sensor-001",
     device_type="temperature",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id="tenant-12345",
-    product_id="product-sensors",
-    product_key="sk_sensors_key"
+    spaceId="tenant-12345",
+    neuronId="product-sensors",
+    appkey="sk_sensors_key"
 )
 
 config_sensor2 = Config(
     device_id="sensor-002",
     device_type="humidity",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id="tenant-12345",
-    product_id="product-sensors",
-    product_key="sk_sensors_key"
+    spaceId="tenant-12345",
+    neuronId="product-sensors",
+    appkey="sk_sensors_key"
 )
 
 # 不同产品的配置
@@ -158,9 +158,9 @@ config_actuator = Config(
     device_id="actuator-001",
     device_type="motor",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id="tenant-12345",
-    product_id="product-actuators",  # 不同的产品ID
-    product_key="sk_actuators_key"   # 不同的密钥
+    spaceId="tenant-12345",
+    neuronId="product-actuators",  # 不同的产品ID
+    appkey="sk_actuators_key"   # 不同的密钥
 )
 ```
 
@@ -176,9 +176,9 @@ config = Config(
     device_id=os.getenv("DEVICE_ID", "device-001"),
     device_type=os.getenv("DEVICE_TYPE", "sensor"),
     endpoint=os.getenv("STREAMIND_ENDPOINT", "wss://api.streamind.com/signals"),
-    tenant_id=os.getenv("STREAMIND_TENANT_ID"),
-    product_id=os.getenv("STREAMIND_PRODUCT_ID"),
-    product_key=os.getenv("STREAMIND_PRODUCT_KEY")
+    spaceId=os.getenv("STREAMIND_spaceId"),
+    neuronId=os.getenv("STREAMIND_NEURONID"),
+    appkey=os.getenv("STREAMIND_APPKEY")
 )
 ```
 
@@ -187,9 +187,9 @@ config = Config(
 DEVICE_ID=sensor-001
 DEVICE_TYPE=temperature_sensor
 STREAMIND_ENDPOINT=wss://api.streamind.com/signals
-STREAMIND_TENANT_ID=tenant-12345
-STREAMIND_PRODUCT_ID=product-67890
-STREAMIND_PRODUCT_KEY=sk_1234567890abcdef
+STREAMIND_spaceId=tenant-12345
+STREAMIND_NEURONID=product-67890
+STREAMIND_APPKEY=sk_1234567890abcdef
 ```
 
 **使用 python-dotenv**：
@@ -204,9 +204,9 @@ config = Config(
     device_id=os.getenv("DEVICE_ID"),
     device_type=os.getenv("DEVICE_TYPE"),
     endpoint=os.getenv("STREAMIND_ENDPOINT"),
-    tenant_id=os.getenv("STREAMIND_TENANT_ID"),
-    product_id=os.getenv("STREAMIND_PRODUCT_ID"),
-    product_key=os.getenv("STREAMIND_PRODUCT_KEY")
+    spaceId=os.getenv("STREAMIND_spaceId"),
+    neuronId=os.getenv("STREAMIND_NEURONID"),
+    appkey=os.getenv("STREAMIND_APPKEY")
 )
 ```
 
@@ -221,9 +221,9 @@ def validate_config(config: Config) -> bool:
         config.device_id,
         config.device_type,
         config.endpoint,
-        config.tenant_id,
-        config.product_id,
-        config.product_key
+        config.spaceId,
+        config.neuronId,
+        config.appkey
     ]
 
     if not all(required_fields):
@@ -246,7 +246,7 @@ else:
 
 ## 最佳实践
 
-1. **安全存储** - 不要将 `product_key` 硬编码在代码中，使用环境变量或配置文件
+1. **安全存储** - 不要将 `appkey` 硬编码在代码中，使用环境变量或配置文件
 2. **唯一 device_id** - 确保每个设备使用唯一的 `device_id`
 3. **HTTPS 端点** - 生产环境使用 `wss://`（WebSocket Secure）而不是 `ws://`
 4. **合理超时** - 根据网络环境调整 `connection_timeout_ms`
@@ -261,9 +261,9 @@ config = Config(
     device_id="dev-sensor-001",
     device_type="sensor",
     endpoint="wss://dev.streamind.com/signals",
-    tenant_id="dev-tenant",
-    product_id="dev-product",
-    product_key="dev-key"
+    spaceId="dev-tenant",
+    neuronId="dev-product",
+    appkey="dev-key"
 )
 config.connection_timeout_ms = 15000  # 开发环境网络可能较慢
 ```
@@ -275,9 +275,9 @@ config = Config(
     device_id="prod-sensor-001",
     device_type="sensor",
     endpoint="wss://api.streamind.com/signals",
-    tenant_id=os.getenv("PROD_TENANT_ID"),
-    product_id=os.getenv("PROD_PRODUCT_ID"),
-    product_key=os.getenv("PROD_PRODUCT_KEY")
+    spaceId=os.getenv("PROD_spaceId"),
+    neuronId=os.getenv("PROD_NEURONID"),
+    appkey=os.getenv("PROD_APPKEY")
 )
 config.heartbeat_interval_ms = 30000
 config.max_reconnect_attempts = 20  # 生产环境增加重连次数

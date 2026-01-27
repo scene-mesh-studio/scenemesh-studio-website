@@ -13,9 +13,9 @@ async function main() {
         deviceId: "device-001",
         deviceType: "sensor",
         endpoint: "wss://your-platform.com/signals",
-        tenantId: "your-tenant-id",
-        productId: "your-product-id",
-        productKey: "your-secret-key"
+        spaceId: "your-spaceId",
+        neuronId: "your-neuronId",
+        appkey: "your-secret-key"
     });
 
     // 2. 创建 SDK 实例
@@ -81,7 +81,7 @@ main().catch(console.error);
 ### TypeScript
 
 1. 保存代码为 `basic_usage.ts`
-2. 替换配置信息（tenantId, productId, productKey）
+2. 替换配置信息（spaceId, neuronId, appkey）
 3. 运行：
 
 ```bash
@@ -98,9 +98,9 @@ async function main() {
         deviceId: "device-001",
         deviceType: "sensor",
         endpoint: "wss://your-platform.com/signals",
-        tenantId: "your-tenant-id",
-        productId: "your-product-id",
-        productKey: "your-secret-key"
+        spaceId: "your-spaceId",
+        neuronId: "your-neuronId",
+        appkey: "your-secret-key"
     });
 
     const sdk = new SDK();
@@ -145,9 +145,9 @@ const config = new Config({
     deviceId: "device-001",      // 设备唯一 ID
     deviceType: "sensor",        // 设备类型
     endpoint: "wss://...",       // WebSocket 端点
-    tenantId: "...",             // 租户 ID
-    productId: "...",            // 产品 ID
-    productKey: "..."            // 产品密钥
+    spaceId: "...",             // 租户 ID
+    neuronId: "...",            // 产品 ID
+    appkey: "..."            // 产品密钥
 });
 ```
 
@@ -223,9 +223,9 @@ async function main() {
         deviceId: process.env.DEVICE_ID || "device-001",
         deviceType: process.env.DEVICE_TYPE || "sensor",
         endpoint: process.env.STREAMIND_ENDPOINT || "",
-        tenantId: process.env.STREAMIND_TENANT_ID || "",
-        productId: process.env.STREAMIND_PRODUCT_ID || "",
-        productKey: process.env.STREAMIND_PRODUCT_KEY || ""
+        spaceId: process.env.STREAMIND_spaceId || "",
+        neuronId: process.env.STREAMIND_NEURONID || "",
+        appkey: process.env.STREAMIND_APPKEY || ""
     });
 
     const sdk = new SDK();
@@ -247,9 +247,9 @@ main().catch(console.error);
 DEVICE_ID=sensor-001
 DEVICE_TYPE=temperature_sensor
 STREAMIND_ENDPOINT=wss://api.streamind.com/signals
-STREAMIND_TENANT_ID=your-tenant-id
-STREAMIND_PRODUCT_ID=your-product-id
-STREAMIND_PRODUCT_KEY=your-secret-key
+STREAMIND_spaceId=your-spaceId
+STREAMIND_NEURONID=your-neuronId
+STREAMIND_APPKEY=your-secret-key
 ```
 
 **安装 dotenv**：

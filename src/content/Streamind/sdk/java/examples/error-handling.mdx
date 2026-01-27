@@ -303,18 +303,18 @@ public class ConfigValidator {
             return false;
         }
 
-        if (config.getTenantId() == null || config.getTenantId().isEmpty()) {
-            System.err.println("错误：tenantId 不能为空");
+        if (config.getspaceId() == null || config.getspaceId().isEmpty()) {
+            System.err.println("错误：spaceId 不能为空");
             return false;
         }
 
-        if (config.getProductId() == null || config.getProductId().isEmpty()) {
-            System.err.println("错误：productId 不能为空");
+        if (config.getneuronId() == null || config.getneuronId().isEmpty()) {
+            System.err.println("错误：neuronId 不能为空");
             return false;
         }
 
-        if (config.getProductKey() == null || config.getProductKey().isEmpty()) {
-            System.err.println("错误：productKey 不能为空");
+        if (config.getappkey() == null || config.getappkey().isEmpty()) {
+            System.err.println("错误：appkey 不能为空");
             return false;
         }
 

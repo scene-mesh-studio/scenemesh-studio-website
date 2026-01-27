@@ -1,22 +1,8 @@
 # SDK 选择指南
 
-StreamInd 提供四种语言的 SDK，帮助你快速集成到不同的应用场景。选择适合你项目的版本开始开发。
+Streamind 提供多种语言的 SDK，帮助你快速集成到不同的应用场景。选择适合你项目的版本开始开发。
 
-## C++ SDK
-
-**适用场景**：嵌入式设备、IoT 硬件、ESP32 开发
-
-- 🎯 **平台**：ESP32-S3（ESP-IDF 5.0+）
-- 📦 **安装**：ESP-IDF Component
-- 🚀 **特性**：低延迟、内存优化、硬件直接控制
-- 📄 **文档**：[查看 C++ SDK 文档](/Streamind/sdk/cpp)
-
-**典型应用**：
-- 智能音箱、语音助手硬件
-- IoT 传感器设备
-- 机器人控制系统
-
----
+> 🔧 **硬件开发者**：如果你正在开发嵌入式设备（如 ESP32），请查看 [通用智能硬件AI应用平台](/docs/SmartHardwarePlatform) 获取完整的硬件 SDK 文档。
 
 ## Python SDK
 
@@ -68,20 +54,19 @@ StreamInd 提供四种语言的 SDK，帮助你快速集成到不同的应用场
 
 ## 对比表
 
-| 特性 | C++ | Python | Node.js | Java |
-|------|-----|--------|---------|------|
-| 异步支持 | ✅ FreeRTOS 任务 | ✅ asyncio | ✅ Promise | ✅ CompletableFuture |
-| 多终端管理 | ❌ | ✅ | ✅ | ✅ |
-| 音频支持 | ✅ OPUS | ✅ OPUS | ✅ OPUS | ✅ OPUS |
-| 内存占用 | 极低 | 中等 | 中等 | 较高 |
-| 启动速度 | 极快 | 快 | 快 | 中等 |
-| 类型安全 | ✅ 编译期 | ❌ 运行时 | ✅ TypeScript | ✅ 编译期 |
+| 特性 | Python | Node.js | Java |
+|------|--------|---------|------|
+| 异步支持 | ✅ asyncio | ✅ Promise | ✅ CompletableFuture |
+| 多终端管理 | ✅ | ✅ | ✅ |
+| 音频支持 | ✅ OPUS | ✅ OPUS | ✅ OPUS |
+| 内存占用 | 中等 | 中等 | 较高 |
+| 启动速度 | 快 | 快 | 中等 |
+| 类型安全 | ❌ 运行时 | ✅ TypeScript | ✅ 编译期 |
 
 ## 快速开始
 
 选择你的语言后，访问对应的文档页面获取详细的安装和使用指南：
 
-- [C++ SDK 快速开始](/Streamind/sdk/cpp/quick-start)
 - [Python SDK 快速开始](/Streamind/sdk/python/quick-start)
 - [Node.js SDK 快速开始](/Streamind/sdk/nodejs/quick-start)
 - [Java SDK 快速开始](/Streamind/sdk/java/quick-start)
@@ -90,8 +75,8 @@ StreamInd 提供四种语言的 SDK，帮助你快速集成到不同的应用场
 
 所有 SDK 都需要以下认证信息：
 
-1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
-2. **product_id**（产品ID）- 设备所属产品的标识
-3. **product_key**（产品密钥）- 产品的访问密钥
+1. **spaceId**（租户ID）- 你的组织/账户唯一标识
+2. **neuronId**（产品ID）- 设备所属产品的标识
+3. **appkey**（产品密钥）- 产品的访问密钥
 
 登录 [StreamInd 控制台](https://console.streamind.com)，在 **开发配置** 菜单中可以查看和管理这些认证信息。

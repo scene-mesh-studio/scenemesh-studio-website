@@ -165,36 +165,44 @@ const Button: React.FC<{
 
 
 
-// 工作室产品展示组件 - 简洁网格设计
-const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDark, isMobile }) => {
-  const products = [
+// AI 智能硬件应用场景展示组件
+const AIHardwareScenes: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDark, isMobile }) => {
+  const scenes = [
     {
-      id: 'scenemesh',
-      title: 'Stremind',
-      description: '专业的事件驱动开发平台，原生集成 AI 能力。通过我们的综合 SDK 和现代化架构，构建可扩展的智能应用程序。',
-      features: [
-        '实时事件处理引擎',
-        '原生 AI 模块集成',
-        '云原生可扩展架构',
-        '直观的开发者 API 和 SDK'
-      ],
-      color: '#3b82f6',
-      shape: 'circle',
-      link: '/product/streamind/'
+      id: 'desktop-robot',
+      title: 'AI 桌面机器人',
+      description: '桌面陪伴、日程提醒、智能问答',
+      color: '#3b82f6'
     },
     {
-      id: 'entity-engine',
-      title: 'Entity Engine',
-      description: '先进的类型安全数据建模引擎，具备智能模式生成能力。将复杂的数据结构转换为可查询实体，自动处理关系映射和数据验证。',
-      features: [
-        'AI 驱动的智能数据建模',
-        '类型安全的高级查询引擎',
-        '实时数据同步',
-        '企业级扩展性和性能'
-      ],
-      color: '#8b5cf6',
-      shape: 'triangle',
-      link: '/product/entityengine/'
+      id: 'smart-toy',
+      title: 'AI 智能玩具',
+      description: '互动对话、情感陪伴、寓教于乐',
+      color: '#8b5cf6'
+    },
+    {
+      id: 'smart-glasses',
+      title: 'AI 智能眼镜',
+      description: '实时翻译、场景识别、语音助手',
+      color: '#10b981'
+    },
+    {
+      id: 'companion-pet',
+      title: 'AI 陪伴宠物',
+      description: '情感交互、动作响应、成长记录',
+      color: '#f59e0b'
+    },
+    {
+      id: 'home-hub',
+      title: 'AI 家居中控',
+      description: '语音控制、场景联动、设备管理',
+      color: '#ef4444'
+    },
+    {
+      id: 'edu-device',
+      title: 'AI 教育硬件',
+      description: '智能辅导、互动学习、知识问答',
+      color: '#06b6d4'
     }
   ]
 
@@ -210,29 +218,31 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
         background: isDark ? undefined : 'linear-gradient(to bottom right, rgb(248, 248, 247), rgb(249, 250, 251))'
       }}>
 
-      {/* 2列网格布局 */}
+      {/* 2×3 网格布局 */}
       <div 
         className="bg-gray-100/50 dark:bg-gray-700/30"
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
           gap: '1px',
           position: 'relative',
           zIndex: 1
         }}>
-        {products.map((product, index) => (
+        {scenes.map((scene, index) => (
           <motion.div
-            key={product.id}
-            initial={{ opacity: 0, y: 30 }}
+            key={scene.id}
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: index * 0.2, duration: 0.6 }}
-            className="bg-white dark:bg-gray-800"
+            transition={{ delay: index * 0.1, duration: 0.5 }}
+            whileHover={{ scale: 1.02 }}
+            className="bg-white dark:bg-gray-800 cursor-pointer"
             style={{
               position: 'relative',
-              padding: isMobile ? '24px 20px' : '32px 32px 24px 32px',
+              padding: isMobile ? '28px 24px' : '40px',
               overflow: 'hidden',
-              border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
+              border: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`,
+              minHeight: isMobile ? 'auto' : '200px'
             }}
           >
             {/* 微妙的内部网格 */}
@@ -242,148 +252,89 @@ const StudioProducts: React.FC<{ isDark: boolean; isMobile: boolean }> = ({ isDa
               left: 0,
               right: 0,
               bottom: 0,
-              opacity: 0.06,
+              opacity: 0.04,
               backgroundImage: `
                 linear-gradient(to right, ${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px),
                 linear-gradient(to bottom, ${isDark ? '#ffffff' : '#000000'} 1px, transparent 1px)
               `,
-              backgroundSize: '12px 12px'
+              backgroundSize: '16px 16px'
             }} />
 
-            {/* 装饰性渐变光晕 - 左上角辐射 */}
+            {/* 右上角渐变光晕 */}
             <div
-              className="opacity-15 dark:opacity-8"
               style={{
                 position: 'absolute',
                 top: '-50%',
-                left: '-50%',
-                width: '200%',
-                height: '200%',
-                background: `radial-gradient(circle at top left, rgba(${index === 0 ? '59, 130, 246' : '139, 92, 246'}, 0.15) 0%, rgba(${index === 0 ? '59, 130, 246' : '139, 92, 246'}, 0.08) 30%, transparent 70%)`,
+                right: '-50%',
+                width: '150%',
+                height: '150%',
+                background: `radial-gradient(circle at top right, ${scene.color}25 0%, ${scene.color}15 25%, ${scene.color}08 50%, transparent 70%)`,
                 pointerEvents: 'none'
               }}
             />
 
-            {/* 产品序号装饰 */}
+            {/* 序号装饰 - 无背景色 */}
             <div 
-              className="bg-blue-500 text-white"
+              className="text-gray-300 dark:text-gray-600"
               style={{
                 position: 'absolute',
-                top: '24px',
-                right: '24px',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                top: '20px',
+                right: '20px',
                 fontSize: '12px',
-                fontWeight: 600,
-                opacity: 0.9
+                fontWeight: 600
               }}>
               {String(index + 1).padStart(2, '0')}
             </div>
 
-            {/* 点阵动画装饰 - 与按钮平行 */}
-            <div style={{
-              position: 'absolute',
-              bottom: '32px',
-              right: '24px',
-              width: index === 0 ? '140px' : '120px',
-              height: index === 0 ? '90px' : '100px',
-              display: 'grid',
-              gridTemplateColumns: index === 0 ? 'repeat(12, 1fr)' : 'repeat(10, 1fr)',
-              gridTemplateRows: index === 0 ? 'repeat(7, 1fr)' : 'repeat(10, 1fr)',
-              gap: '2px'
-            }}>
-              {Array.from({ length: index === 0 ? 84 : 100 }, (_, i) => (
-                <motion.div
-                  key={i}
-                  animate={{ 
-                    opacity: [0.3, 0.7, 0.3],
-                    scale: [0.8, 1.2, 0.8]
-                  }}
-                  transition={{
-                    duration: index === 0 ? 2 : 2.5,
-                    delay: i * 0.015,
-                    repeat: Infinity,
-                    repeatType: 'reverse'
-                  }}
-                  style={{
-                    width: '4px',
-                    height: '4px',
-                    borderRadius: product.shape === 'circle' ? '50%' : '0px',
-                    background: product.color,
-                    clipPath: product.shape === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : 'none'
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* 产品内容 */}
+            {/* 场景内容 */}
             <div style={{ position: 'relative', zIndex: 1 }}>
               <h3 className="text-gray-900 dark:text-gray-100" style={{
-                fontSize: '24px',
+                fontSize: '20px',
                 fontWeight: 700,
-                marginBottom: '16px',
+                marginBottom: '12px',
                 lineHeight: 1.3
               }}>
-                {product.title}
+                {scene.title}
               </h3>
 
-              <p className="text-gray-600 dark:text-gray-300" style={{
+              <p className="text-gray-500 dark:text-gray-400" style={{
                 fontSize: '14px',
-                lineHeight: 1.6,
-                marginBottom: '24px'
+                lineHeight: 1.5
               }}>
-                {product.description}
+                {scene.description}
               </p>
-
-              {/* 功能特性 */}
-              <div>
-                {product.features.map((feature, featureIndex) => (
-                  <div
-                    key={featureIndex}
-                    className="text-gray-700 dark:text-gray-300"
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      paddingLeft: '16px',
-                      position: 'relative',
-                      marginBottom: featureIndex < product.features.length - 1 ? '10px' : '24px'
-                    }}
-                  >
-                    <div style={{
-                      position: 'absolute',
-                      left: '0',
-                      top: '50%',
-                      width: '4px',
-                      height: '4px',
-                      borderRadius: product.shape === 'circle' ? '50%' : '0px',
-                      background: product.color,
-                      transform: 'translateY(-50%)',
-                      clipPath: product.shape === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : 'none'
-                    }} />
-                    {feature}
-                  </div>
-                ))}
-              </div>
-
-              {/* 了解更多按钮 */}
-              <Button
-                variant="outline"
-                size="md"
-                style={{
-                  borderColor: product.color
-                }}
-                onClick={() => window.location.href = product.link}
-              >
-                了解更多
-                <span style={{ fontSize: '12px' }}>→</span>
-              </Button>
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* 底部 CTA */}
+      <div style={{
+        padding: '32px',
+        textAlign: 'center',
+        borderTop: `0.5px solid ${isDark ? '#444444' : '#E5E7EB'}`
+      }}>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => window.location.href = '/product/smart-hardware-platform/'}
+          style={{
+            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+            color: '#ffffff',
+            padding: '14px 32px',
+            fontSize: '16px',
+            fontWeight: 600,
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          立即开始构建
+          <span>→</span>
+        </motion.button>
       </div>
     </div>
   )
@@ -394,7 +345,7 @@ const StudioPhilosophyGrid = ({ isDark, isMobile }: { isDark: boolean; isMobile:
   const philosophies = [
     {
       title: '原生AI能力',
-      description: '我们相信AI应该成为应用场景的原生能力，而非外挂式的附加工具'
+      description: 'AI应该成为应用场景的原生能力，而非外挂式的附加工具'
     },
     {
       title: '业务价值导向',
@@ -581,8 +532,7 @@ export default function HomePage(): React.JSX.Element {
   useEffect(() => {
     // 检测主题变化
     const checkTheme = () => {
-      const isDarkMode = document.documentElement.classList.contains('dark') || 
-                        window.matchMedia('(prefers-color-scheme: dark)').matches
+      const isDarkMode = document.documentElement.classList.contains('dark')
       setIsDark(isDarkMode)
     }
     
@@ -645,7 +595,7 @@ export default function HomePage(): React.JSX.Element {
               letterSpacing: '-0.03em'
             }}
           >
-            SceneMesh Studio
+            SceneMesh
           </motion.h1>
 
           {/* 副标题 */}
@@ -682,7 +632,7 @@ export default function HomePage(): React.JSX.Element {
               whiteSpace: isMobile ? 'normal' : 'nowrap'
             }}
           >
-            我们相信AI应该成为应用场景的原生能力，而非附加工具。让AI真正服务于业务价值的创造。
+            AI应该成为应用场景的原生能力，而非附加工具。让AI真正应用于业务价值创造。
           </motion.p>
 
         </div>
@@ -705,7 +655,7 @@ export default function HomePage(): React.JSX.Element {
                 marginBottom: '16px'
               }}
             >
-              工作室产品
+              构建你的 AI 智能硬件
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
@@ -714,14 +664,16 @@ export default function HomePage(): React.JSX.Element {
               transition={{ delay: 0.1 }}
               className="text-gray-600 dark:text-gray-300"
               style={{
-                fontSize: '18px'
+                fontSize: '18px',
+                maxWidth: '600px',
+                margin: '0 auto'
               }}
             >
-              选择你想使用的产品
+              5 分钟接入，让设备拥有认知能力
             </motion.p>
           </div>
 
-          <StudioProducts isDark={isDark} isMobile={isMobile} />
+          <AIHardwareScenes isDark={isDark} isMobile={isMobile} />
 
         </div>
       </section>
@@ -747,7 +699,7 @@ export default function HomePage(): React.JSX.Element {
                 marginBottom: '16px'
               }}
             >
-              我们的理念
+              SceneMesh理念
             </motion.h2>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
@@ -848,7 +800,7 @@ export default function HomePage(): React.JSX.Element {
               }}>
               <Image
                 src={isDark ? "/images/smlogo-down-white.webp" : "/images/smlogo-down-black.webp"}
-                alt="SceneMesh Studio Logo"
+                alt="SceneMesh Logo"
                 width={200}
                 height={200}
                 style={{ flexShrink: 0 }}
@@ -868,7 +820,7 @@ export default function HomePage(): React.JSX.Element {
               style={{
                 fontSize: '14px'
               }}>
-              © 2025 SceneMesh Studio
+              © 2025 SceneMesh
             </div>
           </div>
         </div>

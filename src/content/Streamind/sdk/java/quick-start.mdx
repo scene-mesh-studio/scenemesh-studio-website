@@ -12,9 +12,9 @@
 
 在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息:
 
-1. **tenantId**（租户ID）- 你的组织/账户唯一标识
-2. **productId**（产品ID）- 设备所属产品的标识
-3. **productKey**（产品密钥）- 产品的访问密钥
+1. **spaceId**（租户ID）- 你的组织/账户唯一标识
+2. **neuronId**（产品ID）- 设备所属产品的标识
+3. **appkey**（产品密钥）- 产品的访问密钥
 
 登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
 
@@ -68,9 +68,9 @@ public class Main {
             .deviceId("device-001")           // 设备唯一ID
             .deviceType("sensor")             // 设备类型
             .endpoint("wss://your-platform.com/signals")  // WebSocket端点
-            .tenantId("your-tenant-id")       // 替换为你的租户ID
-            .productId("your-product-id")     // 替换为你的产品ID
-            .productKey("your-secret-key")    // 替换为你的产品密钥
+            .spaceId("your-spaceId")       // 替换为你的租户ID
+            .neuronId("your-neuronId")     // 替换为你的产品ID
+            .appkey("your-secret-key")    // 替换为你的产品密钥
             .build();
 
         // 2. 创建SDK实例
@@ -159,9 +159,9 @@ Config config = new Config.Builder()
     .deviceId("device-001")      // 必需：设备唯一标识
     .deviceType("sensor")        // 必需：设备类型
     .endpoint("wss://...")       // 必需：WebSocket服务端点
-    .tenantId("...")             // 必需：租户ID
-    .productId("...")            // 必需：产品ID
-    .productKey("...")           // 必需：产品密钥
+    .spaceId("...")             // 必需：租户ID
+    .neuronId("...")            // 必需：产品ID
+    .appkey("...")           // 必需：产品密钥
     .build();
 ```
 
@@ -234,9 +234,9 @@ Config config = new Config.Builder()
     .deviceId("device-001")
     .deviceType("sensor")
     .endpoint("wss://...")
-    .tenantId("...")
-    .productId("...")
-    .productKey("...")
+    .spaceId("...")
+    .neuronId("...")
+    .appkey("...")
     .heartbeatIntervalMs(30000)        // 设置心跳间隔（默认30秒）
     .connectionTimeoutMs(10000)        // 设置连接超时（默认10秒）
     .maxReconnectAttempts(10)          // 设置最大重连次数（默认10次）
@@ -280,8 +280,8 @@ try {
 device.id=sensor-001
 device.type=temperature_sensor
 streamind.endpoint=wss://api.streamind.com/signals
-streamind.tenant.id=your-tenant-id
-streamind.product.id=your-product-id
+streamind.space.id=your-spaceId
+streamind.neuron.id=your-neuronId
 streamind.product.key=your-secret-key
 ```
 
@@ -298,9 +298,9 @@ Config config = new Config.Builder()
     .deviceId(props.getProperty("device.id"))
     .deviceType(props.getProperty("device.type"))
     .endpoint(props.getProperty("streamind.endpoint"))
-    .tenantId(props.getProperty("streamind.tenant.id"))
-    .productId(props.getProperty("streamind.product.id"))
-    .productKey(props.getProperty("streamind.product.key"))
+    .spaceId(props.getProperty("streamind.space.id"))
+    .neuronId(props.getProperty("streamind.neuron.id"))
+    .appkey(props.getProperty("streamind.product.key"))
     .build();
 ```
 
@@ -323,9 +323,9 @@ public class Application {
             .deviceId("${streamind.device.id}")
             .deviceType("${streamind.device.type}")
             .endpoint("${streamind.endpoint}")
-            .tenantId("${streamind.tenant.id}")
-            .productId("${streamind.product.id}")
-            .productKey("${streamind.product.key}")
+            .spaceId("${streamind.space.id}")
+            .neuronId("${streamind.neuron.id}")
+            .appkey("${streamind.product.key}")
             .build();
 
         sdk.registerTerminal("terminal-1", config);
@@ -350,7 +350,7 @@ public class Application {
 ### 无法连接
 
 1. 检查 `endpoint` 是否正确
-2. 检查 `tenantId`、`productId`、`productKey` 是否正确
+2. 检查 `spaceId`、`neuronId`、`appkey` 是否正确
 3. 检查网络连接和防火墙设置
 
 ### 编译错误

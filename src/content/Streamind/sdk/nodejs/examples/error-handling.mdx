@@ -406,16 +406,16 @@ function validateConfig(config: Config): { valid: boolean; message: string } {
         return { valid: false, message: "endpoint 必须使用 wss:// 协议" };
     }
 
-    if (!config.tenantId) {
-        return { valid: false, message: "tenantId 不能为空" };
+    if (!config.spaceId) {
+        return { valid: false, message: "spaceId 不能为空" };
     }
 
-    if (!config.productId) {
-        return { valid: false, message: "productId 不能为空" };
+    if (!config.neuronId) {
+        return { valid: false, message: "neuronId 不能为空" };
     }
 
-    if (!config.productKey) {
-        return { valid: false, message: "productKey 不能为空" };
+    if (!config.appkey) {
+        return { valid: false, message: "appkey 不能为空" };
     }
 
     return { valid: true, message: "配置有效" };

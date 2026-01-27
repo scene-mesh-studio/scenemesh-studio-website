@@ -400,7 +400,7 @@ class InventoryService {
   private async updateInventory(orderData: any) {
     // 更新库存逻辑
     await this.databaseService.update('inventory', 
-      { productId: orderData.productId },
+      { neuronId: orderData.neuronId },
       { $inc: { quantity: -orderData.quantity } }
     );
   }

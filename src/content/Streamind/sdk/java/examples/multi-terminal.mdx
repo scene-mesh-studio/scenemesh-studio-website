@@ -18,27 +18,27 @@ public class MultiTerminalExample {
             .deviceId("sensor-001")
             .deviceType("temperature")
             .endpoint("wss://your-platform.com/signals")
-            .tenantId("your-tenant-id")
-            .productId("product-sensors")
-            .productKey("your-secret-key")
+            .spaceId("your-spaceId")
+            .neuronId("product-sensors")
+            .appkey("your-secret-key")
             .build();
 
         Config config2 = new Config.Builder()
             .deviceId("sensor-002")
             .deviceType("humidity")
             .endpoint("wss://your-platform.com/signals")
-            .tenantId("your-tenant-id")
-            .productId("product-sensors")
-            .productKey("your-secret-key")
+            .spaceId("your-spaceId")
+            .neuronId("product-sensors")
+            .appkey("your-secret-key")
             .build();
 
         Config config3 = new Config.Builder()
             .deviceId("actuator-001")
             .deviceType("motor")
             .endpoint("wss://your-platform.com/signals")
-            .tenantId("your-tenant-id")
-            .productId("product-actuators")
-            .productKey("your-actuators-key")
+            .spaceId("your-spaceId")
+            .neuronId("product-actuators")
+            .appkey("your-actuators-key")
             .build();
 
         // 注册所有终端

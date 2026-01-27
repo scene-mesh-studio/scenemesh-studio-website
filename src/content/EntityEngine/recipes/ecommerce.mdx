@@ -146,15 +146,15 @@ export const ProductModel: IEntityModel = {
     },
     inventory: {
       type: 'relation',
-      relation: { type: 'one_to_one', model: 'Inventory', foreignKey: 'productId' }
+      relation: { type: 'one_to_one', model: 'Inventory', foreignKey: 'neuronId' }
     },
     variants: {
       type: 'relation',
-      relation: { type: 'one_to_many', model: 'ProductVariant', foreignKey: 'productId' }
+      relation: { type: 'one_to_many', model: 'ProductVariant', foreignKey: 'neuronId' }
     },
     reviews: {
       type: 'relation',
-      relation: { type: 'one_to_many', model: 'Review', foreignKey: 'productId' }
+      relation: { type: 'one_to_many', model: 'Review', foreignKey: 'neuronId' }
     },
     seoTitle: { type: 'string' },
     seoDescription: { type: 'string' },
@@ -177,7 +177,7 @@ export const ProductVariantModel: IEntityModel = {
   name: 'ProductVariant',
   fields: {
     id: { type: 'uuid', primaryKey: true },
-    productId: { type: 'uuid', required: true },
+    neuronId: { type: 'uuid', required: true },
     sku: { type: 'string', unique: true, required: true },
     name: { type: 'string', required: true },
     price: { type: 'decimal', required: true },
@@ -201,8 +201,8 @@ export const ProductVariantModel: IEntityModel = {
   },
   indexes: [
     { fields: ['sku'], unique: true },
-    { fields: ['productId'] },
-    { fields: ['productId', 'isDefault'] }
+    { fields: ['neuronId'] },
+    { fields: ['neuronId', 'isDefault'] }
   ]
 };
 
@@ -211,7 +211,7 @@ export const InventoryModel: IEntityModel = {
   name: 'Inventory',
   fields: {
     id: { type: 'uuid', primaryKey: true },
-    productId: { type: 'uuid' },
+    neuronId: { type: 'uuid' },
     variantId: { type: 'uuid' },
     quantity: { type: 'number', required: true, defaultValue: 0 },
     reservedQuantity: { type: 'number', defaultValue: 0 },
@@ -235,7 +235,7 @@ export const InventoryModel: IEntityModel = {
     updatedAt: { type: 'datetime', defaultValue: 'now' }
   },
   indexes: [
-    { fields: ['productId'], unique: true },
+    { fields: ['neuronId'], unique: true },
     { fields: ['variantId'], unique: true },
     { fields: ['quantity'] },
     { fields: ['availableQuantity'] }
@@ -305,7 +305,7 @@ export const CartItemModel: IEntityModel = {
   fields: {
     id: { type: 'uuid', primaryKey: true },
     cartId: { type: 'uuid', required: true },
-    productId: { type: 'uuid', required: true },
+    neuronId: { type: 'uuid', required: true },
     variantId: { type: 'uuid' },
     quantity: { type: 'number', required: true, defaultValue: 1 },
     price: { type: 'decimal', required: true },
@@ -326,7 +326,7 @@ export const CartItemModel: IEntityModel = {
   },
   indexes: [
     { fields: ['cartId'] },
-    { fields: ['productId'] },
+    { fields: ['neuronId'] },
     { fields: ['variantId'] }
   ]
 };
@@ -398,7 +398,7 @@ export const OrderItemModel: IEntityModel = {
   fields: {
     id: { type: 'uuid', primaryKey: true },
     orderId: { type: 'uuid', required: true },
-    productId: { type: 'uuid', required: true },
+    neuronId: { type: 'uuid', required: true },
     variantId: { type: 'uuid' },
     sku: { type: 'string', required: true },
     name: { type: 'string', required: true },
@@ -420,7 +420,7 @@ export const OrderItemModel: IEntityModel = {
   },
   indexes: [
     { fields: ['orderId'] },
-    { fields: ['productId'] },
+    { fields: ['neuronId'] },
     { fields: ['variantId'] },
     { fields: ['sku'] }
   ]
@@ -431,7 +431,7 @@ export const ReviewModel: IEntityModel = {
   name: 'Review',
   fields: {
     id: { type: 'uuid', primaryKey: true },
-    productId: { type: 'uuid', required: true },
+    neuronId: { type: 'uuid', required: true },
     userId: { type: 'uuid', required: true },
     orderId: { type: 'uuid' },
     rating: { type: 'number', required: true, min: 1, max: 5 },
@@ -464,7 +464,7 @@ export const ReviewModel: IEntityModel = {
     updatedAt: { type: 'datetime', defaultValue: 'now' }
   },
   indexes: [
-    { fields: ['productId'] },
+    { fields: ['neuronId'] },
     { fields: ['userId'] },
     { fields: ['orderId'] },
     { fields: ['rating'] },
@@ -496,7 +496,7 @@ class CartManagerActionHandler implements IActionHandler {
       cartId: { type: 'string' },
       userId: { type: 'string' },
       sessionId: { type: 'string' },
-      productId: { type: 'string' },
+      neuronId: { type: 'string' },
       variantId: { type: 'string' },
       quantity: { type: 'number' },
       itemId: { type: 'string' }
@@ -534,13 +534,13 @@ class CartManagerActionHandler implements IActionHandler {
     let cart = await this.getOrCreateCart(input, entityManager);
     
     // 获取产品信息
-    const product = await entityManager.get('Product', input.productId);
+    const product = await entityManager.get('Product', input.neuronId);
     if (!product || product.status !== 'ACTIVE') {
       throw new Error('Product not available');
     }
     
     // 检查库存
-    const inventory = await this.checkInventory(input.productId, input.variantId, input.quantity, entityManager);
+    const inventory = await this.checkInventory(input.neuronId, input.variantId, input.quantity, entityManager);
     if (!inventory.available) {
       throw new Error('Insufficient inventory');
     }
@@ -550,7 +550,7 @@ class CartManagerActionHandler implements IActionHandler {
       entityType: 'CartItem',
       filter: {
         cartId: cart.id,
-        productId: input.productId,
+        neuronId: input.neuronId,
         variantId: input.variantId || null
       }
     });
@@ -570,7 +570,7 @@ class CartManagerActionHandler implements IActionHandler {
       
       cartItem = await entityManager.create('CartItem', {
         cartId: cart.id,
-        productId: input.productId,
+        neuronId: input.neuronId,
         variantId: input.variantId,
         quantity: input.quantity,
         price,
@@ -588,7 +588,7 @@ class CartManagerActionHandler implements IActionHandler {
         type: 'cart.item_added',
         data: {
           cartId: cart.id,
-          productId: input.productId,
+          neuronId: input.neuronId,
           variantId: input.variantId,
           quantity: input.quantity
         }
@@ -604,7 +604,7 @@ class CartManagerActionHandler implements IActionHandler {
     
     // 检查库存
     const inventory = await this.checkInventory(
-      cartItem.productId, 
+      cartItem.neuronId, 
       cartItem.variantId, 
       input.quantity, 
       entityManager
@@ -655,7 +655,7 @@ class CartManagerActionHandler implements IActionHandler {
         data: {
           cartId,
           itemId: input.itemId,
-          productId: cartItem.productId
+          neuronId: cartItem.neuronId
         }
       }]
     };
@@ -756,7 +756,7 @@ class CartManagerActionHandler implements IActionHandler {
   }
   
   private async checkInventory(
-    productId: string, 
+    neuronId: string, 
     variantId?: string, 
     quantity: number = 1,
     entityManager?: IEntityManager
@@ -765,7 +765,7 @@ class CartManagerActionHandler implements IActionHandler {
     if (variantId) {
       filter.variantId = variantId;
     } else {
-      filter.productId = productId;
+      filter.neuronId = neuronId;
     }
     
     const inventories = await entityManager!.query({
@@ -819,7 +819,7 @@ class CartManagerActionHandler implements IActionHandler {
     }
     
     if (input.action === 'add') {
-      if (!input.productId) errors.push('productId is required for add action');
+      if (!input.neuronId) errors.push('neuronId is required for add action');
       if (!input.quantity || input.quantity < 1) errors.push('Valid quantity is required for add action');
     }
     
@@ -972,7 +972,7 @@ class OrderProcessingActionHandler implements IActionHandler {
       
       // 检查库存
       const inventory = await this.checkInventory(
-        item.productId, 
+        item.neuronId, 
         item.variantId, 
         item.quantity, 
         entityManager
@@ -991,7 +991,7 @@ class OrderProcessingActionHandler implements IActionHandler {
       if (item.variantId) {
         filter.variantId = item.variantId;
       } else {
-        filter.productId = item.productId;
+        filter.neuronId = item.neuronId;
       }
       
       const inventories = await entityManager.query({
@@ -1045,7 +1045,7 @@ class OrderProcessingActionHandler implements IActionHandler {
     for (const item of cart.items) {
       await entityManager.create('OrderItem', {
         orderId: order.id,
-        productId: item.productId,
+        neuronId: item.neuronId,
         variantId: item.variantId,
         sku: item.variantId ? item.variant.sku : item.product.sku,
         name: item.product.name,
@@ -1075,7 +1075,7 @@ class OrderProcessingActionHandler implements IActionHandler {
       if (item.variantId) {
         filter.variantId = item.variantId;
       } else {
-        filter.productId = item.productId;
+        filter.neuronId = item.neuronId;
       }
       
       const inventories = await entityManager.query({
@@ -1108,7 +1108,7 @@ class OrderProcessingActionHandler implements IActionHandler {
       if (item.variantId) {
         filter.variantId = item.variantId;
       } else {
-        filter.productId = item.productId;
+        filter.neuronId = item.neuronId;
       }
       
       const inventories = await entityManager.query({
@@ -1142,7 +1142,7 @@ class OrderProcessingActionHandler implements IActionHandler {
   }
   
   private async checkInventory(
-    productId: string, 
+    neuronId: string, 
     variantId?: string, 
     quantity: number = 1,
     entityManager?: IEntityManager
@@ -1151,7 +1151,7 @@ class OrderProcessingActionHandler implements IActionHandler {
     if (variantId) {
       filter.variantId = variantId;
     } else {
-      filter.productId = productId;
+      filter.neuronId = neuronId;
     }
     
     const inventories = await entityManager!.query({
@@ -1678,21 +1678,21 @@ export const ProductDetailView: IViewDefinition = {
         name: 'variants',
         displayName: '产品变体',
         viewId: 'product-variant-list',
-        filter: { productId: '{{id}}' },
+        filter: { neuronId: '{{id}}' },
         position: 'tab'
       },
       {
         name: 'inventory',
         displayName: '库存管理',
         viewId: 'inventory-detail',
-        filter: { productId: '{{id}}' },
+        filter: { neuronId: '{{id}}' },
         position: 'tab'
       },
       {
         name: 'reviews',
         displayName: '用户评价',
         viewId: 'review-list',
-        filter: { productId: '{{id}}' },
+        filter: { neuronId: '{{id}}' },
         position: 'tab'
       }
     ],

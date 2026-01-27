@@ -15,9 +15,9 @@ public class BasicUsageExample {
             .deviceId("device-001")
             .deviceType("sensor")
             .endpoint("wss://your-platform.com/signals")
-            .tenantId("your-tenant-id")
-            .productId("your-product-id")
-            .productKey("your-secret-key")
+            .spaceId("your-spaceId")
+            .neuronId("your-neuronId")
+            .appkey("your-secret-key")
             .build();
 
         // 2. 创建 SDK 实例
@@ -95,9 +95,9 @@ public class BasicUsageLambda {
             .deviceId("device-001")
             .deviceType("sensor")
             .endpoint("wss://your-platform.com/signals")
-            .tenantId("your-tenant-id")
-            .productId("your-product-id")
-            .productKey("your-secret-key")
+            .spaceId("your-spaceId")
+            .neuronId("your-neuronId")
+            .appkey("your-secret-key")
             .build();
 
         SDK sdk = new SDK();
@@ -185,9 +185,9 @@ Config config = new Config.Builder()
     .deviceId("device-001")      // 设备唯一 ID
     .deviceType("sensor")        // 设备类型
     .endpoint("wss://...")       // WebSocket 端点
-    .tenantId("...")             // 租户 ID
-    .productId("...")            // 产品 ID
-    .productKey("...")           // 产品密钥
+    .spaceId("...")             // 租户 ID
+    .neuronId("...")            // 产品 ID
+    .appkey("...")           // 产品密钥
     .build();
 ```
 
@@ -266,9 +266,9 @@ public class ConfigFileExample {
                 .deviceId(props.getProperty("device.id", "device-001"))
                 .deviceType(props.getProperty("device.type", "sensor"))
                 .endpoint(props.getProperty("streamind.endpoint"))
-                .tenantId(props.getProperty("streamind.tenant.id"))
-                .productId(props.getProperty("streamind.product.id"))
-                .productKey(props.getProperty("streamind.product.key"))
+                .spaceId(props.getProperty("streamind.space.id"))
+                .neuronId(props.getProperty("streamind.neuron.id"))
+                .appkey(props.getProperty("streamind.product.key"))
                 .build();
 
             SDK sdk = new SDK();
@@ -293,8 +293,8 @@ public class ConfigFileExample {
 device.id=sensor-001
 device.type=temperature_sensor
 streamind.endpoint=wss://api.streamind.com/signals
-streamind.tenant.id=your-tenant-id
-streamind.product.id=your-product-id
+streamind.space.id=your-spaceId
+streamind.neuron.id=your-neuronId
 streamind.product.key=your-secret-key
 ```
 

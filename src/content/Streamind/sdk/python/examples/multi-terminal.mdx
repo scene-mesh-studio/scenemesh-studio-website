@@ -17,27 +17,27 @@ async def main():
         device_id="sensor-001",
         device_type="temperature",
         endpoint="wss://your-platform.com/signals",
-        tenant_id="your-tenant-id",
-        product_id="product-sensors",
-        product_key="your-secret-key"
+        spaceId="your-spaceId",
+        neuronId="product-sensors",
+        appkey="your-secret-key"
     )
 
     config2 = Config(
         device_id="sensor-002",
         device_type="humidity",
         endpoint="wss://your-platform.com/signals",
-        tenant_id="your-tenant-id",
-        product_id="product-sensors",
-        product_key="your-secret-key"
+        spaceId="your-spaceId",
+        neuronId="product-sensors",
+        appkey="your-secret-key"
     )
 
     config3 = Config(
         device_id="actuator-001",
         device_type="motor",
         endpoint="wss://your-platform.com/signals",
-        tenant_id="your-tenant-id",
-        product_id="product-actuators",
-        product_key="your-actuators-key"
+        spaceId="your-spaceId",
+        neuronId="product-actuators",
+        appkey="your-actuators-key"
     )
 
     # 注册所有终端

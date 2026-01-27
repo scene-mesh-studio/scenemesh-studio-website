@@ -13,9 +13,9 @@
 
 在使用 SDK 前，你需要从 StreamInd 平台获取以下认证信息：
 
-1. **tenant_id**（租户ID）- 你的组织/账户唯一标识
-2. **product_id**（产品ID）- 设备所属产品的标识
-3. **product_key**（产品密钥）- 产品的访问密钥
+1. **spaceId**（租户ID）- 你的组织/账户唯一标识
+2. **neuronId**（产品ID）- 设备所属产品的标识
+3. **appkey**（产品密钥）- 产品的访问密钥
 
 登录 StreamInd 控制台，在 **开发配置菜单** 中可以查看和管理这些认证信息。
 
@@ -64,9 +64,9 @@ async def main():
         device_id="device-001",           # 设备唯一ID
         device_type="sensor",             # 设备类型
         endpoint="wss://your-platform.com/signals",  # WebSocket端点
-        tenant_id="your-tenant-id",       # 替换为你的租户ID
-        product_id="your-product-id",     # 替换为你的产品ID
-        product_key="your-secret-key"     # 替换为你的产品密钥
+        spaceId="your-spaceId",       # 替换为你的租户ID
+        neuronId="your-neuronId",     # 替换为你的产品ID
+        appkey="your-secret-key"     # 替换为你的产品密钥
     )
 
     # 2. 创建SDK实例
@@ -134,9 +134,9 @@ config = Config(
     device_id="device-001",      # 必需：设备唯一标识
     device_type="sensor",        # 必需：设备类型
     endpoint="wss://...",        # 必需：WebSocket服务端点
-    tenant_id="...",             # 必需：租户ID
-    product_id="...",            # 必需：产品ID
-    product_key="..."            # 必需：产品密钥
+    spaceId="...",             # 必需：租户ID
+    neuronId="...",            # 必需：产品ID
+    appkey="..."            # 必需：产品密钥
 )
 ```
 
@@ -240,7 +240,7 @@ except Exception as e:
 ### 无法连接
 
 1. 检查 `endpoint` 是否正确
-2. 检查 `tenant_id`、`product_id`、`product_key` 是否正确
+2. 检查 `spaceId`、`neuronId`、`appkey` 是否正确
 3. 检查网络连接
 
 ### 安装失败

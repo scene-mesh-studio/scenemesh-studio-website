@@ -330,14 +330,14 @@ def validate_config(config: Config) -> tuple[bool, str]:
     if not config.endpoint.startswith("wss://"):
         return False, "endpoint 必须使用 wss:// 协议"
 
-    if not config.tenant_id:
-        return False, "tenant_id 不能为空"
+    if not config.spaceId:
+        return False, "spaceId 不能为空"
 
-    if not config.product_id:
-        return False, "product_id 不能为空"
+    if not config.neuronId:
+        return False, "neuronId 不能为空"
 
-    if not config.product_key:
-        return False, "product_key 不能为空"
+    if not config.appkey:
+        return False, "appkey 不能为空"
 
     return True, "配置有效"
 

@@ -10,7 +10,7 @@ Entity Engine 提供了基于 **PostgreSQL Schema 隔离**的多租户架构支�
 
 - **Schema 隔离**：每个租户独立 PostgreSQL schema（格式：`tenant_<id>`），原生数据隔离
 - **连接池复用**：自动管理租户 Prisma 客户端，按需创建与复用连接，避免重复连接
-- **JWT 自动提取**：从 Authorization header 自动解析 `tenantId`，无需手动传参
+- **JWT 自动提取**：从 Authorization header 自动解析 `spaceId`，无需手动传参
 - **强制访问控制**：所有数据 API 自动验证租户上下文，防止越权访问
 - **灵活 ID 格式**：支持 UUID（推荐）和 Base62 短 ID（10-12位）两种租户标识
 
@@ -30,8 +30,8 @@ Entity Engine 提供了基于 **PostgreSQL Schema 隔离**的多租户架构支�
 import { PrismaService } from '@scenemesh/entity-engine/server';
 
 // 获取租户专用的 Prisma 客户端
-const tenantId = '550e8400-e29b-41d4-a716-446655440000'; // UUID格式
-const prisma = await PrismaService.getTenantClient(tenantId);
+const spaceId = '550e8400-e29b-41d4-a716-446655440000'; // UUID格式
+const prisma = await PrismaService.getTenantClient(spaceId);
 
 // 操作租户数据（自动使用租户 schema）
 const users = await prisma.entityObject.findMany({
@@ -49,10 +49,10 @@ const users = await prisma.entityObject.findMany({
 
 ```typescript
 // 验证租户ID是否有效
-const isValid = PrismaService.isValidTenantId(tenantId);
+const isValid = PrismaService.isValidspaceId(spaceId);
 
 if (!isValid) {
-  throw new Error(`Invalid tenant ID format: ${tenantId}`);
+  throw new Error(`Invalid tenant ID format: ${spaceId}`);
 }
 ```
 
@@ -73,7 +73,7 @@ console.log('Connected schemas:', schemas);
 // 输出示例: ['tenant_550e8400e29b41d4a716446655440000', 'tenant_abc1234567']
 
 // 断开指定租户的连接（释放资源）
-await PrismaService.disconnectTenant(tenantId);
+await PrismaService.disconnectTenant(spaceId);
 
 // 关闭所有租户连接（应用关闭时）
 await PrismaService.disconnectAll();
@@ -112,20 +112,20 @@ process.on('SIGTERM', async () => {
 import { createModelContext } from '@scenemesh/entity-engine/server';
 
 // 创建租户专用的API上下文
-const tenantId = extractTenantIdFromJWT(request); // 从JWT提取
-const ctx = await createModelContext(tenantId, init);
+const spaceId = extractspaceIdFromJWT(request); // 从JWT提取
+const ctx = await createModelContext(spaceId, init);
 
 // ctx 包含：
 // - ctx.db: 租户专用的Prisma客户端（已切换到租户schema）
 // - ctx.engine: Entity Engine实例
-// - ctx.tenantId: 租户ID
+// - ctx.spaceId: 租户ID
 ```
 
-**注意**：`createModelContext` 会自动调用 `PrismaService.getTenantClient(tenantId)` 获取租户客户端，无需手动管理。
+**注意**：`createModelContext` 会自动调用 `PrismaService.getTenantClient(spaceId)` 获取租户客户端，无需手动管理。
 
 ### tRPC 自动集成
 
-Entity Engine 的 tRPC 上下文已内置租户支持，会自动从 JWT token 提取 `tenantId`：
+Entity Engine 的 tRPC 上下文已内置租户支持，会自动从 JWT token 提取 `spaceId`：
 
 ```typescript
 // src/services/api/trpc.ts (已实现，无需修改)
@@ -134,7 +134,7 @@ export const createTRPCContext = async (opts, initializer) => {
 
   // 自动从 Authorization header 解析 JWT
   const authHeader = opts.headers.get('authorization');
-  let tenantId: string | undefined;
+  let spaceId: string | undefined;
   let db: PrismaClient | undefined;
 
   if (authHeader?.startsWith('Bearer ')) {
@@ -145,18 +145,18 @@ export const createTRPCContext = async (opts, initializer) => {
       const payloadJson = Buffer.from(payloadBase64, 'base64').toString('utf-8');
       const payload = JSON.parse(payloadJson);
 
-      tenantId = payload.tenantId;
+      spaceId = payload.spaceId;
 
       // 获取租户专用数据库客户端
-      if (tenantId && PrismaService.isValidTenantId(tenantId)) {
-        db = await PrismaService.getTenantClient(tenantId);
+      if (spaceId && PrismaService.isValidspaceId(spaceId)) {
+        db = await PrismaService.getTenantClient(spaceId);
       }
     } catch (error) {
       console.error('Failed to parse JWT token:', error);
     }
   }
 
-  return { db, engine, tenantId };
+  return { db, engine, spaceId };
 };
 ```
 
@@ -165,7 +165,7 @@ export const createTRPCContext = async (opts, initializer) => {
 ```json
 {
   "userId": "user_123",
-  "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+  "spaceId": "550e8400-e29b-41d4-a716-446655440000",
   "role": "admin",
   "iat": 1735545600,
   "exp": 1735632000
@@ -193,8 +193,8 @@ export { handler as GET, handler as POST };
 
 `fetchEntityEntranceHandler` 内部会：
 1. 从 `Authorization` header 提取 JWT token
-2. 解析 `tenantId`
-3. 调用 `createModelContext(tenantId, init)` 创建租户上下文
+2. 解析 `spaceId`
+3. 调用 `createModelContext(spaceId, init)` 创建租户上下文
 4. 所有后续数据操作自动使用租户专用的数据库客户端
 
 ## 客户端集成
@@ -250,8 +250,8 @@ const client = createVanillaTrpcClient('http://localhost:3000/api/ee/trpc');
 
 ```typescript
 // src/services/api/services/model.service.ts
-function requireTenantDatabase(ctx: ApiContext): asserts ctx is ApiContext & { db: PrismaClient; tenantId: string } {
-  if (!ctx.db || !ctx.tenantId) {
+function requireTenantDatabase(ctx: ApiContext): asserts ctx is ApiContext & { db: PrismaClient; spaceId: string } {
+  if (!ctx.db || !ctx.spaceId) {
     throw new Error('Authentication required: Please login to access tenant data');
   }
 }
@@ -376,14 +376,14 @@ DATABASE_URL="postgresql://user:password@localhost:5432/mydb?schema=tenant_550e8
 import { PrismaService } from '@scenemesh/entity-engine/server';
 import { execSync } from 'child_process';
 
-async function createTenant(tenantId: string) {
+async function createTenant(spaceId: string) {
   // 1. 验证租户ID格式
-  if (!PrismaService.isValidTenantId(tenantId)) {
-    throw new Error(`Invalid tenant ID: ${tenantId}`);
+  if (!PrismaService.isValidspaceId(spaceId)) {
+    throw new Error(`Invalid tenant ID: ${spaceId}`);
   }
 
   // 2. 获取schema名称
-  const schemaName = `tenant_${tenantId.replace(/-/g, '').toLowerCase()}`;
+  const schemaName = `tenant_${spaceId.replace(/-/g, '').toLowerCase()}`;
 
   // 3. 创建schema
   const baseUrl = process.env.EE_DATABASE_URL?.split('?')[0];
@@ -394,10 +394,10 @@ async function createTenant(tenantId: string) {
   execSync(`DATABASE_URL="${schemaUrl}" npx prisma migrate deploy`);
 
   // 5. 测试连接
-  const client = await PrismaService.getTenantClient(tenantId);
-  console.log(`Tenant ${tenantId} created successfully!`);
+  const client = await PrismaService.getTenantClient(spaceId);
+  console.log(`Tenant ${spaceId} created successfully!`);
 
-  return { tenantId, schemaName };
+  return { spaceId, schemaName };
 }
 ```
 
@@ -417,8 +417,8 @@ async function createTenant(tenantId: string) {
    - 验证 token 签发者（`iss`）
 
 2. **租户ID来源**：
-   - 仅从经过验证的 JWT token 中提取 `tenantId`
-   - 禁止从 URL 参数、请求体直接读取 `tenantId`（防止越权访问）
+   - 仅从经过验证的 JWT token 中提取 `spaceId`
+   - 禁止从 URL 参数、请求体直接读取 `spaceId`（防止越权访问）
 
 3. **权限检查**：
    - 在业务逻辑中额外验证用户是否有权访问该租户数据
@@ -451,8 +451,8 @@ setInterval(() => {
 如果您的应用目前是单租户架构，迁移到多租户需要：
 
 1. **数据库迁移**：为每个租户创建独立的 schema 并复制数据
-2. **代码更新**：使用 `createModelContext(tenantId)` 替代原有的数据库客户端获取方式
-3. **JWT集成**：确保 JWT token 包含 `tenantId` 字段
+2. **代码更新**：使用 `createModelContext(spaceId)` 替代原有的数据库客户端获取方式
+3. **JWT集成**：确保 JWT token 包含 `spaceId` 字段
 4. **客户端更新**：在请求中携带 `Authorization` header
 
 ### 单租户应用是否需要多租户架构？
@@ -462,9 +462,9 @@ setInterval(() => {
 ### 如何处理租户数据迁移？
 
 ```typescript
-async function migrateTenantData(sourceTenantId: string, targetTenantId: string) {
-  const sourceClient = await PrismaService.getTenantClient(sourceTenantId);
-  const targetClient = await PrismaService.getTenantClient(targetTenantId);
+async function migrateTenantData(sourcespaceId: string, targetspaceId: string) {
+  const sourceClient = await PrismaService.getTenantClient(sourcespaceId);
+  const targetClient = await PrismaService.getTenantClient(targetspaceId);
 
   // 读取源租户数据
   const objects = await sourceClient.entityObject.findMany();
@@ -474,27 +474,27 @@ async function migrateTenantData(sourceTenantId: string, targetTenantId: string)
     data: objects
   });
 
-  console.log(`Migrated ${objects.length} objects from ${sourceTenantId} to ${targetTenantId}`);
+  console.log(`Migrated ${objects.length} objects from ${sourcespaceId} to ${targetspaceId}`);
 }
 ```
 
 ### 连接池会无限增长吗？
 
 不会。PrismaService 使用 Map 缓存已创建的客户端，相同租户的后续请求会复用客户端。您可以：
-- 使用 `disconnectTenant(tenantId)` 手动释放不活跃租户的连接
+- 使用 `disconnectTenant(spaceId)` 手动释放不活跃租户的连接
 - 实现定时清理机制（如清理30天未访问的租户连接）
 
 ### 如何在开发环境测试多租户？
 
 ```typescript
 // 开发环境测试脚本
-const testTenantId = 'test-tenant-001';
+const testspaceId = 'test-tenant-001';
 
 // 1. 创建测试租户
-await createTenant(testTenantId);
+await createTenant(testspaceId);
 
 // 2. 获取客户端并插入测试数据
-const client = await PrismaService.getTenantClient(testTenantId);
+const client = await PrismaService.getTenantClient(testspaceId);
 await client.entityObject.create({
   data: {
     id: 'test-001',
@@ -518,10 +518,10 @@ console.log('Tenant 2 data:', tenant2Data); // 应该与租户1的数据不同
 
 Entity Engine 的多租户架构通过 PostgreSQL Schema 隔离实现了强数据隔离，配合 JWT 自动提取和连接池管理，为构建企业级 SaaS 应用提供了坚实的基础。核心要点：
 
-- 使用 `PrismaService.getTenantClient(tenantId)` 获取租户客户端
+- 使用 `PrismaService.getTenantClient(spaceId)` 获取租户客户端
 - 所有数据 API 自动验证租户上下文，防止越权访问
 - 连接池自动管理，无需手动释放连接
-- JWT token 必须包含 `tenantId` 字段
+- JWT token 必须包含 `spaceId` 字段
 - 每个租户需要独立执行数据库迁移
 
 更多高级用法和故障排查，请参考官方文档或提交 Issue。
