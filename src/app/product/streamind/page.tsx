@@ -508,7 +508,7 @@ export default function StreamindPage(): React.JSX.Element {
 
                 {/* CTA按钮 */}
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Button variant="outline" size="md" onClick={() => window.location.href = '/docs/Streamind'}>
+                  <Button variant="outline" size="md" onClick={() => window.location.href = '/product/streamind'}>
                     了解更多
                     <span style={{ marginLeft: '6px' }}>→</span>
                   </Button>

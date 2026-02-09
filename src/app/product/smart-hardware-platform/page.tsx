@@ -302,7 +302,7 @@ export default function SmartHardwarePlatformPage() {
               flexWrap: 'wrap'
             }}
           >
-            <Button variant="primary" size="lg" href="/docs/SmartHardwarePlatform/sdk/quick-start">
+            <Button variant="primary" size="lg" href="/docs/SmartHardwarePlatform">
               立即体验
               <span>→</span>
             </Button>
@@ -1036,11 +1036,9 @@ export default function SmartHardwarePlatformPage() {
               justifyContent: 'center',
               flexWrap: 'wrap'
             }}>
-              <Button variant="primary" size="lg" href="https://github.com/streamind/sdk">
-                下载 SDK
-              </Button>
-              <Button variant="outline" size="lg" href="/docs/SmartHardwarePlatform/sdk">
-                查看 API 文档
+              <Button variant="primary" size="lg" href="/docs/SmartHardwarePlatform">
+                查看文档
+                <span>→</span>
               </Button>
             </div>
           </motion.div>

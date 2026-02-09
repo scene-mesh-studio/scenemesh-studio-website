@@ -2,6 +2,15 @@ const meta = {
   index: {
     display: 'hidden'
   },
+  product: {
+    display: 'hidden'
+  },
+  'use-cases': {
+    display: 'hidden'
+  },
+  entityengine_moduel: {
+    display: 'hidden'
+  },
 
   // 1. 智能硬件AI应用平台（一级菜单）
   'smart-hardware-platform': {
